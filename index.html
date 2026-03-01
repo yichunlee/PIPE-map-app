@@ -287,6 +287,175 @@
             flex-shrink: 0;
         }
         
+        /* 段落管理面板 */
+        .segment-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 2000;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            width: 450px;
+            max-height: calc(100vh - 100px);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .segment-panel.minimized {
+            height: auto;
+            max-height: none;
+        }
+        .segment-panel.minimized .segment-panel-body {
+            display: none;
+        }
+        .segment-panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .segment-panel-body {
+            overflow-y: auto;
+            flex: 1;
+            padding: 15px;
+        }
+        .segment-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .segment-table th {
+            background: #f5f5f5;
+            color: #333;
+            padding: 8px 4px;
+            text-align: center;
+            border-bottom: 2px solid #ddd;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            font-weight: 600;
+            font-size: 11px;
+        }
+        .segment-table td {
+            padding: 6px 4px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 11px;
+        }
+        .segment-table tr:hover td { background: #f9f9f9; }
+        .segment-panel-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #eee;
+            flex-shrink: 0;
+        }
+        .btn-add-segment {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-add-segment:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+        }
+        .btn-visual-segment {
+            padding: 10px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-visual-segment:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(240, 147, 251, 0.4);
+        }
+        .btn-visual-segment.active {
+            background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+            box-shadow: 0 0 0 2px rgba(245, 87, 108, 0.3);
+        }
+        
+        /* 視覺化分段線標記 */
+        .segment-divider-marker {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: 3px solid white;
+            border-radius: 50%;
+            cursor: move;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            z-index: 2000;
+            transition: all 0.2s;
+        }
+        .segment-divider-marker:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.5);
+        }
+        .segment-divider-marker.dragging {
+            transform: scale(1.3);
+            box-shadow: 0 6px 16px rgba(245, 87, 108, 0.6);
+            cursor: grabbing;
+        }
+        .segment-divider-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        
+        .btn-edit-segment, .btn-delete-segment {
+            padding: 4px 6px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            margin: 0 1px;
+            transition: all 0.2s;
+        }
+        .btn-edit-segment {
+            background: #4CAF50;
+            color: white;
+        }
+        .btn-edit-segment:hover {
+            background: #45a049;
+        }
+        .btn-delete-segment {
+            background: #f44336;
+            color: white;
+        }
+        .btn-delete-segment:hover {
+            background: #da190b;
+        }
+        
         /* 標記顯示/隱藏按鈕 */
         .permit-zone-button {
             position: absolute;
@@ -527,6 +696,191 @@
         .pipeline-permanent-label::before {
             display: none !important;
         }
+        
+        /* 路徑編輯模式樣式 */
+        .edit-path-button {
+            position: absolute;
+            bottom: 110px;
+            right: 10px;
+            z-index: 1000;
+            background: #FF6B35;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            display: none;
+        }
+        .edit-path-button:hover { background: #E55A2B; }
+        .edit-path-button.active { background: #00695C; }
+        
+        /* 工具抽屜按鈕 */
+        .tools-drawer-toggle {
+            position: absolute;
+            bottom: 20px;
+            right: 10px;
+            z-index: 1000;
+            background: #424242;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            display: none;
+            transition: all 0.3s;
+        }
+        .tools-drawer-toggle:hover {
+            background: #616161;
+            transform: translateX(-2px);
+        }
+        
+        /* 工具抽屜內容 */
+        .tools-drawer {
+            position: absolute;
+            bottom: 20px;
+            right: 160px;
+            z-index: 999;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: none;
+            min-width: 180px;
+            overflow: hidden;
+        }
+        
+        .tools-drawer.active {
+            display: block;
+        }
+        
+        .tool-item {
+            padding: 14px 18px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background 0.2s;
+        }
+        
+        .tool-item:last-child {
+            border-bottom: none;
+        }
+        
+        .tool-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .tool-item.edit { color: #FF6B35; }
+        .tool-item.gantt { color: #00695C; }
+        .tool-item.milestone { color: #3f51b5; }
+        
+        .tool-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .tool-item.disabled:hover {
+            background: white;
+        }
+        
+        /* 手機版優化 */
+        @media (max-width: 768px) {
+            .tools-drawer-toggle {
+                bottom: 15px;
+                right: 8px;
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+            .tools-drawer {
+                right: 140px;
+                bottom: 15px;
+            }
+            .tool-item {
+                padding: 12px 14px;
+                font-size: 12px;
+            }
+        }
+        
+        .edit-mode-toolbar {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1001;
+            background: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: none;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .edit-mode-toolbar.active { display: flex; }
+        
+        .edit-mode-info {
+            font-size: 14px;
+            font-weight: bold;
+            color: #FF6B35;
+            margin-right: 12px;
+        }
+        
+        .edit-mode-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        .edit-mode-btn.save {
+            background: #00695C;
+            color: white;
+        }
+        .edit-mode-btn.save:hover { background: #004D40; }
+        
+        .edit-mode-btn.cancel {
+            background: #e0e0e0;
+            color: #333;
+        }
+        .edit-mode-btn.cancel:hover { background: #d0d0d0; }
+        
+        /* 可拖曳節點樣式 */
+        .path-node {
+            cursor: move;
+        }
+        
+        .path-node-marker {
+            width: 14px !important;
+            height: 14px !important;
+            margin-left: -7px !important;
+            margin-top: -7px !important;
+            background: white;
+            border: 3px solid #FF6B35;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            cursor: move;
+        }
+        
+        .path-node-marker:hover {
+            width: 18px !important;
+            height: 18px !important;
+            margin-left: -9px !important;
+            margin-top: -9px !important;
+            border-width: 4px;
+        }
+        
+        /* 編輯中的管線樣式 */
+        .editing-polyline {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -550,9 +904,23 @@
         <button onclick="updateRoadworkData()" style="width:100%; padding:5px 8px; background:#FF5722; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">🔄 更新資料</button>
     </div>
     
+    <!-- 通用遮罩層 -->
+    <div id="overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1500;"></div>
+    
     <!-- 甘特圖 -->
     <div id="ganttBackdrop" class="gantt-backdrop" onclick="toggleGanttPanel()"></div>
     <div id="ganttBtn" class="gantt-btn" onclick="toggleGanttPanel()">📊 甘特圖</div>
+    
+    <!-- 編輯路徑按鈕 -->
+    <div id="editPathBtn" class="edit-path-button" onclick="toggleEditMode()">✏️ 編輯路徑</div>
+    
+    <!-- 編輯模式工具列 -->
+    <div id="editModeToolbar" class="edit-mode-toolbar">
+        <div class="edit-mode-info">🎯 編輯模式：拖曳節點調整路徑 | 點擊線段新增節點 | 右鍵節點刪除</div>
+        <button class="edit-mode-btn save" onclick="savePathEdits()">💾 儲存</button>
+        <button class="edit-mode-btn cancel" onclick="cancelEditMode()">✕ 取消</button>
+    </div>
+    
     <div id="ganttPanel" class="gantt-panel">
         <!-- 左側：甘特圖主體 -->
         <div class="gantt-main">
@@ -602,6 +970,65 @@
         </div>
     </div>
     
+    <!-- 段落管理面板 -->
+    <div id="segmentPanel" class="segment-panel">
+        <div class="segment-panel-header">
+            <span>📋 段落管理</span>
+            <div>
+                <span style="cursor:pointer;font-size:16px;margin-right:12px;" onclick="toggleSegmentPanelMinimize()" title="最小化">−</span>
+                <span style="cursor:pointer;font-size:18px;" onclick="toggleSegmentPanel()">✕</span>
+            </div>
+        </div>
+        <div class="segment-panel-body">
+            <div id="segmentPipelineInfo" style="background:#f5f5f5;padding:10px;border-radius:6px;margin-bottom:15px;font-size:13px;"></div>
+            <table class="segment-table">
+                <thead>
+                    <tr>
+                        <th style="width:45px;">段落</th>
+                        <th style="width:60px;">起始(m)</th>
+                        <th style="width:60px;">結束(m)</th>
+                        <th style="width:55px;">長度</th>
+                        <th style="width:50px;">管徑</th>
+                        <th style="width:50px;">管種</th>
+                        <th style="width:60px;">方式</th>
+                        <th style="width:70px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="segmentTableBody"></tbody>
+            </table>
+        </div>
+        <div class="segment-panel-footer">
+            <div id="segmentPanelButtons">
+                <button onclick="toggleVisualSegmentation()" class="btn-visual-segment" style="width:100%;">🎯 視覺化分段</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 工具抽屜 -->
+    <div id="toolsDrawerToggle" class="tools-drawer-toggle" onclick="toggleToolsDrawer()">🛠️ 工具</div>
+    <div id="toolsDrawer" class="tools-drawer">
+        <div class="tool-item edit" onclick="selectTool('edit')">
+            <span>✏️</span>
+            <span>編輯路徑</span>
+        </div>
+        <div class="tool-item segment" onclick="selectTool('segment')">
+            <span>📋</span>
+            <span>段落管理</span>
+        </div>
+        <div class="tool-item gantt" onclick="selectTool('gantt')">
+            <span>📊</span>
+            <span>甘特圖</span>
+        </div>
+        <div class="tool-item milestone" onclick="selectTool('milestone')">
+            <span>📅</span>
+            <span>施工里程碑</span>
+        </div>
+        <div class="tool-item" onclick="logout()" style="color: #666; border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px;">
+            <span>🔓</span>
+            <span>登出</span>
+        </div>
+    </div>
+    
     <div id="projectSelector" class="project-selector hidden">
         <h2>🗂️ 選擇施工計畫</h2>
         <div class="project-grid" id="projectGrid"></div>
@@ -629,6 +1056,12 @@
         let dateLabels = [];
         let dateLabelArrows = [];
         let ganttItemsCache = [];
+        
+        // 路徑編輯模式變數
+        let isEditingPath = false;
+        let editingPolyline = null;
+        let editingNodes = [];
+        let originalCoords = [];
         
         // 工法顏色配置（改用飽和度更高的顏色）
         const METHOD_COLORS = {
@@ -736,9 +1169,54 @@
             
             initMap();
             
-            // 先清除地圖（但不重置 UI 元素）
-            allPolylines.forEach(p => map.removeLayer(p));
+            // 徹底清除地圖上的所有圖層（除了底圖）
+            map.eachLayer(function(layer) {
+                // 只保留底圖 (TileLayer)
+                if (!(layer instanceof L.TileLayer)) {
+                    map.removeLayer(layer);
+                }
+            });
             allPolylines = [];
+            
+            // 清除計畫備註標記
+            projectPermitZones = [];
+            projectPermitLabels = [];
+            projectPermitVisible = false;
+            
+            // 隱藏個別工程的按鈕
+            const ganttBtn = document.getElementById('ganttBtn');
+            if (ganttBtn) ganttBtn.style.display = 'none';
+            
+            const milestoneBtn = document.getElementById('milestoneBtn');
+            if (milestoneBtn) milestoneBtn.style.display = 'none';
+            
+            const permitZoneBtn = document.getElementById('permitZoneButton');
+            if (permitZoneBtn) {
+                permitZoneBtn.classList.add('hidden');
+                permitZoneBtn.classList.remove('hidden-markers');
+            }
+            
+            const dateLabelBtn = document.getElementById('dateLabelButton');
+            if (dateLabelBtn) {
+                dateLabelBtn.classList.add('hidden');
+                dateLabelBtn.classList.remove('active');
+            }
+            
+            // 隱藏台中挖掘許可按鈕（如果有的話）
+            const roadworkBtn = document.getElementById('roadworkButton');
+            if (roadworkBtn) {
+                roadworkBtn.classList.remove('active');
+            }
+            
+            // 顯示計畫總覽的路權按鈕
+            const projectNotesBtn = document.getElementById('permitZoneButton');
+            if (projectNotesBtn) {
+                projectNotesBtn.classList.remove('hidden');
+                projectNotesBtn.classList.remove('hidden-markers');
+                projectNotesBtn.textContent = '👁️';
+                projectNotesBtn.title = '顯示所有工程路權申請狀況';
+                projectNotesBtn.onclick = () => toggleProjectNotes(projectPipelines);
+            }
             
             // 顯示工程列表（會設定按鈕為顯示）
             showPipelineList(projectPipelines);
@@ -765,20 +1243,11 @@
                     opacity: 0.8
                 }).addTo(map);
                 
-                // 在管線中點顯示固定標籤
+                // 在管線中點顯示固定標籤（彩色框線）
                 if (coords.length > 0) {
                     const midIndex = Math.floor(coords.length / 2);
                     const midPoint = coords[midIndex];
                     
-                    polyline.bindTooltip(pipeline.name, {
-                        permanent: true,
-                        direction: 'top',
-                        offset: [0, -10],
-                        className: 'pipeline-permanent-label',
-                        interactive: false
-                    });
-                    
-                    // 在中點顯示標籤
                     const labelTooltip = L.tooltip({
                         permanent: true,
                         direction: 'top',
@@ -800,6 +1269,9 @@
             if (bounds.length > 0) {
                 map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50] });
             }
+            
+            // 顯示計畫統計面板
+            showProjectStatsPanel(projectPipelines);
         }
         
         function showPipelineList(pipelines) {
@@ -820,7 +1292,9 @@
                     showPipelineDetail(pipeline.id);
                     // 選擇工程後自動關閉列表
                     const list = document.querySelector('.pipeline-list');
+                    const toggle = document.getElementById('pipelineListToggle');
                     if (list) list.classList.remove('open');
+                    if (toggle) toggle.textContent = '📋 工程列表';
                 };
                 item.innerHTML = `
                     <div class="pipeline-item-name">${pipeline.name}</div>
@@ -831,12 +1305,13 @@
             
             document.body.appendChild(listDiv);
             
-            // 顯示切換按鈕
+            // 顯示切換按鈕並重置文字和狀態
             const toggle = document.getElementById('pipelineListToggle');
             console.log('切換按鈕元素:', toggle);
             if (toggle) {
                 toggle.style.display = 'block';
-                console.log('✅ 切換按鈕已設定為顯示');
+                toggle.textContent = '📋 工程列表'; // 重置文字
+                console.log('✅ 切換按鈕已設定為顯示並重置文字');
             } else {
                 console.error('❌ 找不到切換按鈕元素！');
             }
@@ -862,6 +1337,11 @@
         function showPipelineDetail(pipelineId, keepView = false) {
             currentPipeline = allPipelines.find(p => p.id === pipelineId);
             
+            // 只在首次進入工程時重置標記可見性（編輯後重載時保持狀態）
+            if (!keepView) {
+                allMarkersVisible = true;
+            }
+            
             console.log('顯示工程:', currentPipeline.name);
             console.log('段落數量:', currentPipeline.segments.length);
             
@@ -869,6 +1349,10 @@
             
             const coords = parseLineString(currentPipeline.linestring);
             const totalLength = Math.round(calculateTotalLength(coords));
+            
+            // 儲存管線總長度到 currentPipeline 物件
+            currentPipeline.length = totalLength;
+            
             console.log('管線座標點數:', coords.length);
             console.log('管線總長:', totalLength, 'm');
             
@@ -890,7 +1374,8 @@
                             <div class="popup-info">⚠️ 尚未定義段落</div>
                             <div class="popup-info">管線總長：約 ${totalLength}m</div>
                             <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
-                                💡 請在 Google Sheets「施工進度」表中手動設定段落資料
+                                💡 請在 Google Sheets「施工進度」表中手動設定段落資料<br>
+                                或使用「🛠️ 工具 → 📋 段落管理」功能
                             </div>
                         `)
                         .openOn(map);
@@ -1060,16 +1545,51 @@
             loadShafts();
             
             // 載入挖掘許可範圍
-            document.getElementById('permitZoneButton').classList.remove('hidden');
+            const permitBtn = document.getElementById('permitZoneButton');
+            if (permitBtn) {
+                permitBtn.classList.remove('hidden');
+                permitBtn.classList.remove('hidden-markers');
+                permitBtn.textContent = '👁️';
+                permitBtn.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍）';
+                permitBtn.onclick = toggleAllMarkers; // 設定為切換所有標記功能
+            }
             loadPermitZones();
             
-            // 顯示里程碑和甘特圖按鈕
-            document.getElementById('milestoneBtn').style.display = 'block';
-            document.getElementById('ganttBtn').style.display = 'block';
+            // 隱藏獨立的工具按鈕（改用抽屜）
+            document.getElementById('milestoneBtn').style.display = 'none';
+            document.getElementById('ganttBtn').style.display = 'none';
+            document.getElementById('editPathBtn').style.display = 'none';
+            
+            // 顯示工具抽屜按鈕
+            document.getElementById('toolsDrawerToggle').style.display = 'block';
             
             // 顯示日期標註按鈕並載入甘特圖資料
             document.getElementById('dateLabelButton').classList.remove('hidden');
             loadGanttItemsForLabels();
+            
+            // 恢復標記可見性狀態
+            // 延遲執行，確保所有標記都已載入
+            setTimeout(() => {
+                // 先更新按鈕狀態
+                const btn = document.getElementById('permitZoneButton');
+                if (btn) {
+                    if (allMarkersVisible) {
+                        btn.classList.remove('hidden-markers');
+                        btn.textContent = '👁️';
+                        btn.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍）';
+                    } else {
+                        // 如果之前已隱藏，需要移除剛載入的標記
+                        noteMarkers.forEach(m => map.removeLayer(m));
+                        panelMarkers.forEach(m => map.removeLayer(m));
+                        shaftMarkers.forEach(m => map.removeLayer(m));
+                        permitZones.forEach(z => map.removeLayer(z));
+                        permitLabels.forEach(l => map.removeLayer(l));
+                        btn.classList.add('hidden-markers');
+                        btn.textContent = '🙈';
+                        btn.title = '顯示所有標記（備註/配電盤/工作井/挖掘範圍）';
+                    }
+                }
+            }, 100);
             
             // 移除工程列表和切換按鈕
             const existingList = document.querySelector('.pipeline-list');
@@ -1511,20 +2031,32 @@
         // 載入配電盤標記
         async function loadPanels() {
             try {
+                console.log('🔌 開始載入配電盤標記...');
                 let url = API_URL + '?action=getPanels';
                 if (currentPipeline && currentPipeline.id) {
                     url += '&pipelineId=' + encodeURIComponent(currentPipeline.id);
+                    console.log('當前工程ID:', currentPipeline.id);
                 }
                 
                 const response = await fetch(url);
                 const result = await response.json();
                 
+                console.log('配電盤 API 回應:', result);
+                
                 if (result.panels) {
                     panelData = result.panels;
+                    console.log('✅ 載入配電盤數量:', panelData.length);
+                    panelData.forEach(p => {
+                        console.log('  - 配電盤:', p.id, '工程:', p.pipelineId, '照片:', p.photo ? '有' : '無');
+                    });
                     displayPanels();
+                } else if (result.error) {
+                    console.error('❌ 載入配電盤失敗:', result.error);
+                } else {
+                    console.warn('⚠️ API 回應格式異常:', result);
                 }
             } catch (error) {
-                console.error('載入配電盤標記失敗:', error);
+                console.error('❌ 載入配電盤標記失敗:', error);
             }
         }
         
@@ -1537,13 +2069,32 @@
                 return;
             }
             
+            console.log('📍 顯示配電盤標記，數量:', panelData.length);
+            
             panelData.forEach(panel => {
                 // 前端二次過濾
                 if (panel.pipelineId && panel.pipelineId !== currentPipeline.id) {
                     return;
                 }
                 
-                const marker = L.marker([panel.lat, panel.lng], {
+                // 處理經緯度（後端可能回傳 lat/lng 或 lat/lon）
+                const lat = panel.lat || panel.latitude;
+                const lng = panel.lng || panel.lon || panel.longitude;
+                
+                console.log('配電盤資料:', {
+                    id: panel.id,
+                    lat: lat,
+                    lng: lng,
+                    photo: panel.photo,
+                    text: panel.text
+                });
+                
+                if (!lat || !lng) {
+                    console.warn('❌ 配電盤座標不完整:', panel);
+                    return;
+                }
+                
+                const marker = L.marker([lat, lng], {
                     icon: L.divIcon({
                         className: 'panel-marker-custom',
                         html: `
@@ -1568,10 +2119,55 @@
                     })
                 }).addTo(map);
                 
+                // 轉換 Google Drive 連結為可嵌入的圖片 URL
+                let photoUrl = '';
+                if (panel.photo) {
+                    console.log('原始照片連結:', panel.photo);
+                    
+                    if (panel.photo.includes('drive.google.com/file/d/') || panel.photo.includes('drive.google.com/uc?')) {
+                        // Google Drive 連結格式
+                        let fileId = '';
+                        
+                        // 提取 FILE_ID
+                        const fileIdMatch1 = panel.photo.match(/\/d\/([^\/]+)/);
+                        const fileIdMatch2 = panel.photo.match(/id=([^&]+)/);
+                        
+                        if (fileIdMatch1) {
+                            fileId = fileIdMatch1[1];
+                        } else if (fileIdMatch2) {
+                            fileId = fileIdMatch2[1];
+                        }
+                        
+                        if (fileId) {
+                            // 使用 Google Drive 縮圖 API（更可靠）
+                            photoUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+                            console.log('✅ 使用縮圖 API:', photoUrl);
+                        }
+                    } else if (panel.photo.includes('drive.google.com/open?id=')) {
+                        // 另一種 Google Drive 格式
+                        const fileIdMatch = panel.photo.match(/id=([^&]+)/);
+                        if (fileIdMatch) {
+                            const fileId = fileIdMatch[1];
+                            photoUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+                            console.log('✅ 使用縮圖 API:', photoUrl);
+                        }
+                    } else if (panel.photo.startsWith('http')) {
+                        // 其他 HTTP 連結直接使用
+                        photoUrl = panel.photo;
+                        console.log('📷 使用原始 HTTP 連結');
+                    } else if (panel.photo.startsWith('data:image')) {
+                        // Base64 圖片直接使用
+                        photoUrl = panel.photo;
+                        console.log('📷 使用 Base64 圖片');
+                    }
+                } else {
+                    console.log('⚠️ 沒有照片');
+                }
+                
                 marker.bindPopup(`
                     <div style="min-width: 240px; max-width: 300px;" id="panel-popup-${panel.id}">
                         <div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">🔌 配電盤/儀表箱</div>
-                        ${panel.photo ? `<img src="${panel.photo}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;">` : ''}
+                        ${photoUrl ? `<img src="${photoUrl}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;" onerror="console.error('圖片載入失敗:', this.src); this.style.display='none'">` : '<div style="padding: 20px; text-align: center; color: #999; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px;">📷 無照片</div>'}
                         <div id="panel-text-view-${panel.id}" style="margin-bottom: 8px; white-space: pre-wrap;">${panel.text || ''}</div>
                         <textarea id="panel-text-edit-${panel.id}" style="display:none; width: 100%; height: 80px; padding: 6px; border: 1px solid #4CAF50; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 13px; box-sizing: border-box;">${panel.text || ''}</textarea>
                         <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px;">
@@ -1640,6 +2236,13 @@
                 return;
             }
             
+            // 確保有 currentPipeline
+            if (!currentPipeline || !currentPipeline.id) {
+                alert('❌ 錯誤：無法取得當前工程資訊\n請重新進入工程頁面');
+                console.error('currentPipeline 未定義:', currentPipeline);
+                return;
+            }
+            
             let photoBase64 = '';
             
             if (photoInput && photoInput.files && photoInput.files[0]) {
@@ -1662,7 +2265,7 @@
                     '&lng=' + lng +
                     '&text=' + encodeURIComponent(text) +
                     '&creator=' + encodeURIComponent(creator) +
-                    '&pipelineId=' + encodeURIComponent(currentPipeline ? currentPipeline.id : '');
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id);
                 
                 const response = await fetch(API_URL + queryString, {
                     method: 'POST',
@@ -3953,6 +4556,177 @@ window.addEventListener('message', async function(event) {
             document.body.appendChild(panel);
         }
         
+        // ========== 計畫總覽路權範圍功能 ==========
+        let projectPermitVisible = false;
+        let projectPermitZones = [];
+        let projectPermitLabels = [];
+        
+        async function toggleProjectNotes(pipelines) {
+            projectPermitVisible = !projectPermitVisible;
+            const btn = document.getElementById('permitZoneButton');
+            
+            if (projectPermitVisible) {
+                // 顯示所有工程的路權範圍
+                btn.textContent = '🙈';
+                btn.title = '隱藏所有工程路權申請狀況';
+                
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                // 同時載入所有工程的路權範圍
+                await Promise.all(pipelines.map(async pipeline => {
+                    try {
+                        const res = await fetch(API_URL + '?action=getPermitZones&pipelineId=' + encodeURIComponent(pipeline.id));
+                        const result = await res.json();
+                        const zones = result.zones || [];
+                        
+                        zones.forEach(zone => {
+                            const points = zone.points.split(';').map(p => {
+                                const parts = p.split(',');
+                                return [parseFloat(parts[0]), parseFloat(parts[1])];
+                            }).filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+                            
+                            if (points.length < 3) return;
+                            
+                            const isApproved = zone.status === 'approved';
+                            let color = isApproved ? '#27ae60' : '#e74c3c';
+                            let statusLabel = isApproved ? '🟢 路權已取得' : '🔴 路權申請中';
+                            
+                            // 檢查是否即將過期
+                            if (isApproved && zone.permitDateEnd) {
+                                const endDate = new Date(zone.permitDateEnd);
+                                endDate.setHours(0, 0, 0, 0);
+                                const daysRemaining = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                                
+                                if (daysRemaining <= 14 && daysRemaining >= 0) {
+                                    color = '#FFA500';
+                                    statusLabel = '🟡 路權即將過期';
+                                } else if (daysRemaining < 0) {
+                                    color = '#808080';
+                                    statusLabel = '⚫ 路權已過期';
+                                }
+                            }
+                            
+                            const polygon = L.polygon(points, {
+                                color: color,
+                                weight: 2,
+                                fillColor: color,
+                                fillOpacity: 0.25,
+                                interactive: true
+                            }).addTo(map);
+                            
+                            // Popup 內容
+                            const popupContent = `
+                                <div style="min-width:220px;font-size:13px;">
+                                    <div style="font-weight:bold;color:${color};margin-bottom:8px;font-size:14px;">${statusLabel}</div>
+                                    <div style="margin:3px 0;color:#666;"><b>工程：</b>${pipeline.name}</div>
+                                    ${zone.permitNo ? '<div style="margin:3px 0"><b>許可證號：</b>' + zone.permitNo + '</div>' : ''}
+                                    ${zone.applyDate ? '<div style="margin:3px 0"><b>申請時間：</b>' + String(zone.applyDate).substring(0,10) + '</div>' : ''}
+                                    ${(zone.permitDateStart || zone.permitDateEnd) ? '<div style="margin:3px 0"><b>許可期間：</b>' + (zone.permitDateStart ? String(zone.permitDateStart).substring(0,10) : '') + ' ～ ' + (zone.permitDateEnd ? String(zone.permitDateEnd).substring(0,10) : '') + '</div>' : ''}
+                                    ${zone.notes ? '<div style="margin:3px 0;color:#666;"><b>備註：</b>' + zone.notes + '</div>' : ''}
+                                </div>
+                            `;
+                            polygon.bindPopup(popupContent);
+                            
+                            // 中心標籤
+                            const centerLat = points.reduce((s, p) => s + p[0], 0) / points.length;
+                            const centerLng = points.reduce((s, p) => s + p[1], 0) / points.length;
+                            const lines = [statusLabel];
+                            if (zone.applyDate) lines.push('申請：' + zone.applyDate);
+                            if (zone.permitDateStart || zone.permitDateEnd) lines.push('許可：' + (zone.permitDateStart || '') + '～' + (zone.permitDateEnd || ''));
+                            
+                            const labelHtml = '<div style="color:' + color + ';opacity:0.75;font-size:11px;font-weight:bold;text-align:center;white-space:nowrap;line-height:1.6;text-shadow:0 0 3px white,0 0 3px white,0 0 3px white;">' + lines.join('<br>') + '</div>';
+                            const labelIcon = L.divIcon({ className: '', html: labelHtml, iconAnchor: [0, 0] });
+                            const labelMarker = L.marker([centerLat, centerLng], { icon: labelIcon, interactive: false, zIndexOffset: -100 }).addTo(map);
+                            
+                            projectPermitZones.push(polygon);
+                            projectPermitLabels.push(labelMarker);
+                        });
+                    } catch (error) {
+                        console.error('載入工程路權範圍失敗:', pipeline.name, error);
+                    }
+                }));
+            } else {
+                // 隱藏所有路權範圍
+                btn.textContent = '👁️';
+                btn.title = '顯示所有工程路權申請狀況';
+                projectPermitZones.forEach(z => map.removeLayer(z));
+                projectPermitZones = [];
+                projectPermitLabels.forEach(l => map.removeLayer(l));
+                projectPermitLabels = [];
+            }
+        }
+        
+        // 顯示計畫統計面板（整個計畫的多個工程）
+        function showProjectStatsPanel(pipelines) {
+            const existingPanel = document.querySelector('.stats-panel');
+            if (existingPanel) existingPanel.remove();
+            
+            // 計算所有工程的總進度
+            let totalLength = 0;
+            let completedLength = 0;
+            const methodStats = {}; // {工法: {total: 長度, completed: 完工長度}}
+            
+            pipelines.forEach(pipeline => {
+                (pipeline.segments || []).forEach(segment => {
+                    const segLength = segment.endDistance - segment.startDistance;
+                    const smallSegmentsStatus = segment.smallSegments || '';
+                    const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+                    const numSmallSegments = Math.ceil(segLength / 10);
+                    
+                    let segCompleted = 0;
+                    for (let i = 0; i < numSmallSegments; i++) {
+                        const smallLength = Math.min(10, segLength - (i * 10));
+                        totalLength += smallLength;
+                        
+                        if (statusArray[i] === '1') {
+                            completedLength += smallLength;
+                            segCompleted += smallLength;
+                        }
+                    }
+                    
+                    // 統計各工法（含管徑、管種）
+                    const method = segment.method || '未設定';
+                    const diameter = segment.diameter || '';
+                    const pipeType = segment.pipeType || '';
+                    const methodKey = method;
+                    const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
+                    if (!methodStats[methodKey]) {
+                        methodStats[methodKey] = { total: 0, completed: 0, label: methodLabel };
+                    }
+                    methodStats[methodKey].total += segLength;
+                    methodStats[methodKey].completed += segCompleted;
+                });
+            });
+            
+            const overallPercent = totalLength > 0 ? Math.round((completedLength / totalLength) * 100) : 0;
+            
+            let statsHTML = `
+                <h3>📊 ${currentProject.name}</h3>
+                <div class="stats-info" style="font-size: 13px; font-weight: bold; color: #2c3e50; margin: 10px 0;">
+                    總進度：${overallPercent}% (${Math.round(completedLength)}m/${Math.round(totalLength)}m)
+                </div>
+            `;
+            
+            // 顯示各工法統計
+            Object.keys(methodStats).forEach(method => {
+                const stats = methodStats[method];
+                const percent = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+                const color = METHOD_COLORS[method] ? METHOD_COLORS[method].color : '#999999';
+                
+                statsHTML += `
+                    <div class="stats-info" style="font-size: 11px; margin: 5px 0; padding-left: 10px; border-left: 3px solid ${color};">
+                        ${stats.label}：${percent}% (${Math.round(stats.completed)}m/${Math.round(stats.total)}m)
+                    </div>
+                `;
+            });
+            
+            const panel = document.createElement('div');
+            panel.className = 'stats-panel';
+            panel.innerHTML = statsHTML;
+            document.body.appendChild(panel);
+        }
+        
         // 清空工程所有段落
         window.clearAllSegments = async function() {
             if (!confirm('⚠️ 確定要刪除這個工程的所有段落嗎？\n\n這個動作無法復原！')) {
@@ -4002,6 +4776,19 @@ window.addEventListener('message', async function(event) {
                 if (existingList) existingList.remove();
                 
                 btn.remove();
+                
+                // 隱藏工具相關按鈕
+                document.getElementById('editPathBtn').style.display = 'none';
+                document.getElementById('toolsDrawerToggle').style.display = 'none';
+                document.getElementById('toolsDrawer').classList.remove('active');
+                
+                // 重置密碼驗證狀態
+                isAuthenticated = false;
+                
+                // 如果正在編輯，先取消（靜默模式，不顯示確認對話框）
+                if (isEditingPath) {
+                    cancelEditMode(true);
+                }
                 
                 if (currentPipeline) {
                     // 返回工程列表
@@ -4157,12 +4944,17 @@ window.addEventListener('message', async function(event) {
             shaftMarkers.forEach(m => map.removeLayer(m));
             shaftMarkers = [];
             shaftData = [];
-            // 清除挖掘許可範圍
+            // 清除挖掘許可範圍（個別工程）
             permitZones.forEach(z => map.removeLayer(z));
             permitZones = [];
             permitLabels.forEach(l => map.removeLayer(l));
             permitLabels = [];
             permitZoneData = [];
+            // 清除大地圖的路權標記（計畫總覽）
+            projectPermitZones.forEach(z => map.removeLayer(z));
+            projectPermitZones = [];
+            projectPermitLabels.forEach(l => map.removeLayer(l));
+            projectPermitLabels = [];
             // 清除工程列表
             const existingList = document.querySelector('.pipeline-list');
             if (existingList) existingList.remove();
@@ -4786,7 +5578,1516 @@ window.addEventListener('message', async function(event) {
             }
         });
         
-        console.log('管線施工進度管理系統 v2.0 - 簡化測試版');
+        // ==================== 路徑編輯功能 ====================
+        
+        // 切換編輯模式
+        function toggleEditMode() {
+            if (!currentPipeline) {
+                alert('❌ 請先選擇一個工程');
+                return;
+            }
+            
+            if (isEditingPath) {
+                cancelEditMode();
+            } else {
+                startEditMode();
+            }
+        }
+        
+        // 開始編輯模式
+        function startEditMode() {
+            isEditingPath = true;
+            
+            // 更新按鈕狀態
+            const btn = document.getElementById('editPathBtn');
+            btn.classList.add('active');
+            btn.textContent = '⏸️ 編輯中...';
+            
+            // 顯示工具列
+            document.getElementById('editModeToolbar').classList.add('active');
+            
+            // 取得當前管線座標
+            const coords = parseLineString(currentPipeline.linestring);
+            originalCoords = JSON.parse(JSON.stringify(coords)); // 深拷貝
+            
+            // 清除現有管線顯示
+            allPolylines.forEach(layer => {
+                if (layer instanceof L.Polyline) {
+                    map.removeLayer(layer);
+                }
+            });
+            
+            // 繪製可編輯的管線
+            editingPolyline = L.polyline(coords, {
+                color: '#FF6B35',
+                weight: 6,
+                opacity: 0.8,
+                className: 'editing-polyline'
+            }).addTo(map);
+            
+            // 在管線上加入點擊事件（新增節點）
+            editingPolyline.on('click', function(e) {
+                addNodeAtPosition(e.latlng);
+            });
+            
+            // 建立可拖曳節點
+            createEditableNodes(coords);
+            
+            console.log('🎨 進入編輯模式，共', coords.length, '個節點');
+        }
+        
+        // 建立可編輯節點
+        function createEditableNodes(coords) {
+            editingNodes = [];
+            
+            coords.forEach((coord, index) => {
+                const marker = L.marker([coord[0], coord[1]], {
+                    draggable: true,
+                    icon: L.divIcon({
+                        className: 'path-node-marker',
+                        iconSize: [14, 14]
+                    })
+                }).addTo(map);
+                
+                // 拖曳事件
+                marker.on('drag', function(e) {
+                    updatePolylineFromNodes();
+                });
+                
+                // 右鍵刪除節點
+                marker.on('contextmenu', function(e) {
+                    e.originalEvent.preventDefault();
+                    if (editingNodes.length > 2) {
+                        removeNode(index);
+                    } else {
+                        alert('⚠️ 路徑至少需要 2 個節點');
+                    }
+                });
+                
+                editingNodes.push(marker);
+            });
+        }
+        
+        // 在指定位置新增節點
+        function addNodeAtPosition(latlng) {
+            // 找到最接近的線段
+            const coords = editingPolyline.getLatLngs();
+            let minDist = Infinity;
+            let insertIndex = -1;
+            
+            for (let i = 0; i < coords.length - 1; i++) {
+                const dist = L.GeometryUtil.distanceSegment(map, latlng, coords[i], coords[i + 1]);
+                if (dist < minDist) {
+                    minDist = dist;
+                    insertIndex = i + 1;
+                }
+            }
+            
+            if (insertIndex === -1) return;
+            
+            // 插入新節點標記
+            const newMarker = L.marker(latlng, {
+                draggable: true,
+                icon: L.divIcon({
+                    className: 'path-node-marker',
+                    iconSize: [14, 14]
+                })
+            }).addTo(map);
+            
+            newMarker.on('drag', function(e) {
+                updatePolylineFromNodes();
+            });
+            
+            newMarker.on('contextmenu', function(e) {
+                e.originalEvent.preventDefault();
+                const idx = editingNodes.indexOf(newMarker);
+                if (editingNodes.length > 2) {
+                    removeNode(idx);
+                } else {
+                    alert('⚠️ 路徑至少需要 2 個節點');
+                }
+            });
+            
+            editingNodes.splice(insertIndex, 0, newMarker);
+            updatePolylineFromNodes();
+            
+            console.log('➕ 新增節點於索引', insertIndex);
+        }
+        
+        // 移除節點
+        function removeNode(index) {
+            const marker = editingNodes[index];
+            map.removeLayer(marker);
+            editingNodes.splice(index, 1);
+            updatePolylineFromNodes();
+            
+            console.log('➖ 刪除節點索引', index, '，剩餘', editingNodes.length, '個節點');
+        }
+        
+        // 從節點更新管線
+        function updatePolylineFromNodes() {
+            const newCoords = editingNodes.map(marker => marker.getLatLng());
+            editingPolyline.setLatLngs(newCoords);
+        }
+        
+        // 儲存編輯
+        async function savePathEdits() {
+            // 第一階段確認：儲存路徑並清空段落
+            const confirmMessage = `⚠️ 儲存路徑變更
+            
+新路徑將更新至 Google Sheets
+
+⚠️ 重要提醒：
+• 施工進度段落資料將被清空
+• 小段狀態將被重設
+• 地圖備註、工作井、路權範圍不受影響
+
+您需要重新設定：
+1. 在「施工進度」表手動新增段落
+2. 設定起始/結束距離、管徑、施工方式等
+
+確定要繼續嗎？`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                // 取得新座標
+                const newCoords = editingNodes.map(marker => {
+                    const ll = marker.getLatLng();
+                    return [ll.lat, ll.lng];
+                });
+                
+                // 轉換為 LINESTRING 格式
+                const linestring = 'LINESTRING(' + 
+                    newCoords.map(c => c[1] + ' ' + c[0]).join(', ') + 
+                ')';
+                
+                // 計算新路徑長度
+                let newLength = 0;
+                for (let i = 0; i < newCoords.length - 1; i++) {
+                    const p1 = newCoords[i];
+                    const p2 = newCoords[i + 1];
+                    newLength += getDistance(p1, p2);
+                }
+                newLength = Math.round(newLength);
+                
+                console.log('📡 準備儲存新路徑');
+                console.log('   LINESTRING:', linestring);
+                console.log('   新路徑長度:', newLength, 'm');
+                
+                // 呼叫 API 更新（會同時清空段落資料）
+                const url = API_URL + 
+                    '?action=updateLinestring' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&linestring=' + encodeURIComponent(linestring);
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ 路徑已成功更新！\n\n施工進度段落資料已清空，請重新在 Google Sheets 設定。');
+                    
+                    // 更新本地資料
+                    currentPipeline.linestring = linestring;
+                    currentPipeline.segments = []; // 清空本地段落資料
+                    
+                    // 退出編輯模式（靜默模式）
+                    cancelEditMode(true);
+                    
+                    // 重新載入工程詳細頁面
+                    showPipelineDetail(currentPipeline.id, true);
+                } else {
+                    throw new Error(result.error || '更新失敗');
+                }
+            } catch (error) {
+                console.error('❌ 儲存失敗:', error);
+                alert('❌ 儲存失敗：' + error.message);
+            }
+        }
+        
+        // 取消編輯模式
+        function cancelEditMode(silent = false) {
+            // silent = true 時不顯示確認對話框（例如：返回按鈕、儲存後）
+            if (!silent && isEditingPath && !confirm('❌ 確定要取消編輯嗎？\n\n所有變更都將遺失。')) {
+                return;
+            }
+            
+            isEditingPath = false;
+            
+            // 恢復按鈕狀態
+            const btn = document.getElementById('editPathBtn');
+            btn.classList.remove('active');
+            btn.textContent = '✏️ 編輯路徑';
+            
+            // 隱藏工具列
+            document.getElementById('editModeToolbar').classList.remove('active');
+            
+            // 移除編輯元素
+            if (editingPolyline) {
+                map.removeLayer(editingPolyline);
+                editingPolyline = null;
+            }
+            
+            editingNodes.forEach(marker => map.removeLayer(marker));
+            editingNodes = [];
+            
+            // 重新顯示管線
+            if (currentPipeline) {
+                showPipelineDetail(currentPipeline.id, true);
+            }
+            
+            console.log('🔙 退出編輯模式');
+        }
+        
+        // 加入 Leaflet.GeometryUtil 的簡化版本（計算點到線段距離）
+        L.GeometryUtil = L.GeometryUtil || {};
+        L.GeometryUtil.distanceSegment = function(map, latlng, latlng1, latlng2) {
+            const p = map.latLngToLayerPoint(latlng);
+            const p1 = map.latLngToLayerPoint(latlng1);
+            const p2 = map.latLngToLayerPoint(latlng2);
+            return L.LineUtil.pointToSegmentDistance(p, p1, p2);
+        };
+        
+        // ==================== 工具抽屜功能 ====================
+        
+        // 密碼設定（您可以修改這個密碼）
+        const EDIT_PASSWORD = 'edit123';
+        let isAuthenticated = false; // 記錄本次 session 是否已驗證
+        
+        // 切換工具抽屜
+        function toggleToolsDrawer() {
+            const drawer = document.getElementById('toolsDrawer');
+            
+            // 如果抽屜已開啟，直接關閉
+            if (drawer.classList.contains('active')) {
+                drawer.classList.remove('active');
+                return;
+            }
+            
+            // 如果本次 session 還沒驗證過，要求輸入密碼
+            if (!isAuthenticated) {
+                const password = prompt('🔐 請輸入編輯密碼：');
+                
+                if (password === null) {
+                    // 使用者取消
+                    return;
+                }
+                
+                if (password !== EDIT_PASSWORD) {
+                    alert('❌ 密碼錯誤！');
+                    return;
+                }
+                
+                // 密碼正確，標記為已驗證
+                isAuthenticated = true;
+                alert('✅ 驗證成功！');
+            }
+            
+            // 展開抽屜
+            drawer.classList.add('active');
+        }
+        
+        // 選擇工具
+        function selectTool(tool) {
+            // 關閉抽屜
+            document.getElementById('toolsDrawer').classList.remove('active');
+            
+            // 執行對應功能
+            switch(tool) {
+                case 'edit':
+                    if (!isEditingPath) {
+                        toggleEditMode();
+                    }
+                    break;
+                case 'segment':
+                    toggleSegmentPanel();
+                    break;
+                case 'gantt':
+                    toggleGanttPanel();
+                    break;
+                case 'milestone':
+                    toggleMilestonePanel();
+                    break;
+            }
+        }
+        
+        // 登出功能
+        function logout() {
+            if (confirm('確定要登出嗎？\n\n登出後需要重新輸入密碼才能使用編輯功能。')) {
+                isAuthenticated = false;
+                document.getElementById('toolsDrawer').classList.remove('active');
+                alert('✅ 已登出');
+            }
+        }
+        
+        // 點擊地圖其他地方時關閉抽屜
+        document.addEventListener('click', function(e) {
+            const drawer = document.getElementById('toolsDrawer');
+            const toggle = document.getElementById('toolsDrawerToggle');
+            
+            if (drawer && toggle && 
+                !drawer.contains(e.target) && 
+                !toggle.contains(e.target) &&
+                drawer.classList.contains('active')) {
+                drawer.classList.remove('active');
+            }
+        });
+        
+        // ==================== 段落管理功能 ====================
+        
+        let currentSegments = []; // 儲存當前工程的段落資料
+        let visualSegmentationMode = false; // 視覺化分段模式
+        let segmentDividers = []; // 分段線標記 {distance: number, marker: L.Marker}
+        let pipelineCoords = []; // 管線座標
+        let isDraggingDivider = false; // 是否正在拖拉分段線
+        
+        // 切換視覺化分段模式
+        function toggleVisualSegmentation() {
+            if (!currentPipeline) {
+                alert('⚠️ 請先選擇一個工程');
+                return;
+            }
+            
+            visualSegmentationMode = !visualSegmentationMode;
+            const buttonsContainer = document.getElementById('segmentPanelButtons');
+            
+            if (visualSegmentationMode) {
+                // 進入視覺化分段模式：顯示完成和取消按鈕
+                buttonsContainer.innerHTML = `
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="completeVisualSegmentation()" class="btn-visual-segment active" style="flex:1;">✓ 完成分段</button>
+                        <button onclick="cancelVisualSegmentation()" style="flex:1;padding:10px;background:#f5f5f5;color:#666;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">✕ 取消</button>
+                    </div>
+                `;
+                enterVisualSegmentationMode();
+            } else {
+                // 退出視覺化分段模式：恢復單一按鈕
+                buttonsContainer.innerHTML = `
+                    <button onclick="toggleVisualSegmentation()" class="btn-visual-segment" style="width:100%;">🎯 視覺化分段</button>
+                `;
+                exitVisualSegmentationMode();
+            }
+        }
+        
+        // 完成視覺化分段
+        function completeVisualSegmentation() {
+            visualSegmentationMode = false;
+            const buttonsContainer = document.getElementById('segmentPanelButtons');
+            buttonsContainer.innerHTML = `
+                <button onclick="toggleVisualSegmentation()" class="btn-visual-segment" style="width:100%;">🎯 視覺化分段</button>
+            `;
+            exitVisualSegmentationMode();
+        }
+        
+        // 取消視覺化分段
+        function cancelVisualSegmentation() {
+            if (segmentDividers.length > 0) {
+                if (!confirm('確定要取消嗎？所有分段線將被清除')) {
+                    return;
+                }
+            }
+            
+            visualSegmentationMode = false;
+            const buttonsContainer = document.getElementById('segmentPanelButtons');
+            buttonsContainer.innerHTML = `
+                <button onclick="toggleVisualSegmentation()" class="btn-visual-segment" style="width:100%;">🎯 視覺化分段</button>
+            `;
+            
+            // 移除所有分段線標記
+            segmentDividers.forEach(divider => {
+                map.removeLayer(divider.marker);
+            });
+            segmentDividers = [];
+            
+            // 移除地圖點擊事件
+            map.off('click', onMapClickAddDivider);
+            
+            // 恢復段落表格
+            document.querySelector('.segment-table').style.display = 'table';
+            hideVisualSegmentationPanel();
+        }
+        
+        // 進入視覺化分段模式
+        function enterVisualSegmentationMode() {
+            console.log('📍 進入視覺化分段模式');
+            
+            // 解析管線座標
+            pipelineCoords = parseLineString(currentPipeline.linestring);
+            
+            // 檢查是否已有段落
+            let adjustmentMode = false; // 微調模式
+            
+            if (currentSegments.length > 0) {
+                // 已有段落，詢問使用者意圖
+                const choice = confirm(
+                    `目前已有 ${currentSegments.length} 個段落\n\n` +
+                    `【確定】= 微調現有段落位置（只能拖拉調整）\n` +
+                    `【取消】= 清空重新分段（可新增分段線）\n\n` +
+                    `請選擇：`
+                );
+                
+                if (choice) {
+                    // 微調模式
+                    adjustmentMode = true;
+                    const sortedSegments = [...currentSegments].sort((a, b) => a.startDistance - b.startDistance);
+                    
+                    sortedSegments.forEach((seg, index) => {
+                        // 在每個段落的結束位置加分段線（除了終點）
+                        if (index < sortedSegments.length - 1) {
+                            addSegmentDivider(seg.endDistance);
+                        }
+                    });
+                    
+                    updateVisualSegmentationPanel();
+                } else {
+                    // 重新分段模式：不載入現有分段線
+                    showVisualSegmentationGuide();
+                    // 啟用地圖點擊新增分段線
+                    map.on('click', onMapClickAddDivider);
+                }
+            } else {
+                // 無段落，顯示提示訊息
+                showVisualSegmentationGuide();
+                // 啟用地圖點擊新增分段線
+                map.on('click', onMapClickAddDivider);
+            }
+            
+            // 隱藏段落表格，顯示操作說明
+            document.querySelector('.segment-table').style.display = 'none';
+            showVisualSegmentationPanel(adjustmentMode);
+        }
+        
+        // 退出視覺化分段模式
+        function exitVisualSegmentationMode() {
+            console.log('📍 退出視覺化分段模式');
+            
+            // 先檢查是否有分段線需要儲存
+            const hasDividers = segmentDividers.length > 0;
+            
+            if (hasDividers) {
+                // 詢問是否儲存
+                if (confirm('是否要根據分段線建立段落？')) {
+                    createSegmentsFromDividers();
+                    return; // createSegmentsFromDividers 會處理清理工作
+                }
+            }
+            
+            // 移除所有分段線標記
+            segmentDividers.forEach(divider => {
+                map.removeLayer(divider.marker);
+            });
+            segmentDividers = [];
+            
+            // 移除地圖點擊事件
+            map.off('click', onMapClickAddDivider);
+            
+            // 恢復段落表格
+            document.querySelector('.segment-table').style.display = 'table';
+            hideVisualSegmentationPanel();
+        }
+        
+        // 在地圖上點擊新增分段線
+        function onMapClickAddDivider(e) {
+            if (!visualSegmentationMode) return;
+            
+            // 必須按住 Ctrl 或 Shift 鍵才能新增分段線
+            if (!e.originalEvent.ctrlKey && !e.originalEvent.shiftKey) {
+                return;
+            }
+            
+            // 計算點擊位置在管線上的距離
+            const clickPoint = [e.latlng.lat, e.latlng.lng];
+            const distance = findNearestPointOnLine(clickPoint, pipelineCoords);
+            
+            if (distance !== null) {
+                addSegmentDivider(distance);
+            }
+        }
+        
+        // 新增分段線標記
+        function addSegmentDivider(distance) {
+            // 檢查是否在起點或終點（不允許）
+            if (distance < 1) {
+                console.log('⚠️ 不能在起點 (0m) 放置分段線');
+                return;
+            }
+            if (distance >= currentPipeline.length - 1) {
+                console.log('⚠️ 不能在終點放置分段線');
+                return;
+            }
+            
+            // 檢查是否已存在相同位置的分段線
+            const existing = segmentDividers.find(d => Math.abs(d.distance - distance) < 1);
+            if (existing) {
+                console.log('⚠️ 該位置已有分段線');
+                return;
+            }
+            
+            // 計算分段線在管線上的座標
+            const position = getPositionAtDistance(pipelineCoords, distance);
+            if (!position) {
+                console.error('❌ 無法計算分段線位置');
+                return;
+            }
+            
+            // 建立分段線標記
+            const dividerIcon = L.divIcon({
+                className: 'segment-divider-marker',
+                html: `<div style="position:relative;">
+                    ✂️
+                    <div class="segment-divider-label">${Math.round(distance)}m</div>
+                </div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+            
+            const marker = L.marker(position, {
+                icon: dividerIcon,
+                draggable: true,
+                zIndexOffset: 2000
+            }).addTo(map);
+            
+            // 拖拉事件
+            marker.on('dragstart', function() {
+                isDraggingDivider = true;
+                this._icon.classList.add('dragging');
+            });
+            
+            marker.on('drag', function(e) {
+                // 計算新位置的距離（使用 marker 的當前位置）
+                const latlng = this.getLatLng();
+                const newPos = [latlng.lat, latlng.lng];
+                const newDistance = findNearestPointOnLine(newPos, pipelineCoords);
+                
+                if (newDistance !== null) {
+                    // 更新標籤
+                    const label = this._icon.querySelector('.segment-divider-label');
+                    if (label) {
+                        label.textContent = Math.round(newDistance) + 'm';
+                    }
+                }
+            });
+            
+            marker.on('dragend', function(e) {
+                isDraggingDivider = false;
+                this._icon.classList.remove('dragging');
+                
+                // 計算最終位置（使用 marker 的當前位置）
+                const latlng = this.getLatLng();
+                const newPos = [latlng.lat, latlng.lng];
+                const newDistance = findNearestPointOnLine(newPos, pipelineCoords);
+                
+                console.log('拖拉結束，距離:', newDistance);
+                
+                if (newDistance !== null) {
+                    // 檢查是否太靠近起點或終點
+                    if (newDistance < 5 || newDistance >= currentPipeline.length - 5) {
+                        // 自動刪除這條分段線
+                        console.log('🗑️ 拖拉到邊界，自動刪除分段線');
+                        console.log('刪除前分段線數量:', segmentDividers.length);
+                        
+                        map.removeLayer(this);
+                        const dividerIndex = segmentDividers.findIndex(d => d.marker === this);
+                        console.log('找到的索引:', dividerIndex);
+                        
+                        if (dividerIndex !== -1) {
+                            segmentDividers.splice(dividerIndex, 1);
+                        }
+                        
+                        console.log('刪除後分段線數量:', segmentDividers.length);
+                        console.log('剩餘分段線:', segmentDividers.map(d => Math.round(d.distance)));
+                        
+                        updateVisualSegmentationPanel();
+                        return;
+                    }
+                    
+                    // 更新距離
+                    const dividerIndex = segmentDividers.findIndex(d => d.marker === this);
+                    if (dividerIndex !== -1) {
+                        console.log('更新分段線距離:', segmentDividers[dividerIndex].distance, '->', newDistance);
+                        segmentDividers[dividerIndex].distance = newDistance;
+                    }
+                    
+                    // 吸附到管線
+                    const snapPosition = getPositionAtDistance(pipelineCoords, newDistance);
+                    if (snapPosition) {
+                        this.setLatLng(snapPosition);
+                    }
+                    
+                    // 更新視覺化面板
+                    updateVisualSegmentationPanel();
+                }
+            });
+            
+            // 右鍵刪除
+            marker.on('contextmenu', function(e) {
+                L.DomEvent.preventDefault(e);
+                
+                if (confirm('確定要刪除這條分段線嗎？')) {
+                    map.removeLayer(marker);
+                    const index = segmentDividers.findIndex(d => d.marker === marker);
+                    if (index !== -1) {
+                        segmentDividers.splice(index, 1);
+                    }
+                    updateVisualSegmentationPanel();
+                }
+            });
+            
+            // 儲存分段線
+            segmentDividers.push({ distance, marker });
+            
+            // 更新視覺化面板
+            updateVisualSegmentationPanel();
+            
+            console.log(`✅ 新增分段線：${Math.round(distance)}m`);
+        }
+        
+        // 切換段落管理面板
+        function toggleSegmentPanel() {
+            const panel = document.getElementById('segmentPanel');
+            const overlay = document.getElementById('overlay');
+            
+            if (!currentPipeline) {
+                alert('⚠️ 請先選擇一個工程');
+                return;
+            }
+            
+            if (panel.style.display === 'flex') {
+                panel.style.display = 'none';
+                overlay.style.display = 'none';
+                // 如果在視覺化分段模式，退出
+                if (visualSegmentationMode) {
+                    visualSegmentationMode = false;
+                    const btn = document.querySelector('.btn-visual-segment');
+                    if (btn) {
+                        btn.classList.remove('active');
+                        btn.textContent = '🎯 視覺化分段';
+                    }
+                    exitVisualSegmentationMode();
+                }
+            } else {
+                loadSegmentData();
+                panel.style.display = 'flex';
+                panel.classList.remove('minimized'); // 確保展開
+                overlay.style.display = 'none'; // 不顯示遮罩，讓地圖可操作
+            }
+        }
+        
+        // 切換最小化
+        function toggleSegmentPanelMinimize() {
+            const panel = document.getElementById('segmentPanel');
+            panel.classList.toggle('minimized');
+        }
+        
+        // 載入段落資料
+        async function loadSegmentData() {
+            try {
+                const response = await fetch(API_URL + '?action=getSegments&pipelineId=' + encodeURIComponent(currentPipeline.id));
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentSegments = result.segments || [];
+                    renderSegmentTable();
+                    updateSegmentInfo();
+                } else {
+                    alert('❌ 載入段落失敗：' + result.error);
+                }
+            } catch (error) {
+                console.error('載入段落錯誤:', error);
+                alert('❌ 載入段落失敗：' + error.message);
+            }
+        }
+        
+        // 更新工程資訊顯示
+        function updateSegmentInfo() {
+            const infoDiv = document.getElementById('segmentPipelineInfo');
+            
+            // 計算管線總長度（從 LINESTRING）
+            const totalLength = currentPipeline.length || 0;
+            
+            // 計算已分配的段落總長度
+            let allocatedLength = 0;
+            currentSegments.forEach(seg => {
+                allocatedLength += (parseFloat(seg.endDistance) - parseFloat(seg.startDistance));
+            });
+            allocatedLength = Math.round(allocatedLength);
+            
+            const remaining = totalLength - allocatedLength;
+            
+            infoDiv.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <strong style="color:#667eea;font-size:14px;">${currentPipeline.id}</strong>
+                        <div style="color:#666;font-size:12px;margin-top:3px;">管線總長度：${totalLength}m</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:12px;color:#666;">已分配：${allocatedLength}m</div>
+                        <div style="font-size:13px;font-weight:bold;color:${remaining > 0 ? '#f44336' : '#4CAF50'};margin-top:2px;">
+                            剩餘：${remaining}m
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 渲染段落表格
+        function renderSegmentTable() {
+            const tbody = document.getElementById('segmentTableBody');
+            tbody.innerHTML = '';
+            
+            if (currentSegments.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="padding:30px;color:#999;font-size:12px;">尚無段落資料</td></tr>';
+                return;
+            }
+            
+            // 按段落編號排序
+            currentSegments.sort((a, b) => a.segmentNumber - b.segmentNumber);
+            
+            currentSegments.forEach(seg => {
+                const length = parseFloat(seg.endDistance) - parseFloat(seg.startDistance);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="font-weight:bold;">#${seg.segmentNumber}</td>
+                    <td>${Math.round(seg.startDistance)}</td>
+                    <td>${Math.round(seg.endDistance)}</td>
+                    <td style="font-weight:600;color:#667eea;">${Math.round(length)}</td>
+                    <td>${seg.diameter || '-'}</td>
+                    <td>${seg.pipeType || '-'}</td>
+                    <td style="font-size:10px;">${seg.method || '-'}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn-edit-segment" onclick="editSegmentForm(${seg.segmentNumber})">編輯</button>
+                        <button class="btn-delete-segment" onclick="deleteSegmentConfirm(${seg.segmentNumber})">刪除</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // 顯示新增段落表單
+        function showAddSegmentForm() {
+            const totalLength = currentPipeline.length || 0;
+            
+            // 計算已分配的長度
+            let allocatedLength = 0;
+            currentSegments.forEach(seg => {
+                allocatedLength += (parseFloat(seg.endDistance) - parseFloat(seg.startDistance));
+            });
+            
+            // 建議起始距離為最後一個段落的結束距離（取整數）
+            let suggestedStart = 0;
+            if (currentSegments.length > 0) {
+                const lastSeg = currentSegments.reduce((max, seg) => 
+                    parseFloat(seg.endDistance) > parseFloat(max.endDistance) ? seg : max
+                );
+                suggestedStart = Math.round(parseFloat(lastSeg.endDistance));
+            }
+            
+            const formHTML = `
+                <div style="background:white;padding:20px;border-radius:6px;width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+                    <div style="font-size:16px;font-weight:600;margin-bottom:15px;color:#333;">新增段落</div>
+                    
+                    <div style="font-size:11px;color:#666;margin-bottom:15px;padding:8px;background:#f8f9fa;border-radius:4px;">
+                        總長 ${Math.round(totalLength)}m · 已分配 ${Math.round(allocatedLength)}m · 剩餘 ${Math.round(totalLength - allocatedLength)}m
+                    </div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <input type="number" id="segStartDist" value="${suggestedStart}" step="1" placeholder="起始距離(m)" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <input type="number" id="segEndDist" value="${Math.round(totalLength)}" step="1" placeholder="結束距離(m)" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <input type="text" id="segDiameter" value="2200" placeholder="管徑" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <select id="segPipeType" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;background:white;">
+                            <option value="DIP">DIP</option>
+                            <option value="PVC">PVC</option>
+                            <option value="HDPE">HDPE</option>
+                            <option value="鋼管">鋼管</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom:15px;">
+                        <select id="segMethod" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;background:white;">
+                            <option value="埋設">埋設</option>
+                            <option value="推進">推進</option>
+                            <option value="潛鑽">潛鑽</option>
+                            <option value="潛盾">潛盾</option>
+                            <option value="水管橋">水管橋</option>
+                            <option value="隧道">隧道</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="confirmAddSegment()" style="flex:1;padding:10px;background:#667eea;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">儲存</button>
+                        <button onclick="closeCustomDialog()" style="flex:1;padding:10px;background:#f5f5f5;color:#666;border:none;border-radius:4px;cursor:pointer;font-size:14px;">取消</button>
+                    </div>
+                </div>
+            `;
+            
+            showCustomDialog(formHTML);
+        }
+        
+        // 確認新增段落
+        async function confirmAddSegment() {
+            const startDist = parseFloat(document.getElementById('segStartDist').value);
+            const endDist = parseFloat(document.getElementById('segEndDist').value);
+            const diameter = document.getElementById('segDiameter').value.trim();
+            const pipeType = document.getElementById('segPipeType').value;
+            const method = document.getElementById('segMethod').value;
+            const notes = document.getElementById('segNotes').value.trim();
+            
+            // 驗證
+            if (isNaN(startDist) || isNaN(endDist)) {
+                alert('❌ 請輸入有效的距離');
+                return;
+            }
+            
+            if (startDist >= endDist) {
+                alert('❌ 結束距離必須大於起始距離');
+                return;
+            }
+            
+            if (endDist > currentPipeline.length) {
+                if (!confirm(`⚠️ 結束距離 ${endDist}m 超過管線總長度 ${currentPipeline.length}m\n\n是否繼續？`)) {
+                    return;
+                }
+            }
+            
+            // 檢查是否與現有段落重疊
+            const overlapping = currentSegments.some(seg => {
+                const segStart = parseFloat(seg.startDistance);
+                const segEnd = parseFloat(seg.endDistance);
+                return (startDist < segEnd && endDist > segStart);
+            });
+            
+            if (overlapping) {
+                if (!confirm('⚠️ 此段落與現有段落有重疊\n\n是否繼續？')) {
+                    return;
+                }
+            }
+            
+            // 計算下一個段落編號
+            let nextSegNum = 1;
+            if (currentSegments.length > 0) {
+                const maxNum = Math.max(...currentSegments.map(s => parseInt(s.segmentNumber)));
+                nextSegNum = maxNum + 1;
+            }
+            
+            try {
+                const url = API_URL + 
+                    '?action=addSegment' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&segmentNumber=' + nextSegNum +
+                    '&startDistance=' + startDist +
+                    '&endDistance=' + endDist +
+                    '&diameter=' + encodeURIComponent(diameter) +
+                    '&pipeType=' + encodeURIComponent(pipeType) +
+                    '&method=' + encodeURIComponent(method) +
+                    '&notes=' + encodeURIComponent(notes);
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success) {
+                    closeCustomDialog();
+                    alert(`✅ 段落新增成功！\n\n段落 #${nextSegNum}\n長度：${Math.round(endDist - startDist)}m\n小段數量：${result.smallSegments}個`);
+                    loadSegmentData();
+                } else {
+                    alert('❌ 新增失敗：' + result.error);
+                }
+            } catch (error) {
+                console.error('新增段落錯誤:', error);
+                alert('❌ 新增失敗：' + error.message);
+            }
+        }
+        
+        // 編輯段落表單
+        function editSegmentForm(segmentNumber) {
+            const segment = currentSegments.find(s => s.segmentNumber == segmentNumber);
+            if (!segment) {
+                alert('❌ 找不到段落');
+                return;
+            }
+            
+            const formHTML = `
+                <div style="background:white;padding:20px;border-radius:6px;width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+                    <div style="font-size:16px;font-weight:600;margin-bottom:15px;color:#333;">編輯段落 #${segmentNumber}</div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <input type="number" id="editStartDist" value="${Math.round(segment.startDistance)}" step="1" placeholder="起始距離(m)" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <input type="number" id="editEndDist" value="${Math.round(segment.endDistance)}" step="1" placeholder="結束距離(m)" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <input type="text" id="editDiameter" value="${segment.diameter || ''}" placeholder="管徑" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
+                    <div style="margin-bottom:12px;">
+                        <select id="editPipeType" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;background:white;">
+                            <option value="DIP" ${segment.pipeType === 'DIP' ? 'selected' : ''}>DIP</option>
+                            <option value="PVC" ${segment.pipeType === 'PVC' ? 'selected' : ''}>PVC</option>
+                            <option value="HDPE" ${segment.pipeType === 'HDPE' ? 'selected' : ''}>HDPE</option>
+                            <option value="鋼管" ${segment.pipeType === '鋼管' ? 'selected' : ''}>鋼管</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom:15px;">
+                        <select id="editMethod" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;background:white;">
+                            <option value="埋設" ${segment.method === '埋設' ? 'selected' : ''}>埋設</option>
+                            <option value="推進" ${segment.method === '推進' ? 'selected' : ''}>推進</option>
+                            <option value="潛鑽" ${segment.method === '潛鑽' ? 'selected' : ''}>潛鑽</option>
+                            <option value="潛盾" ${segment.method === '潛盾' ? 'selected' : ''}>潛盾</option>
+                            <option value="水管橋" ${segment.method === '水管橋' ? 'selected' : ''}>水管橋</option>
+                            <option value="隧道" ${segment.method === '隧道' ? 'selected' : ''}>隧道</option>
+                            <option value="其他" ${segment.method === '其他' ? 'selected' : ''}>其他</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="confirmEditSegment(${segmentNumber})" style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">儲存</button>
+                        <button onclick="closeCustomDialog()" style="flex:1;padding:10px;background:#f5f5f5;color:#666;border:none;border-radius:4px;cursor:pointer;font-size:14px;">取消</button>
+                    </div>
+                </div>
+            `;
+            
+            showCustomDialog(formHTML);
+        }
+        
+        // 確認編輯段落
+        async function confirmEditSegment(segmentNumber) {
+            const startDist = parseFloat(document.getElementById('editStartDist').value);
+            const endDist = parseFloat(document.getElementById('editEndDist').value);
+            const diameter = document.getElementById('editDiameter').value.trim();
+            const pipeType = document.getElementById('editPipeType').value;
+            const method = document.getElementById('editMethod').value;
+            
+            // 驗證
+            if (isNaN(startDist) || isNaN(endDist)) {
+                alert('❌ 請輸入有效的距離');
+                return;
+            }
+            
+            if (startDist >= endDist) {
+                alert('❌ 結束距離必須大於起始距離');
+                return;
+            }
+            
+            try {
+                const url = API_URL + 
+                    '?action=updateSegment' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&segmentNumber=' + segmentNumber +
+                    '&startDistance=' + Math.round(startDist) +
+                    '&endDistance=' + Math.round(endDist) +
+                    '&diameter=' + encodeURIComponent(diameter) +
+                    '&pipeType=' + encodeURIComponent(pipeType) +
+                    '&method=' + encodeURIComponent(method) +
+                    '&notes=';
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success) {
+                    closeCustomDialog();
+                    
+                    console.log('✅ 段落更新成功，開始重新載入資料...');
+                    
+                    // 先關閉段落管理面板
+                    toggleSegmentPanel();
+                    
+                    // 等待 1 秒後重新載入地圖
+                    setTimeout(async () => {
+                        console.log('開始重新載入地圖...');
+                        await showPipelineDetail(currentPipeline.id, true);
+                        
+                        // 再等 500ms 後重新開啟段落管理面板
+                        setTimeout(() => {
+                            toggleSegmentPanel();
+                            console.log('段落管理面板已重新開啟');
+                        }, 500);
+                    }, 1000);
+                    
+                    alert('✅ 段落更新成功！');
+                } else {
+                    alert('❌ 更新失敗：' + result.error);
+                }
+            } catch (error) {
+                console.error('更新段落錯誤:', error);
+                alert('❌ 更新失敗：' + error.message);
+            }
+        }
+        
+        // 刪除段落確認
+        function deleteSegmentConfirm(segmentNumber) {
+            const segment = currentSegments.find(s => s.segmentNumber == segmentNumber);
+            if (!segment) {
+                alert('❌ 找不到段落');
+                return;
+            }
+            
+            const start = Math.round(parseFloat(segment.startDistance));
+            const end = Math.round(parseFloat(segment.endDistance));
+            const length = end - start;
+            
+            if (confirm(`確定要刪除段落 #${segmentNumber} 嗎？\n\n起始：${start}m\n結束：${end}m\n長度：${length}m\n\n⚠️ 此操作無法復原！`)) {
+                deleteSegment(segmentNumber);
+            }
+        }
+        
+        // 刪除段落
+        async function deleteSegment(segmentNumber) {
+            try {
+                const response = await fetch(API_URL + 
+                    '?action=deleteSegment' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&segmentNumber=' + segmentNumber
+                );
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ 段落刪除成功，開始重新載入資料...');
+                    
+                    // 先關閉段落管理面板
+                    toggleSegmentPanel();
+                    
+                    // 等待 1 秒後重新載入地圖
+                    setTimeout(async () => {
+                        console.log('開始重新載入地圖...');
+                        await showPipelineDetail(currentPipeline.id, true);
+                        
+                        // 再等 500ms 後重新開啟段落管理面板
+                        setTimeout(() => {
+                            toggleSegmentPanel();
+                            console.log('段落管理面板已重新開啟');
+                        }, 500);
+                    }, 1000);
+                    
+                    alert('✅ 段落刪除成功！');
+                } else {
+                    alert('❌ 刪除失敗：' + result.error);
+                }
+            } catch (error) {
+                console.error('刪除段落錯誤:', error);
+                alert('❌ 刪除失敗：' + error.message);
+            }
+        }
+        
+        // 顯示自訂對話框
+        function showCustomDialog(html) {
+            const overlay = document.getElementById('overlay');
+            const container = document.createElement('div');
+            container.id = 'customDialog';
+            container.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;';
+            container.innerHTML = html;
+            
+            document.body.appendChild(container);
+            overlay.style.display = 'block';
+            overlay.style.zIndex = '9998'; // 確保遮罩在對話框下方
+        }
+        
+        // 關閉自訂對話框
+        function closeCustomDialog() {
+            const dialog = document.getElementById('customDialog');
+            if (dialog) {
+                dialog.remove();
+            }
+            const overlay = document.getElementById('overlay');
+            overlay.style.display = 'none';
+            overlay.style.zIndex = '1500'; // 恢復原本的 z-index
+        }
+        
+        // ==================== 視覺化分段輔助函數 ====================
+        
+        // 找到點擊位置在管線上最近的點，並返回距離
+        function findNearestPointOnLine(clickPoint, lineCoords) {
+            let minDist = Infinity;
+            let bestDistance = null;
+            let accumulatedDistance = 0;
+            
+            for (let i = 0; i < lineCoords.length - 1; i++) {
+                const p1 = lineCoords[i];
+                const p2 = lineCoords[i + 1];
+                
+                // 計算點到線段的最短距離
+                const result = pointToSegmentDistance(clickPoint, p1, p2);
+                
+                if (result.distance < minDist) {
+                    minDist = result.distance;
+                    // 計算到該點的累積距離
+                    const segmentLength = getDistance(p1, p2);
+                    bestDistance = accumulatedDistance + (segmentLength * result.t);
+                }
+                
+                accumulatedDistance += getDistance(p1, p2);
+            }
+            
+            // 只接受距離管線 50m 以內的點擊
+            if (minDist > 50) {
+                return null;
+            }
+            
+            return bestDistance;
+        }
+        
+        // 計算點到線段的最短距離
+        function pointToSegmentDistance(point, segStart, segEnd) {
+            const [px, py] = point;
+            const [x1, y1] = segStart;
+            const [x2, y2] = segEnd;
+            
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const lengthSquared = dx * dx + dy * dy;
+            
+            let t = 0;
+            if (lengthSquared > 0) {
+                t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSquared));
+            }
+            
+            const closestX = x1 + t * dx;
+            const closestY = y1 + t * dy;
+            
+            const distX = px - closestX;
+            const distY = py - closestY;
+            const distance = Math.sqrt(distX * distX + distY * distY) * 111000; // 轉換為公尺
+            
+            return { distance, t };
+        }
+        
+        // 根據距離取得管線上的座標位置
+        function getPositionAtDistance(lineCoords, targetDistance) {
+            let accumulatedDistance = 0;
+            
+            for (let i = 0; i < lineCoords.length - 1; i++) {
+                const p1 = lineCoords[i];
+                const p2 = lineCoords[i + 1];
+                const segmentLength = getDistance(p1, p2);
+                
+                if (accumulatedDistance + segmentLength >= targetDistance) {
+                    // 目標距離在這個線段上
+                    const remainingDistance = targetDistance - accumulatedDistance;
+                    const t = remainingDistance / segmentLength;
+                    
+                    const lat = p1[0] + (p2[0] - p1[0]) * t;
+                    const lng = p1[1] + (p2[1] - p1[1]) * t;
+                    
+                    return [lat, lng];
+                }
+                
+                accumulatedDistance += segmentLength;
+            }
+            
+            // 如果超出範圍，返回終點
+            return lineCoords[lineCoords.length - 1];
+        }
+        
+        // 顯示視覺化分段操作面板
+        function showVisualSegmentationPanel(adjustmentMode = false) {
+            const tbody = document.getElementById('segmentTableBody');
+            
+            const instructions = adjustmentMode ? `
+                <div>🖱️ <strong>拖拉分段線</strong>調整位置</div>
+                <div>🗑️ <strong>右鍵分段線</strong>刪除</div>
+                <div style="margin-top:10px;padding:8px;background:#fff3cd;border-radius:4px;color:#856404;font-size:12px;">
+                    ⚠️ 微調模式：無法新增分段線
+                </div>
+            ` : `
+                <div>✂️ <strong>Ctrl + 點擊管線</strong>新增分段線</div>
+                <div>🖱️ <strong>拖拉分段線</strong>調整位置</div>
+                <div>🗑️ <strong>右鍵分段線</strong>刪除</div>
+            `;
+            
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="padding:30px;">
+                        <div style="text-align:center;">
+                            <div style="font-size:48px;margin-bottom:15px;">🎯</div>
+                            <div style="font-size:16px;font-weight:bold;color:#667eea;margin-bottom:10px;">視覺化分段模式</div>
+                            <div style="font-size:13px;color:#666;line-height:1.8;">
+                                ${instructions}
+                                <div style="margin-top:15px;padding:12px;background:#f0f4ff;border-radius:6px;">
+                                    <div id="dividerCount" style="font-weight:bold;color:#667eea;">目前分段線：0 條</div>
+                                    <div id="segmentPreview" style="margin-top:8px;color:#999;">尚未新增分段線</div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            
+            // 修改表格顯示方式
+            document.querySelector('.segment-table').style.display = 'table';
+        }
+        
+        // 隱藏視覺化分段操作面板
+        function hideVisualSegmentationPanel() {
+            // 恢復段落表格
+            renderSegmentTable();
+        }
+        
+        // 更新視覺化分段面板資訊
+        function updateVisualSegmentationPanel() {
+            const dividerCountEl = document.getElementById('dividerCount');
+            const segmentPreviewEl = document.getElementById('segmentPreview');
+            
+            if (!dividerCountEl || !segmentPreviewEl) return;
+            
+            // 排序分段線
+            const sortedDividers = [...segmentDividers].sort((a, b) => a.distance - b.distance);
+            
+            dividerCountEl.textContent = `目前分段線：${sortedDividers.length} 條`;
+            
+            if (sortedDividers.length === 0) {
+                segmentPreviewEl.innerHTML = '<span style="color:#999;">尚未新增分段線</span>';
+                return;
+            }
+            
+            // 計算預覽段落
+            const segments = [];
+            let prevDistance = 0;
+            
+            sortedDividers.forEach((divider, index) => {
+                segments.push({
+                    num: index + 1,
+                    start: prevDistance,
+                    end: divider.distance,
+                    length: divider.distance - prevDistance
+                });
+                prevDistance = divider.distance;
+            });
+            
+            // 最後一段
+            segments.push({
+                num: sortedDividers.length + 1,
+                start: prevDistance,
+                end: currentPipeline.length,
+                length: currentPipeline.length - prevDistance
+            });
+            
+            // 顯示預覽
+            const preview = segments.map(seg => 
+                `段落${seg.num}：${Math.round(seg.start)}-${Math.round(seg.end)}m (${Math.round(seg.length)}m)`
+            ).join('<br>');
+            
+            segmentPreviewEl.innerHTML = preview;
+        }
+        
+        // 顯示視覺化分段引導
+        function showVisualSegmentationGuide() {
+            // 在地圖中央顯示提示
+            const center = map.getCenter();
+            L.popup()
+                .setLatLng(center)
+                .setContent(`
+                    <div style="text-align:center;padding:10px;">
+                        <div style="font-size:32px;margin-bottom:10px;">🎯</div>
+                        <div style="font-weight:bold;margin-bottom:8px;">視覺化分段模式</div>
+                        <div style="font-size:12px;color:#666;line-height:1.6;">
+                            按住 <strong style="color:#667eea;">Ctrl</strong> 鍵<br>
+                            點擊管線新增分段線
+                        </div>
+                    </div>
+                `)
+                .openOn(map);
+        }
+        
+        // 根據分段線建立段落
+        async function createSegmentsFromDividers() {
+            if (segmentDividers.length === 0) {
+                alert('⚠️ 沒有分段線，無法建立段落');
+                return;
+            }
+            
+            // 排序分段線
+            const sortedDividers = [...segmentDividers].sort((a, b) => a.distance - b.distance);
+            
+            // 計算段落
+            const segments = [];
+            let prevDistance = 0;
+            
+            sortedDividers.forEach(divider => {
+                segments.push({
+                    start: prevDistance,
+                    end: divider.distance
+                });
+                prevDistance = divider.distance;
+            });
+            
+            // 最後一段
+            segments.push({
+                start: prevDistance,
+                end: currentPipeline.length
+            });
+            
+            // 顯示段落設定表單
+            showBatchSegmentForm(segments);
+        }
+        
+        // 批次段落設定表單
+        function showBatchSegmentForm(segments) {
+            let formHTML = `
+                <div style="background:white;padding:20px;border-radius:6px;width:400px;max-height:85vh;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+                    <div style="font-size:16px;font-weight:600;margin-bottom:10px;color:#333;">批次設定 (${segments.length}段)</div>
+            `;
+            
+            segments.forEach((seg, index) => {
+                const length = Math.round(seg.end - seg.start);
+                formHTML += `
+                    <div style="border:1px solid #e0e0e0;border-radius:4px;padding:12px;margin-bottom:10px;background:#fafafa;">
+                        <div style="font-weight:600;color:#667eea;margin-bottom:8px;font-size:13px;">
+                            #${index + 1} · ${Math.round(seg.start)}-${Math.round(seg.end)}m (${length}m)
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <input type="text" id="seg${index}_diameter" value="2200" placeholder="管徑" style="padding:8px;border:1px solid #e0e0e0;border-radius:4px;font-size:13px;">
+                            <select id="seg${index}_pipeType" style="padding:8px;border:1px solid #e0e0e0;border-radius:4px;font-size:13px;background:white;">
+                                <option value="DIP">DIP</option>
+                                <option value="PVC">PVC</option>
+                                <option value="HDPE">HDPE</option>
+                                <option value="鋼管">鋼管</option>
+                            </select>
+                        </div>
+                        <select id="seg${index}_method" style="width:100%;padding:8px;border:1px solid #e0e0e0;border-radius:4px;font-size:13px;margin-top:8px;background:white;">
+                            <option value="埋設">埋設</option>
+                            <option value="推進">推進</option>
+                            <option value="潛鑽">潛鑽</option>
+                            <option value="潛盾">潛盾</option>
+                            <option value="水管橋">水管橋</option>
+                            <option value="隧道">隧道</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                `;
+            });
+            
+            formHTML += `
+                    <div style="display:flex;gap:10px;margin-top:15px;position:sticky;bottom:0;background:white;padding-top:10px;">
+                        <button onclick="confirmBatchSegments(${JSON.stringify(segments).replace(/"/g, '&quot;')})" style="flex:1;padding:10px;background:#667eea;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">建立全部</button>
+                        <button onclick="closeCustomDialog()" style="flex:1;padding:10px;background:#f5f5f5;color:#666;border:none;border-radius:4px;cursor:pointer;font-size:14px;">取消</button>
+                    </div>
+                </div>
+            `;
+            
+            showCustomDialog(formHTML);
+        }
+        
+        // 確認批次建立段落
+        window.confirmBatchSegments = async function(segments) {
+            console.log('📋 批次建立段落:', segments);
+            
+            // 檢查是否有現有段落
+            if (currentSegments.length > 0) {
+                if (!confirm(`⚠️ 目前已有 ${currentSegments.length} 個段落\n\n批次建立會刪除所有現有段落並重新建立\n\n確定要繼續嗎？`)) {
+                    return;
+                }
+                
+                // 刪除所有現有段落
+                console.log('🗑️ 刪除現有段落...');
+                for (const seg of currentSegments) {
+                    try {
+                        await fetch(API_URL + 
+                            '?action=deleteSegment' +
+                            '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                            '&segmentNumber=' + seg.segmentNumber
+                        );
+                    } catch (error) {
+                        console.error('刪除段落錯誤:', error);
+                    }
+                }
+                // 清空當前段落列表
+                currentSegments = [];
+            }
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 0; i < segments.length; i++) {
+                const seg = segments[i];
+                const diameter = document.getElementById(`seg${i}_diameter`).value.trim();
+                const pipeType = document.getElementById(`seg${i}_pipeType`).value;
+                const method = document.getElementById(`seg${i}_method`).value;
+                
+                try {
+                    const url = API_URL + 
+                        '?action=addSegment' +
+                        '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                        '&segmentNumber=' + (i + 1) +
+                        '&startDistance=' + Math.round(seg.start) +
+                        '&endDistance=' + Math.round(seg.end) +
+                        '&diameter=' + encodeURIComponent(diameter) +
+                        '&pipeType=' + encodeURIComponent(pipeType) +
+                        '&method=' + encodeURIComponent(method) +
+                        '&notes=';
+                    
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                        console.error(`段落 ${i + 1} 建立失敗:`, result.error);
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error(`段落 ${i + 1} 建立錯誤:`, error);
+                }
+            }
+            
+            closeCustomDialog();
+            
+            if (errorCount === 0) {
+                alert(`✅ 成功建立 ${successCount} 個段落！`);
+            } else {
+                alert(`⚠️ 建立完成\n\n成功：${successCount} 個\n失敗：${errorCount} 個`);
+            }
+            
+            // 移除所有分段線標記
+            segmentDividers.forEach(divider => {
+                map.removeLayer(divider.marker);
+            });
+            segmentDividers = [];
+            
+            // 移除地圖點擊事件
+            map.off('click', onMapClickAddDivider);
+            
+            // 退出視覺化分段模式並恢復按鈕
+            visualSegmentationMode = false;
+            const buttonsContainer = document.getElementById('segmentPanelButtons');
+            if (buttonsContainer) {
+                buttonsContainer.innerHTML = `
+                    <button onclick="toggleVisualSegmentation()" class="btn-visual-segment" style="width:100%;">🎯 視覺化分段</button>
+                `;
+            }
+            
+            // 先關閉段落管理面板
+            toggleSegmentPanel();
+            
+            // 等待 1 秒後重新載入地圖
+            setTimeout(async () => {
+                console.log('開始重新載入地圖...');
+                await showPipelineDetail(currentPipeline.id, true);
+                
+                // 再等 500ms 後重新開啟段落管理面板
+                setTimeout(() => {
+                    toggleSegmentPanel();
+                    console.log('段落管理面板已重新開啟');
+                }, 500);
+            }, 1000);
+        };
+        
+        console.log('管線施工進度管理系統 v3.5 - 段落管理版');
         console.log('API URL:', API_URL);
         console.log('請打開 F12 Console 查看載入狀態');
     </script>
