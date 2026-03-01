@@ -9,15 +9,15 @@
     <style>
         .measure-button {
             position: absolute;
-            top: 80px;
+            top: 260px; /* 放在日曆按鈕下方 */
             left: 10px;
             z-index: 1000;
             background: white;
-            padding: 10px;
+            padding: 8px;
             border-radius: 4px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.4);
             cursor: pointer;
-            font-size: 20px;
+            font-size: 18px;
             width: 34px;
             height: 34px;
             display: flex;
@@ -66,6 +66,18 @@
             display: none;
         }
         .gantt-btn:hover { background: #004D40; }
+        
+        /* 手機版優化 */
+        @media (max-width: 768px) {
+            /* 縮小右側按鈕 */
+            .gantt-btn, .milestone-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+                border-radius: 6px;
+            }
+            .gantt-btn { bottom: 60px; right: 8px; }
+            .milestone-btn { bottom: 25px; right: 8px; }
+        }
         
         /* 甘特圖改為浮動視窗 */
         .gantt-panel {
@@ -296,6 +308,55 @@
         .permit-zone-button:hover { background: #f4f4f4; }
         .permit-zone-button.hidden-markers { background: #7f8c8d; color: white; }
         
+        /* 施工日期標註按鈕 */
+        .date-label-button {
+            position: absolute;
+            top: 215px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            cursor: pointer;
+            font-size: 20px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .date-label-button:hover { background: #f4f4f4; }
+        .date-label-button.active { background: #00695C; color: white; }
+        .date-label-button.hidden { display: none; }
+        
+        /* 施工日期標籤 - 簡化單行樣式 */
+        .schedule-label-watermark {
+            background: rgba(255, 255, 255, 0.92);
+            border: 2px solid rgba(0, 121, 107, 0.8);
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #00695C;
+            white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            pointer-events: none;
+            text-shadow: 0 0 4px white, 0 0 4px white;
+        }
+        
+        /* 箭頭線樣式 - 更明顯 */
+        .schedule-arrow {
+            stroke: #00796B;
+            stroke-width: 2.5;
+            fill: none;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+        .schedule-arrow-marker {
+            fill: #00BFA5;
+        }
+        
         /* 台中挖掘許可按鈕 */
         .roadwork-button {
             position: absolute;
@@ -373,9 +434,39 @@
         .project-card-info { color: #666; font-size: 13px; margin: 4px 0; }
         
         .pipeline-list {
-            position: absolute; top: 20px; left: 20px; background: white;
-            padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000; max-width: 300px; max-height: calc(100vh - 100px); overflow-y: auto;
+            position: absolute; 
+            top: 20px; 
+            left: -280px; /* 預設隱藏到左邊 */
+            background: white;
+            padding: 15px; 
+            border-radius: 0 8px 8px 0; 
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            z-index: 1000; 
+            width: 280px; 
+            max-height: calc(100vh - 100px); 
+            overflow-y: auto;
+            transition: left 0.3s ease;
+        }
+        .pipeline-list.open {
+            left: 0; /* 展開時移到可見位置 */
+        }
+        .pipeline-list-toggle {
+            position: absolute;
+            bottom: 20px; /* 改到左下角 */
+            left: 10px;
+            z-index: 1001;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            color: #00695C;
+            display: none;
+        }
+        .pipeline-list-toggle:hover {
+            background: #f0f0f0;
         }
         .pipeline-list h3 { font-size: 14px; margin-bottom: 10px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
         .pipeline-item {
@@ -387,9 +478,18 @@
         .pipeline-item-info { font-size: 11px; color: #666; }
         
         .back-button {
-            position: absolute; top: 20px; left: 20px; background: white;
-            padding: 10px 20px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            cursor: pointer; z-index: 1000; font-size: 14px; color: #667eea; font-weight: bold;
+            position: absolute; 
+            top: 10px; /* 移到最左上角 */
+            left: 10px;
+            background: white;
+            padding: 8px 12px; 
+            border-radius: 4px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer; 
+            z-index: 1000; 
+            font-size: 13px; 
+            color: #667eea; 
+            font-weight: bold;
         }
         .back-button:hover { background: #f8f9ff; }
         
@@ -437,9 +537,13 @@
     
     <div id="map"></div>
     
+    <!-- 工程列表切換按鈕 -->
+    <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
+    
     <div id="measureButton" class="measure-button" title="測量距離">📏</div>
     <div id="roadworkButton" class="roadwork-button" title="台中市挖掘許可" onclick="toggleRoadworkLayer()">🚧</div>
     <div id="permitZoneButton" class="permit-zone-button hidden" title="隱藏所有標記（備註/工作井/挖掘範圍）" onclick="toggleAllMarkers()">👁️</div>
+    <div id="dateLabelButton" class="date-label-button hidden" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()">📅</div>
     <div id="roadworkPanel" class="roadwork-panel">
         <div style="font-weight:bold; margin-bottom:6px; color:#FF5722;">🚧 台中市挖掘許可</div>
         <div id="roadworkCount" style="color:#666; margin-bottom:8px;">尚未載入</div>
@@ -519,6 +623,12 @@
         let measureLine = null;
         let measureMarkers = [];
         let measureLabel = null;
+        
+        // 施工日期標籤
+        let dateLabelsVisible = false;
+        let dateLabels = [];
+        let dateLabelArrows = [];
+        let ganttItemsCache = [];
         
         // 工法顏色配置（改用飽和度更高的顏色）
         const METHOD_COLORS = {
@@ -625,9 +735,12 @@
             document.getElementById('projectSelector').classList.add('hidden');
             
             initMap();
-            clearMap(true);
             
-            // 顯示工程列表
+            // 先清除地圖（但不重置 UI 元素）
+            allPolylines.forEach(p => map.removeLayer(p));
+            allPolylines = [];
+            
+            // 顯示工程列表（會設定按鈕為顯示）
             showPipelineList(projectPipelines);
             
             // 顯示返回按鈕
@@ -690,6 +803,9 @@
         }
         
         function showPipelineList(pipelines) {
+            console.log('=== showPipelineList 被呼叫 ===');
+            console.log('工程數量:', pipelines.length);
+            
             const existingList = document.querySelector('.pipeline-list');
             if (existingList) existingList.remove();
             
@@ -700,7 +816,12 @@
             pipelines.forEach(pipeline => {
                 const item = document.createElement('div');
                 item.className = 'pipeline-item';
-                item.onclick = () => showPipelineDetail(pipeline.id);
+                item.onclick = () => {
+                    showPipelineDetail(pipeline.id);
+                    // 選擇工程後自動關閉列表
+                    const list = document.querySelector('.pipeline-list');
+                    if (list) list.classList.remove('open');
+                };
                 item.innerHTML = `
                     <div class="pipeline-item-name">${pipeline.name}</div>
                     <div class="pipeline-item-info">📏 ${pipeline.segments.length} 個段落</div>
@@ -709,6 +830,33 @@
             });
             
             document.body.appendChild(listDiv);
+            
+            // 顯示切換按鈕
+            const toggle = document.getElementById('pipelineListToggle');
+            console.log('切換按鈕元素:', toggle);
+            if (toggle) {
+                toggle.style.display = 'block';
+                console.log('✅ 切換按鈕已設定為顯示');
+            } else {
+                console.error('❌ 找不到切換按鈕元素！');
+            }
+        }
+        
+        // 切換工程列表顯示/隱藏
+        function togglePipelineList() {
+            const list = document.querySelector('.pipeline-list');
+            const toggle = document.getElementById('pipelineListToggle');
+            
+            if (list) {
+                const isOpen = list.classList.contains('open');
+                if (isOpen) {
+                    list.classList.remove('open');
+                    toggle.textContent = '📋 工程列表';
+                } else {
+                    list.classList.add('open');
+                    toggle.textContent = '✕ 關閉';
+                }
+            }
         }
         
         function showPipelineDetail(pipelineId, keepView = false) {
@@ -905,6 +1053,9 @@
             // 顯示地圖備註（只在詳細檢視模式）
             displayMapNotes();
             
+            // 載入配電盤標記
+            loadPanels();
+            
             // 載入工作井
             loadShafts();
             
@@ -916,9 +1067,14 @@
             document.getElementById('milestoneBtn').style.display = 'block';
             document.getElementById('ganttBtn').style.display = 'block';
             
-            // 移除工程列表，只保留返回按鈕
+            // 顯示日期標註按鈕並載入甘特圖資料
+            document.getElementById('dateLabelButton').classList.remove('hidden');
+            loadGanttItemsForLabels();
+            
+            // 移除工程列表和切換按鈕
             const existingList = document.querySelector('.pipeline-list');
             if (existingList) existingList.remove();
+            document.getElementById('pipelineListToggle').style.display = 'none';
         }
         
         function showSegmentPopup(latlng, segment) {
@@ -1033,7 +1189,13 @@
         // 載入地圖備註
         async function loadMapNotes() {
             try {
-                const response = await fetch(API_URL + '?action=getMapNotes');
+                // 如果有選擇工程，只載入該工程的備註
+                let url = API_URL + '?action=getMapNotes';
+                if (currentPipeline && currentPipeline.id) {
+                    url += '&pipelineId=' + encodeURIComponent(currentPipeline.id);
+                }
+                
+                const response = await fetch(url);
                 const result = await response.json();
                 
                 if (result.notes) {
@@ -1056,8 +1218,14 @@
                 return;
             }
             
-            // 顯示所有備註
+            // 顯示備註（加入前端二次過濾，確保只顯示當前工程的備註）
             mapNotes.forEach(note => {
+                // 🔒 前端二次過濾：只顯示 pipelineId 符合的備註
+                if (note.pipelineId && note.pipelineId !== currentPipeline.id) {
+                    console.log('過濾掉不符的備註:', note.id, '工程ID:', note.pipelineId);
+                    return; // 跳過不符的備註
+                }
+                
                 const marker = L.marker([note.lat, note.lng], {
                     icon: L.divIcon({
                         className: 'note-marker-custom',
@@ -1245,7 +1413,8 @@
                     '&lat=' + lat +
                     '&lng=' + lng +
                     '&text=' + encodeURIComponent(text) +
-                    '&creator=' + encodeURIComponent(creator);
+                    '&creator=' + encodeURIComponent(creator) +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline ? currentPipeline.id : '');
                 
                 const response = await fetch(API_URL + queryString, {
                     method: 'POST',
@@ -1334,6 +1503,251 @@
         };
         
         // ========== 地圖備註功能結束 ==========
+        
+        // ========== 配電盤/儀表箱功能 ==========
+        let panelMarkers = [];
+        let panelData = [];
+        
+        // 載入配電盤標記
+        async function loadPanels() {
+            try {
+                let url = API_URL + '?action=getPanels';
+                if (currentPipeline && currentPipeline.id) {
+                    url += '&pipelineId=' + encodeURIComponent(currentPipeline.id);
+                }
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.panels) {
+                    panelData = result.panels;
+                    displayPanels();
+                }
+            } catch (error) {
+                console.error('載入配電盤標記失敗:', error);
+            }
+        }
+        
+        // 顯示配電盤標記
+        function displayPanels() {
+            panelMarkers.forEach(marker => map.removeLayer(marker));
+            panelMarkers = [];
+            
+            if (!currentPipeline || !currentPipeline.id) {
+                return;
+            }
+            
+            panelData.forEach(panel => {
+                // 前端二次過濾
+                if (panel.pipelineId && panel.pipelineId !== currentPipeline.id) {
+                    return;
+                }
+                
+                const marker = L.marker([panel.lat, panel.lng], {
+                    icon: L.divIcon({
+                        className: 'panel-marker-custom',
+                        html: `
+                            <div style="
+                                background: #4CAF50; 
+                                color: white; 
+                                width: 20px; 
+                                height: 20px; 
+                                border-radius: 3px; 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center; 
+                                font-size: 11px; 
+                                box-shadow: 0 2px 5px rgba(0,0,0,0.3); 
+                                border: 2px solid white;
+                                cursor: pointer;
+                            ">🔌</div>
+                        `,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10],
+                        popupAnchor: [0, -12]
+                    })
+                }).addTo(map);
+                
+                marker.bindPopup(`
+                    <div style="min-width: 240px; max-width: 300px;" id="panel-popup-${panel.id}">
+                        <div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">🔌 配電盤/儀表箱</div>
+                        ${panel.photo ? `<img src="${panel.photo}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;">` : ''}
+                        <div id="panel-text-view-${panel.id}" style="margin-bottom: 8px; white-space: pre-wrap;">${panel.text || ''}</div>
+                        <textarea id="panel-text-edit-${panel.id}" style="display:none; width: 100%; height: 80px; padding: 6px; border: 1px solid #4CAF50; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 13px; box-sizing: border-box;">${panel.text || ''}</textarea>
+                        <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px;">
+                            ${panel.creator || '未知'} · ${panel.timestamp || ''}
+                        </div>
+                        <div id="panel-btns-view-${panel.id}">
+                            <button onclick="startEditPanel('${panel.id}')" style="margin-top: 8px; padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                                ✏️ 編輯
+                            </button>
+                            <button onclick="deletePanel('${panel.id}')" style="margin-top: 5px; padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                                🗑️ 刪除
+                            </button>
+                        </div>
+                        <div id="panel-btns-edit-${panel.id}" style="display:none;">
+                            <button onclick="saveEditPanel('${panel.id}')" style="margin-top: 8px; padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                                💾 儲存修改
+                            </button>
+                            <button onclick="cancelEditPanel('${panel.id}')" style="margin-top: 5px; padding: 5px 10px; background: #e0e0e0; color: #666; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                                取消
+                            </button>
+                        </div>
+                    </div>
+                `);
+                
+                panelMarkers.push(marker);
+            });
+            applyMarkerVisibility();
+        }
+        
+        // 顯示新增配電盤彈窗
+        function showAddPanelPopup(latlng) {
+            const div = document.createElement('div');
+            div.style.cssText = 'min-width:260px;';
+            div.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 10px; color: #4CAF50;">🔌 新增配電盤/儀表箱標記</div>
+                <textarea id="panelText" placeholder="輸入備註內容..." style="width: 100%; height: 80px; padding: 8px; border: 1px solid #4CAF50; border-radius: 4px; resize: vertical; margin-bottom: 8px; font-family: inherit; font-size: 13px; box-sizing: border-box;"></textarea>
+                <div style="font-size: 11px; color: #666; margin-bottom: 3px;">上傳照片（選填）</div>
+                <input type="file" id="panelPhoto" accept="image/*" style="width: 100%; margin-bottom: 8px; font-size: 12px;">
+                <input id="panelCreator" placeholder="建立者（選填）" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+            `;
+            
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = '💾 儲存';
+            saveBtn.style.cssText = 'width:100%;margin-top:8px;padding:8px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;';
+            saveBtn.onclick = function() { savePanel(latlng.lat, latlng.lng); };
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = '取消';
+            cancelBtn.style.cssText = 'width:100%;margin-top:3px;padding:5px;background:#e0e0e0;color:#666;border:none;border-radius:5px;cursor:pointer;font-size:12px;';
+            cancelBtn.onclick = function() { map.closePopup(); };
+            
+            div.appendChild(saveBtn);
+            div.appendChild(cancelBtn);
+            
+            L.popup().setLatLng([latlng.lat, latlng.lng]).setContent(div).openOn(map);
+        }
+        
+        // 儲存配電盤標記
+        window.savePanel = async function(lat, lng) {
+            const text = document.getElementById('panelText').value.trim();
+            const creator = document.getElementById('panelCreator').value.trim() || '匿名';
+            const photoInput = document.getElementById('panelPhoto');
+            
+            if (!text) {
+                alert('請輸入備註內容！');
+                return;
+            }
+            
+            let photoBase64 = '';
+            
+            if (photoInput && photoInput.files && photoInput.files[0]) {
+                const file = photoInput.files[0];
+                try {
+                    photoBase64 = await compressImage(file, 1600, 0.85);
+                    if (photoBase64.length > 3 * 1024 * 1024) {
+                        photoBase64 = await compressImage(file, 1200, 0.75);
+                    }
+                } catch (error) {
+                    console.error('照片壓縮失敗:', error);
+                    alert('照片處理失敗，但備註文字將繼續儲存。');
+                    photoBase64 = '';
+                }
+            }
+            
+            try {
+                const queryString = '?action=addPanel' +
+                    '&lat=' + lat +
+                    '&lng=' + lng +
+                    '&text=' + encodeURIComponent(text) +
+                    '&creator=' + encodeURIComponent(creator) +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline ? currentPipeline.id : '');
+                
+                const response = await fetch(API_URL + queryString, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ photo: photoBase64 }),
+                    redirect: 'follow'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    map.closePopup();
+                    await loadPanels();
+                    alert('✅ 配電盤標記已新增！');
+                } else {
+                    alert('❌ 新增失敗：' + (result.error || '未知錯誤'));
+                }
+            } catch (error) {
+                alert('❌ 新增失敗：' + error.message);
+                console.error('新增配電盤標記錯誤:', error);
+            }
+        };
+        
+        // 刪除配電盤標記
+        window.deletePanel = async function(panelId) {
+            if (!confirm('確定要刪除這個配電盤標記嗎？')) {
+                return;
+            }
+            
+            try {
+                const url = API_URL + '?action=deletePanel&panelId=' + encodeURIComponent(panelId);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success) {
+                    map.closePopup();
+                    await loadPanels();
+                    alert('✅ 配電盤標記已刪除！');
+                } else {
+                    alert('❌ 刪除失敗：' + (result.error || '未知錯誤'));
+                }
+            } catch (error) {
+                alert('❌ 刪除失敗：' + error.message);
+            }
+        };
+        
+        // 編輯模式切換
+        window.startEditPanel = function(panelId) {
+            document.getElementById('panel-text-view-' + panelId).style.display = 'none';
+            document.getElementById('panel-text-edit-' + panelId).style.display = 'block';
+            document.getElementById('panel-btns-view-' + panelId).style.display = 'none';
+            document.getElementById('panel-btns-edit-' + panelId).style.display = 'block';
+            document.getElementById('panel-text-edit-' + panelId).focus();
+        };
+        
+        window.cancelEditPanel = function(panelId) {
+            document.getElementById('panel-text-view-' + panelId).style.display = 'block';
+            document.getElementById('panel-text-edit-' + panelId).style.display = 'none';
+            document.getElementById('panel-btns-view-' + panelId).style.display = 'block';
+            document.getElementById('panel-btns-edit-' + panelId).style.display = 'none';
+        };
+        
+        window.saveEditPanel = async function(panelId) {
+            const newText = document.getElementById('panel-text-edit-' + panelId).value.trim();
+            if (!newText) {
+                alert('備註內容不能為空！');
+                return;
+            }
+            
+            try {
+                const url = API_URL + '?action=updatePanel&panelId=' + encodeURIComponent(panelId) + '&text=' + encodeURIComponent(newText);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success) {
+                    map.closePopup();
+                    await loadPanels();
+                    alert('✅ 配電盤標記已更新！');
+                } else {
+                    alert('❌ 更新失敗：' + (result.error || '未知錯誤'));
+                }
+            } catch (error) {
+                alert('❌ 更新失敗：' + error.message);
+            }
+        };
+        // ========== 配電盤/儀表箱功能結束 ==========
         
         // ========== 台中市挖掘許可功能 ==========
         let roadworkMarkers = [];
@@ -1475,9 +1889,9 @@
             const lat = latlng.lat;
             const lng = latlng.lng;
             menu.innerHTML =
-                '<div style="padding:8px 0;font-size:12px;color:#999;text-align:center;border-bottom:1px solid #eee;">新增項目</div>' +
                 '<div class="rcm-item" onclick="closeRightClickMenu();showAddNotePopup({lat:' + lat + ',lng:' + lng + '})">📝 <span>新增備註</span></div>' +
                 '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddShaftPopup(' + lat + ',' + lng + ')">🕳️ <span>新增工作井</span></div>' +
+                '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddPanelPopup({lat:' + lat + ',lng:' + lng + '})">🔌 <span>新增配電盤/儀表箱</span></div>' +
                 '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>';
             
             document.body.appendChild(menu);
@@ -1847,11 +2261,10 @@
                 '<option value="applying">🔴 路權申請中</option>',
                 '<option value="approved">🟢 路權已取得</option>',
                 '</select>',
-                '<input id="pz_label" placeholder="範圍說明（如：田心路推進段）" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;">',
                 '<input id="pz_permitNo" placeholder="許可證號（選填）" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;">',
                 '<div style="font-size:11px;color:#666;margin-bottom:3px;">申請時間（選填）</div>',
                 '<input id="pz_applyDate" type="date" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;">',
-                '<div style="font-size:11px;color:#666;margin-bottom:3px;">許可時間（選填）</div>',
+                '<div id="pz_permitPeriodLabel" style="font-size:11px;color:#666;margin-bottom:3px;">許可期間（選填）</div>',
                 '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">',
                 '<input id="pz_permitDateStart" type="date" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;">',
                 '<span style="color:#666;font-size:12px;">～</span>',
@@ -1875,12 +2288,15 @@
             div.appendChild(cancelBtn);
             
             L.popup().setLatLng([centerLat, centerLng]).setContent(div).openOn(map);
+            
+            // 監聽狀態變更，動態更新「許可期間」的必填標示
+            document.getElementById('pz_status').addEventListener('change', function(e) {
+                const isApproved = e.target.value === 'approved';
+                document.getElementById('pz_permitPeriodLabel').textContent = '許可期間（' + (isApproved ? '必填' : '選填') + '）';
+            });
         }
         
         async function savePermitZone(points) {
-            const label = document.getElementById('pz_label').value.trim();
-            if (!label) { alert('請輸入範圍說明！'); return; }
-            
             const status = document.getElementById('pz_status').value;
             const permitNo = document.getElementById('pz_permitNo').value.trim();
             const notes = document.getElementById('pz_notes').value.trim();
@@ -1888,14 +2304,23 @@
             const pointsStr = points.map(p => p[0] + ',' + p[1]).join(';');
             
             const applyDate = document.getElementById('pz_applyDate').value;
+            const permitDateStart = document.getElementById('pz_permitDateStart').value;
+            const permitDateEnd = document.getElementById('pz_permitDateEnd').value;
+            
+            // 如果狀態是「已取得」，檢查許可期間是否填寫
+            if (status === 'approved' && (!permitDateStart || !permitDateEnd)) {
+                alert('⚠️ 路權已取得時，許可期間為必填！');
+                return;
+            }
+            
             const qs = '?action=addPermitZone' +
                 '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
-                '&label=' + encodeURIComponent(label) +
+                '&label=' + encodeURIComponent(status === 'approved' ? '路權已取得' : '路權申請中') +
                 '&status=' + encodeURIComponent(status) +
                 '&permitNo=' + encodeURIComponent(permitNo) +
                 '&applyDate=' + encodeURIComponent(applyDate) +
-                '&permitDateStart=' + encodeURIComponent(document.getElementById('pz_permitDateStart').value) +
-                '&permitDateEnd=' + encodeURIComponent(document.getElementById('pz_permitDateEnd').value) +
+                '&permitDateStart=' + encodeURIComponent(permitDateStart) +
+                '&permitDateEnd=' + encodeURIComponent(permitDateEnd) +
                 '&notes=' + encodeURIComponent(notes) +
                 '&creator=' + encodeURIComponent(creator) +
                 '&points=' + encodeURIComponent(pointsStr);
@@ -1935,6 +2360,9 @@
             permitLabels.forEach(l => map.removeLayer(l));
             permitLabels = [];
             
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // 設定為今天0點
+            
             permitZoneData.forEach(zone => {
                 const points = zone.points.split(';').map(p => {
                     const parts = p.split(',');
@@ -1944,8 +2372,25 @@
                 if (points.length < 3) return;
                 
                 const isApproved = zone.status === 'approved';
-                const color = isApproved ? '#27ae60' : '#e74c3c';
-                const statusLabel = isApproved ? '🟢 路權已取得' : '🔴 路權申請中';
+                let color = isApproved ? '#27ae60' : '#e74c3c';
+                let statusLabel = isApproved ? '🟢 路權已取得' : '🔴 路權申請中';
+                let isExpiring = false;
+                
+                // 檢查是否即將過期（已取得 且 距離結束日期不到14天）
+                if (isApproved && zone.permitDateEnd) {
+                    const endDate = new Date(zone.permitDateEnd);
+                    endDate.setHours(0, 0, 0, 0);
+                    const daysRemaining = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                    
+                    if (daysRemaining <= 14 && daysRemaining >= 0) {
+                        color = '#FFA500'; // 橘黃色
+                        statusLabel = '🟡 路權即將過期';
+                        isExpiring = true;
+                    } else if (daysRemaining < 0) {
+                        color = '#808080'; // 灰色（已過期）
+                        statusLabel = '⚫ 路權已過期';
+                    }
+                }
                 
                 const polygon = L.polygon(points, {
                     color: color,
@@ -1965,10 +2410,9 @@
                 div.style.cssText = 'min-width:220px;font-size:13px;';
                 div.innerHTML = [
                     '<div style="font-weight:bold;color:' + color + ';margin-bottom:8px;font-size:14px;">' + statusLabel + '</div>',
-                    '<div style="margin:3px 0"><b>說明：</b>' + (zone.label || '-') + '</div>',
                     zone.permitNo ? '<div style="margin:3px 0"><b>許可證號：</b>' + zone.permitNo + '</div>' : '',
                     zone.applyDate ? '<div style="margin:3px 0"><b>申請時間：</b>' + String(zone.applyDate).substring(0,10) + '</div>' : '',
-                    (zone.permitDateStart || zone.permitDateEnd) ? '<div style="margin:3px 0"><b>許可時間：</b>' + (zone.permitDateStart ? String(zone.permitDateStart).substring(0,10) : '') + ' ～ ' + (zone.permitDateEnd ? String(zone.permitDateEnd).substring(0,10) : '') + '</div>' : '',
+                    (zone.permitDateStart || zone.permitDateEnd) ? '<div style="margin:3px 0"><b>許可期間：</b>' + (zone.permitDateStart ? String(zone.permitDateStart).substring(0,10) : '') + ' ～ ' + (zone.permitDateEnd ? String(zone.permitDateEnd).substring(0,10) : '') + '</div>' : '',
                     zone.notes ? '<div style="margin:3px 0;color:#666;"><b>備註：</b>' + zone.notes + '</div>' : '',
                     '<div style="font-size:11px;color:#aaa;margin-top:5px;border-top:1px solid #eee;padding-top:5px;">' + (zone.creator || '') + ' · ' + (zone.timestamp || '') + '</div>'
                 ].join('');
@@ -1992,7 +2436,8 @@
                 const centerLat = points.reduce((s, p) => s + p[0], 0) / points.length;
                 const centerLng = points.reduce((s, p) => s + p[1], 0) / points.length;
                 const lines = [];
-                if (zone.label) lines.push(zone.label);
+                // 只顯示狀態，不顯示 label
+                lines.push(statusLabel);
                 if (zone.applyDate) lines.push('申請：' + zone.applyDate);
                 if (zone.permitDateStart || zone.permitDateEnd) lines.push('許可：' + (zone.permitDateStart || '') + '～' + (zone.permitDateEnd || ''));
                 
@@ -2019,11 +2464,10 @@
                 '<option value="applying"' + (zone.status === 'applying' ? ' selected' : '') + '>🔴 路權申請中</option>',
                 '<option value="approved"' + (zone.status === 'approved' ? ' selected' : '') + '>🟢 路權已取得</option>',
                 '</select>',
-                '<input id="pz_label" value="' + (zone.label || '') + '" placeholder="範圍說明" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;">',
                 '<input id="pz_permitNo" value="' + (zone.permitNo || '') + '" placeholder="許可證號（選填）" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;">',
                 '<div style="font-size:11px;color:#666;margin-bottom:3px;">申請時間（選填）</div>',
                 '<input id="pz_applyDate" type="date" value="' + (zone.applyDate || '') + '" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;">',
-                '<div style="font-size:11px;color:#666;margin-bottom:3px;">許可時間（選填）</div>',
+                '<div id="pz_permitPeriodLabel" style="font-size:11px;color:#666;margin-bottom:3px;">許可期間（' + (zone.status === 'approved' ? '必填' : '選填') + '）</div>',
                 '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">',
                 '<input id="pz_permitDateStart" type="date" value="' + (zone.permitDateStart || '') + '" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;">',
                 '<span style="color:#666;font-size:12px;">～</span>',
@@ -2047,19 +2491,33 @@
             div.appendChild(cancelBtn);
             
             L.popup().setLatLng([centerLat, centerLng]).setContent(div).openOn(map);
+            
+            // 監聽狀態變更，動態更新「許可期間」的必填標示
+            document.getElementById('pz_status').addEventListener('change', function(e) {
+                const isApproved = e.target.value === 'approved';
+                document.getElementById('pz_permitPeriodLabel').textContent = '許可期間（' + (isApproved ? '必填' : '選填') + '）';
+            });
         }
         
         async function updatePermitZone(zoneId) {
-            const label = document.getElementById('pz_label').value.trim();
-            if (!label) { alert('請輸入範圍說明！'); return; }
+            const status = document.getElementById('pz_status').value;
+            const permitDateStart = document.getElementById('pz_permitDateStart').value;
+            const permitDateEnd = document.getElementById('pz_permitDateEnd').value;
+            
+            // 如果狀態是「已取得」，檢查許可期間是否填寫
+            if (status === 'approved' && (!permitDateStart || !permitDateEnd)) {
+                alert('⚠️ 路權已取得時，許可期間為必填！');
+                return;
+            }
+            
             const qs = '?action=updatePermitZone' +
                 '&zoneId=' + encodeURIComponent(zoneId) +
-                '&label=' + encodeURIComponent(label) +
-                '&status=' + encodeURIComponent(document.getElementById('pz_status').value) +
+                '&label=' + encodeURIComponent(status === 'approved' ? '路權已取得' : '路權申請中') +
+                '&status=' + encodeURIComponent(status) +
                 '&permitNo=' + encodeURIComponent(document.getElementById('pz_permitNo').value) +
                 '&applyDate=' + encodeURIComponent(document.getElementById('pz_applyDate').value) +
-                '&permitDateStart=' + encodeURIComponent(document.getElementById('pz_permitDateStart').value) +
-                '&permitDateEnd=' + encodeURIComponent(document.getElementById('pz_permitDateEnd').value) +
+                '&permitDateStart=' + encodeURIComponent(permitDateStart) +
+                '&permitDateEnd=' + encodeURIComponent(permitDateEnd) +
                 '&notes=' + encodeURIComponent(document.getElementById('pz_notes').value) +
                 '&creator=' + encodeURIComponent(document.getElementById('pz_creator').value || '匿名');
             try {
@@ -2091,20 +2549,22 @@
             if (!btn) return;
             if (allMarkersVisible) {
                 noteMarkers.forEach(m => map.addLayer(m));
+                panelMarkers.forEach(m => map.addLayer(m));
                 shaftMarkers.forEach(m => map.addLayer(m));
                 permitZones.forEach(z => map.addLayer(z));
                 permitLabels.forEach(l => map.addLayer(l));
                 btn.classList.remove('hidden-markers');
                 btn.textContent = '👁️';
-                btn.title = '隱藏所有標記（備註/工作井/挖掘範圍）';
+                btn.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍）';
             } else {
                 noteMarkers.forEach(m => map.removeLayer(m));
+                panelMarkers.forEach(m => map.removeLayer(m));
                 shaftMarkers.forEach(m => map.removeLayer(m));
                 permitZones.forEach(z => map.removeLayer(z));
                 permitLabels.forEach(l => map.removeLayer(l));
                 btn.classList.add('hidden-markers');
                 btn.textContent = '🙈';
-                btn.title = '顯示所有標記（備註/工作井/挖掘範圍）';
+                btn.title = '顯示所有標記（備註/配電盤/工作井/挖掘範圍）';
             }
         }
         
@@ -2141,18 +2601,26 @@
             console.log('=== 開始載入甘特圖 ===');
             
             try {
+                // 載入甘特圖項目
                 const res = await fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id));
                 const result = await res.json();
                 const items = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
                 
-                console.log('載入項目數:', items.length);
+                // 載入里程碑
+                const milestoneRes = await fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(currentPipeline.id));
+                const milestoneResult = await milestoneRes.json();
+                const milestones = (milestoneResult.milestones || []).sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
                 
-                // 傳遞數據到新視窗，包含 segments
-                const html = createGanttWindowHTML(items, currentPipeline);
+                console.log('載入項目數:', items.length);
+                console.log('載入里程碑數:', milestones.length);
+                
+                // 傳遞數據到新視窗，包含 segments 和 milestones
+                const html = createGanttWindowHTML(items, currentPipeline, milestones);
                 const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 
-                window.open(url, 'gantt_' + Date.now(), 'width=1400,height=900');
+                // 儲存視窗引用
+                window.ganttWindow = window.open(url, 'gantt_' + Date.now(), 'width=1400,height=900');
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             } catch(e) {
                 console.error('開啟甘特圖失敗', e);
@@ -2160,10 +2628,11 @@
             }
         };
         
-        function createGanttWindowHTML(items, pipeline) {
+        function createGanttWindowHTML(items, pipeline, milestones) {
             const itemsJson = JSON.stringify(items).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const segmentsJson = JSON.stringify(pipeline.segments || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const pipelineJson = JSON.stringify(pipeline).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+            const milestonesJson = JSON.stringify(milestones || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const nameEscaped = (pipeline.name || '').replace(/'/g, "\\'");
             const apiUrl = API_URL;
             
@@ -2187,6 +2656,8 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; displ
 .gantt-bar { position: absolute; height: 100%; border-radius: 3px; display: flex; align-items: center; padding: 0 6px; font-size: 9px; color: white; font-weight: bold; }
 .gantt-progress { position: absolute; left: 100%; padding-left: 6px; font-size: 10px; color: #333; font-weight: 600; white-space: nowrap; display: flex; align-items: center; height: 100%; }
 .gantt-today { position: absolute; width: 2px; height: 100%; background: #e53935; z-index: 10; }
+.milestone-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; }
+.milestone-tooltip { font-size: 11px; }
 .edit-panel { position: fixed; top: 50px; right: 10px; width: 280px; background: white; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px; display: none; z-index: 100; max-height: calc(100vh - 70px); overflow-y: auto; }
 .edit-panel.show { display: block; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #00695C; }
@@ -2206,7 +2677,10 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </head>
 <body>
 <div class="header"><h1>📊 施工甘特圖 - ${nameEscaped}</h1></div>
-<div class="chart-area"><div class="container" id="chart"></div></div>
+<div class="chart-area">
+    <div class="container" id="chart"></div>
+    <div class="container milestone-section" id="milestones"></div>
+</div>
 <div class="edit-panel" id="editPanel">
 <div class="panel-header">
 <span class="panel-title" id="panelTitle">編輯項目</span>
@@ -2214,13 +2688,27 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </div>
 <div id="panelBody"></div>
 </div>
-<button class="add-btn" onclick="showAddForm()" title="新增項目">＋</button>
+<button class="add-btn" onclick="showAddForm()" title="新增甘特圖項目">＋</button>
 <script>
 const items = ${itemsJson};
 const segments = ${segmentsJson};
 const pipeline = ${pipelineJson};
+let milestones = ${milestonesJson};
 const API_URL = '${apiUrl}';
 let editingItem = null;
+
+// 確保 methodData 是物件而不是字串
+milestones = milestones.map(m => {
+    if (typeof m.methodData === 'string') {
+        try {
+            m.methodData = JSON.parse(m.methodData);
+        } catch(e) {
+            console.error('解析 methodData 失敗:', e);
+            m.methodData = {};
+        }
+    }
+    return m;
+});
 
 function getItemProgress(item) {
     const label = item.label || '';
@@ -2468,7 +2956,14 @@ async function saveItem() {
     try {
         const res = await fetch(API_URL + '?' + params.toString());
         const result = await res.json();
-        if (result.success) { alert('儲存成功! 請重新開啟甘特圖'); window.close(); }
+        if (result.success) { 
+            alert('儲存成功!'); 
+            // 使用 postMessage 通知主頁面
+            if (window.opener) {
+                window.opener.postMessage({ type: 'ganttChanged' }, '*');
+            }
+            window.close(); 
+        }
         else { alert('失敗: ' + (result.error || '未知錯誤')); }
     } catch(e) { alert('失敗: ' + e.message); }
 }
@@ -2478,12 +2973,269 @@ async function deleteItem() {
     try {
         const res = await fetch(API_URL + '?action=deleteGanttItem&itemId=' + editingItem.id);
         const result = await res.json();
-        if (result.success) { alert('刪除成功! 請重新開啟甘特圖'); window.close(); }
+        if (result.success) { 
+            alert('刪除成功!'); 
+            // 使用 postMessage 通知主頁面
+            if (window.opener) {
+                window.opener.postMessage({ type: 'ganttChanged' }, '*');
+            }
+            window.close(); 
+        }
         else { alert('失敗: ' + (result.error || '未知錯誤')); }
     } catch(e) { alert('失敗: ' + e.message); }
 }
 
+// 渲染里程碑區域
+function renderMilestones() {
+    const container = document.getElementById('milestones');
+    if (!container || !milestones || milestones.length === 0) {
+        if (container) container.style.display = 'none';
+        return;
+    }
+    
+    // 使用與甘特圖相同的時間範圍（不包含里程碑日期）
+    const dates = items.flatMap(item => [new Date(item.startDate), new Date(item.endDate)]);
+    let minDate = new Date(Math.min(...dates));
+    let maxDate = new Date(Math.max(...dates));
+    minDate.setDate(minDate.getDate() - 7);
+    maxDate.setDate(maxDate.getDate() + 7);
+    
+    // 過濾出在時間範圍內的里程碑
+    const visibleMilestones = milestones.filter(m => {
+        const mDate = new Date(m.endDate);
+        return mDate >= minDate && mDate <= maxDate;
+    });
+    
+    if (visibleMilestones.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    // 計算各施工方式的實際完工長度
+    function getActualLength() {
+        const actual = {};
+        segments.forEach(seg => {
+            const method = seg.method || '';
+            if (!method) return;
+            if (!actual[method]) actual[method] = 0;
+            const start = Number(seg.startDistance);
+            const end = Number(seg.endDistance);
+            const numSmall = Math.ceil((end - start) / 10);
+            const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
+            for (let i = 0; i < numSmall; i++) {
+                if (statusArr[i] === '1') {
+                    actual[method] += Math.min(start + (i+1)*10, end) - (start + i*10);
+                }
+            }
+        });
+        return actual;
+    }
+    
+    // 計算各施工方式的預定長度（從甘特圖項目累加，含進行中項目的比例）
+    function getPlannedLength(milestone) {
+        const planned = {};
+        const milestoneDate = new Date(milestone.endDate);
+        
+        items.forEach(item => {
+            const itemStart = new Date(item.startDate);
+            const itemEnd = new Date(item.endDate);
+            
+            // 如果里程碑日期在項目開始前，不計算
+            if (milestoneDate < itemStart) return;
+            
+            const label = item.label || '';
+            const segMatch = label.match(/段落(\\d+)/);
+            const rangeMatch = label.match(/#(\\d+)～?~?#(\\d+)/);
+            
+            if (segMatch && rangeMatch) {
+                const segNum = parseInt(segMatch[1]);
+                const seg = segments.find(s => s.segmentNumber === segNum);
+                if (seg) {
+                    const method = seg.method || '';
+                    if (!method) return;
+                    if (!planned[method]) planned[method] = 0;
+                    
+                    const from = parseInt(rangeMatch[1]) - 1;
+                    const to = parseInt(rangeMatch[2]) - 1;
+                    const start = Number(seg.startDistance);
+                    const end = Number(seg.endDistance);
+                    const segLen = end - start;
+                    const numSmall = Math.ceil(segLen / 10);
+                    
+                    // 計算此項目的總長度
+                    let totalLength = 0;
+                    for (let i = from; i <= to && i < numSmall; i++) {
+                        const smallStart = start + i * 10;
+                        const smallEnd = Math.min(start + (i + 1) * 10, end);
+                        totalLength += smallEnd - smallStart;
+                    }
+                    
+                    // 判斷項目狀態並計算應完成長度
+                    if (milestoneDate >= itemEnd) {
+                        // 里程碑在項目結束後：100% 完成
+                        planned[method] += totalLength;
+                    } else {
+                        // 里程碑在項目進行中：按時間比例計算
+                        const totalDays = (itemEnd - itemStart) / (1000 * 60 * 60 * 24);
+                        const elapsedDays = (milestoneDate - itemStart) / (1000 * 60 * 60 * 24);
+                        const progressRatio = elapsedDays / totalDays;
+                        planned[method] += totalLength * progressRatio;
+                    }
+                }
+            }
+        });
+        
+        return planned;
+    }
+    
+    const actualLength = getActualLength();
+    const methods = ['埋設', '推進', '水管橋', '潛鑽', '潛遁', '隧道'];
+    const methodColors = {
+        '埋設': '#e53935',
+        '推進': '#1976d2',
+        '水管橋': '#388e3c',
+        '潛鑽': '#f57c00',
+        '潛遁': '#7b1fa2',
+        '隧道': '#ff5722'
+    };
+    
+    // 建立里程碑時間軸容器（簡化版）
+    let html = '<div style="display:flex;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">';
+    html += '<div style="width:240px;font-size:11px;font-weight:bold;color:#3f51b5;padding:8px;">🎯 里程碑</div>';
+    html += '<div style="flex:1;position:relative;height:60px;padding-right:80px;">';
+    
+    const totalRange = maxDate.getTime() - minDate.getTime();
+    
+    visibleMilestones.forEach((milestone, idx) => {
+        const plannedLength = getPlannedLength(milestone);
+        const milestoneDate = new Date(milestone.endDate);
+        const dateStr = milestoneDate.toLocaleDateString('zh-TW');
+        
+        // 計算里程碑在時間軸上的位置（使用毫秒數計算）
+        const milestoneOffset = milestoneDate.getTime() - minDate.getTime();
+        const milestonePct = (milestoneOffset / totalRange) * 100;
+        
+        // 建立 tooltip 內容（橫向簡化版）
+        let tooltipHtml = '<div style="min-width:300px;max-width:500px;">';
+        tooltipHtml += '<div style="font-weight:bold;margin-bottom:10px;color:#3f51b5;border-bottom:2px solid #ddd;padding-bottom:6px;font-size:12px;">' + dateStr + '</div>';
+        
+        const hasData = methods.some(method => {
+            // 嘗試直接用 method，如果找不到就嘗試找包含 method 的 key
+            let target = 0;
+            if (milestone.methodData) {
+                if (milestone.methodData[method]) {
+                    target = Math.round(Number(milestone.methodData[method]));
+                } else {
+                    // 尋找包含此施工方式的 key（例如 "2200 DIP 埋設"）
+                    const foundKey = Object.keys(milestone.methodData).find(k => k.includes(method));
+                    if (foundKey) {
+                        target = Math.round(Number(milestone.methodData[foundKey]));
+                    }
+                }
+            }
+            const planned = Math.round(plannedLength[method] || 0);
+            const actual = Math.round(actualLength[method] || 0);
+            return target > 0 || planned > 0 || actual > 0;
+        });
+        
+        if (hasData) {
+            methods.forEach(method => {
+                // 嘗試直接用 method，如果找不到就嘗試找包含 method 的 key
+                let target = 0;
+                if (milestone.methodData) {
+                    if (milestone.methodData[method]) {
+                        target = Math.round(Number(milestone.methodData[method]));
+                    } else {
+                        // 尋找包含此施工方式的 key（例如 "2200 DIP 埋設"）
+                        const foundKey = Object.keys(milestone.methodData).find(k => k.includes(method));
+                        if (foundKey) {
+                            target = Math.round(Number(milestone.methodData[foundKey]));
+                        }
+                    }
+                }
+                const planned = Math.round(plannedLength[method] || 0);
+                const actual = Math.round(actualLength[method] || 0);
+                
+                if (target > 0 || planned > 0 || actual > 0) {
+                    const color = methodColors[method] || '#666';
+                    tooltipHtml += '<div style="margin-bottom:6px;font-size:10px;">';
+                    tooltipHtml += '<span style="font-weight:bold;color:' + color + ';">' + method + '</span>: ';
+                    tooltipHtml += '<span style="color:#3f51b5;">目標 ' + target + 'm</span> / ';
+                    tooltipHtml += '<span style="color:#FF9800;">預定 ' + planned + 'm</span> / ';
+                    tooltipHtml += '<span style="color:#4CAF50;">完工 ' + actual + 'm</span>';
+                    tooltipHtml += '</div>';
+                }
+            });
+        } else {
+            tooltipHtml += '<div style="color:#999;font-size:10px;text-align:center;padding:10px;">尚無資料</div>';
+        }
+        tooltipHtml += '</div>';
+        
+        // 里程碑標記（圖示 + 垂直線）
+        html += '<div class="milestone-marker-icon" style="position:absolute;left:' + milestonePct + '%;top:0;transform:translateX(-50%);cursor:pointer;" data-tooltip-id="ms' + idx + '">';
+        // 垂直線（從頂部延伸）
+        html += '<div style="width:2px;height:60px;background:#3f51b5;opacity:0.4;position:absolute;left:50%;transform:translateX(-50%);top:-20px;"></div>';
+        // 圖示
+        html += '<div style="font-size:20px;position:relative;z-index:2;">📅</div>';
+        html += '<div style="font-size:8px;color:#3f51b5;font-weight:bold;text-align:center;margin-top:2px;">' + (milestoneDate.getMonth() + 1) + '/' + milestoneDate.getDate() + '</div>';
+        html += '</div>';
+        
+        // tooltip（預設隱藏）
+        html += '<div id="ms' + idx + '" class="milestone-tooltip" style="display:none;position:absolute;left:' + milestonePct + '%;top:45px;transform:translateX(-50%);background:white;border:2px solid #3f51b5;border-radius:6px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,0.2);z-index:1000;white-space:nowrap;">';
+        html += tooltipHtml;
+        html += '</div>';
+    });
+    
+    html += '</div></div>';
+    container.innerHTML = html;
+    
+    // 綁定 hover 事件
+    document.querySelectorAll('.milestone-marker-icon').forEach(marker => {
+        const tooltipId = marker.getAttribute('data-tooltip-id');
+        const tooltip = document.getElementById(tooltipId);
+        
+        marker.addEventListener('mouseenter', function() {
+            tooltip.style.display = 'block';
+        });
+        
+        marker.addEventListener('mouseleave', function() {
+            tooltip.style.display = 'none';
+        });
+    });
+}
+
 renderChart();
+renderMilestones();
+
+// 監聽來自主頁面的里程碑更新通知
+window.addEventListener('message', async function(event) {
+    if (event.data && event.data.type === 'milestoneChanged') {
+        console.log('收到里程碑變更通知，重新載入...');
+        try {
+            const res = await fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(pipeline.id));
+            const result = await res.json();
+            let newMilestones = (result.milestones || []).sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+            
+            // 確保 methodData 是物件而不是字串
+            newMilestones = newMilestones.map(m => {
+                if (typeof m.methodData === 'string') {
+                    try {
+                        m.methodData = JSON.parse(m.methodData);
+                    } catch(e) {
+                        console.error('解析 methodData 失敗:', e);
+                        m.methodData = {};
+                    }
+                }
+                return m;
+            });
+            
+            window.milestones = newMilestones;
+            renderMilestones();
+        } catch(e) {
+            console.error('重新載入里程碑失敗:', e);
+        }
+    }
+});
 </` + `script>
 </body>
 </html>`;
@@ -2776,7 +3528,15 @@ renderChart();
             try {
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
-                if (result.success) { map.closePopup(); await loadGanttData(); }
+                if (result.success) { 
+                    map.closePopup(); 
+                    await loadGanttData();
+                    // 重新載入甘特圖快取並更新地圖標註
+                    await loadGanttItemsForLabels();
+                    if (dateLabelsVisible) {
+                        showDateLabels();
+                    }
+                }
                 else alert('❌ ' + (result.error || '儲存失敗'));
             } catch(e) { alert('❌ ' + e.message); }
         }
@@ -2793,7 +3553,15 @@ renderChart();
             try {
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
-                if (result.success) { map.closePopup(); await loadGanttData(); }
+                if (result.success) { 
+                    map.closePopup(); 
+                    await loadGanttData();
+                    // 重新載入甘特圖快取並更新地圖標註
+                    await loadGanttItemsForLabels();
+                    if (dateLabelsVisible) {
+                        showDateLabels();
+                    }
+                }
                 else alert('❌ ' + (result.error || '更新失敗'));
             } catch(e) { alert('❌ ' + e.message); }
         }
@@ -2803,7 +3571,15 @@ renderChart();
             try {
                 const res = await fetch(API_URL + '?action=deleteGanttItem&itemId=' + encodeURIComponent(id));
                 const result = await res.json();
-                if (result.success) { map.closePopup(); await loadGanttData(); }
+                if (result.success) { 
+                    map.closePopup(); 
+                    await loadGanttData();
+                    // 重新載入甘特圖快取並更新地圖標註
+                    await loadGanttItemsForLabels();
+                    if (dateLabelsVisible) {
+                        showDateLabels(); // 如果標註正在顯示，重新繪製
+                    }
+                }
                 else alert('❌ ' + (result.error || '刪除失敗'));
             } catch(e) { alert('❌ ' + e.message); }
         };
@@ -2989,7 +3765,14 @@ renderChart();
             try {
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
-                if (result.success) { map.closePopup(); await loadMilestones(); }
+                if (result.success) { 
+                    map.closePopup(); 
+                    await loadMilestones();
+                    // 通知甘特圖視窗更新
+                    if (window.ganttWindow && !window.ganttWindow.closed) {
+                        window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
+                    }
+                }
                 else alert('❌ 儲存失敗：' + (result.error || ''));
             } catch(e) { alert('❌ ' + e.message); }
         }
@@ -3006,7 +3789,14 @@ renderChart();
             try {
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
-                if (result.success) { map.closePopup(); await loadMilestones(); }
+                if (result.success) { 
+                    map.closePopup(); 
+                    await loadMilestones();
+                    // 通知甘特圖視窗更新
+                    if (window.ganttWindow && !window.ganttWindow.closed) {
+                        window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
+                    }
+                }
                 else alert('❌ 更新失敗：' + (result.error || ''));
             } catch(e) { alert('❌ ' + e.message); }
         }
@@ -3016,7 +3806,13 @@ renderChart();
             try {
                 const res = await fetch(API_URL + '?action=deleteMilestone&milestoneId=' + encodeURIComponent(id));
                 const result = await res.json();
-                if (result.success) await loadMilestones();
+                if (result.success) {
+                    await loadMilestones();
+                    // 通知甘特圖視窗更新
+                    if (window.ganttWindow && !window.ganttWindow.closed) {
+                        window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
+                    }
+                }
                 else alert('❌ 刪除失敗：' + (result.error || ''));
             } catch(e) { alert('❌ ' + e.message); }
         };
@@ -3223,7 +4019,8 @@ renderChart();
         function initMap() {
             if (map) return;
             map = L.map('map', {
-                maxZoom: 19  // OpenStreetMap 圖磚最大到 19
+                maxZoom: 19,
+                zoomControl: false  // 完全不顯示縮放控制（所有裝置）
             }).setView([24.15, 120.65], 11);
             
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -3352,6 +4149,10 @@ renderChart();
             // 清除備註標記（只在個別工程地圖顯示）
             noteMarkers.forEach(marker => map.removeLayer(marker));
             noteMarkers = [];
+            // 清除配電盤標記
+            panelMarkers.forEach(marker => map.removeLayer(marker));
+            panelMarkers = [];
+            panelData = [];
             // 清除工作井標記
             shaftMarkers.forEach(m => map.removeLayer(m));
             shaftMarkers = [];
@@ -3362,6 +4163,9 @@ renderChart();
             permitLabels.forEach(l => map.removeLayer(l));
             permitLabels = [];
             permitZoneData = [];
+            // 清除工程列表
+            const existingList = document.querySelector('.pipeline-list');
+            if (existingList) existingList.remove();
             // 只有真正返回大地圖時才重置隱藏狀態
             if (resetMarkerVisibility) {
                 allMarkersVisible = true;
@@ -3375,6 +4179,14 @@ renderChart();
                 document.getElementById('ganttPanel').style.display = 'none';
                 ganttPanelOpen = false;
                 ganttData = [];
+                // 隱藏工程列表切換按鈕
+                document.getElementById('pipelineListToggle').style.display = 'none';
+                // 隱藏日期標註按鈕並清除標籤
+                document.getElementById('dateLabelButton').classList.add('hidden');
+                document.getElementById('dateLabelButton').classList.remove('active');
+                clearDateLabels();
+                dateLabelsVisible = false;
+                ganttItemsCache = [];
             }
         }
         
@@ -3701,6 +4513,278 @@ renderChart();
                 btn.disabled = false;
             }
         };
+        
+        // ========== 施工日期標註功能（改良版）==========
+        
+        // 載入甘特圖項目用於日期標註
+        async function loadGanttItemsForLabels() {
+            if (!currentPipeline) return;
+            
+            try {
+                const res = await fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id));
+                const result = await res.json();
+                ganttItemsCache = result.items || [];
+                console.log('載入甘特圖項目用於日期標註:', ganttItemsCache.length, '個項目');
+                
+                // 監聽地圖縮放事件，自動調整標籤顯示
+                map.on('zoomend', function() {
+                    if (dateLabelsVisible) {
+                        showDateLabels();
+                    }
+                });
+            } catch (error) {
+                console.error('載入甘特圖項目失敗:', error);
+                ganttItemsCache = [];
+            }
+        }
+        
+        // 切換日期標註顯示/隱藏
+        window.toggleDateLabels = function() {
+            dateLabelsVisible = !dateLabelsVisible;
+            const btn = document.getElementById('dateLabelButton');
+            
+            if (dateLabelsVisible) {
+                btn.classList.add('active');
+                showDateLabels();
+            } else {
+                btn.classList.remove('active');
+                clearDateLabels();
+            }
+        };
+        
+        // 顯示日期標註（改良版：浮水印 + 箭頭線 + 智能密度控制）
+        function showDateLabels() {
+            if (!currentPipeline || ganttItemsCache.length === 0) {
+                console.log('無甘特圖項目可顯示');
+                return;
+            }
+            
+            clearDateLabels();
+            
+            // 取得當前縮放等級，決定顯示密度
+            const zoom = map.getZoom();
+            const showAllLabels = zoom >= 15; // 縮放等級 >= 15 時顯示所有標籤
+            
+            let visibleCount = 0;
+            
+            ganttItemsCache.forEach((item, index) => {
+                // 智能密度控制：低縮放時只顯示部分標籤
+                if (!showAllLabels && index % 2 === 1) return; // 縮放小時跳過一半標籤
+                
+                const label = item.label || '';
+                const segMatch = label.match(/段落(\d+)/);
+                const rangeMatch = label.match(/#(\d+)～#(\d+)/);
+                
+                if (!segMatch || !rangeMatch) return;
+                
+                const segmentNumber = parseInt(segMatch[1]);
+                const fromSmall = parseInt(rangeMatch[1]) - 1;
+                const toSmall = parseInt(rangeMatch[2]) - 1;
+                
+                const segment = currentPipeline.segments.find(s => s.segmentNumber === segmentNumber);
+                if (!segment) return;
+                
+                const segmentLength = segment.endDistance - segment.startDistance;
+                const numSmallSegments = Math.ceil(segmentLength / 10);
+                
+                const validFrom = Math.max(0, Math.min(fromSmall, numSmallSegments - 1));
+                const validTo = Math.max(0, Math.min(toSmall, numSmallSegments - 1));
+                
+                // 計算起點和終點的實際距離
+                const startDistance = segment.startDistance + (validFrom * 10);
+                const endDistance = segment.startDistance + Math.min((validTo + 1) * 10, segmentLength);
+                
+                // 取得管線座標
+                const coords = parseLineString(currentPipeline.linestring);
+                const startCoord = getCoordAtDistance(coords, startDistance);
+                const endCoord = getCoordAtDistance(coords, endDistance);
+                
+                if (!startCoord || !endCoord) return;
+                
+                // 計算標籤位置（在起點和終點的中間）
+                const middleDistance = (startDistance + endDistance) / 2;
+                const labelCoord = getCoordAtDistance(coords, middleDistance);
+                
+                // ========== 智能偏移：根據管線方向判斷 ==========
+                // 計算管線方向（起點到終點的角度）
+                const deltaLat = endCoord[0] - startCoord[0];
+                const deltaLng = endCoord[1] - startCoord[1];
+                const angle = Math.atan2(deltaLat, deltaLng) * (180 / Math.PI);
+                
+                // 判斷管線主要方向
+                let offsetPixelsX = 0;
+                let offsetPixelsY = -50; // 預設向上偏移
+                
+                // 東西向管線（-45° ~ 45° 或 135° ~ -135°）
+                if ((angle >= -45 && angle <= 45) || (angle >= 135 || angle <= -135)) {
+                    offsetPixelsX = 0;
+                    offsetPixelsY = -80; // 東西向：標籤在上方，增加到80px
+                }
+                // 南北向管線（45° ~ 135° 或 -45° ~ -135°）
+                else {
+                    // 判斷要放左邊還是右邊（避免被其他管線遮擋）
+                    if (angle >= 45 && angle <= 135) {
+                        offsetPixelsX = -120; // 東北-西南走向：標籤在左側，增加到120px
+                    } else {
+                        offsetPixelsX = 120;  // 西北-東南走向：標籤在右側，增加到120px
+                    }
+                    offsetPixelsY = 0;
+                }
+                
+                const point = map.latLngToContainerPoint(labelCoord);
+                const offsetPoint = L.point(point.x + offsetPixelsX, point.y + offsetPixelsY);
+                const offsetLatLng = map.containerPointToLatLng(offsetPoint);
+                
+                // 計算日期資訊
+                const startDate = new Date(item.startDate);
+                const endDate = new Date(item.endDate);
+                const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                
+                // 計算管線長度
+                const pipelineLength = Math.round(endDistance - startDistance);
+                
+                // 取得施工方式
+                const method = segment.method || '未設定';
+                
+                const rangeStr = `#${validFrom + 1}~#${validTo + 1}`;
+                const dateStr = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
+                
+                // 建立簡化單行標籤
+                const labelHtml = `
+                    <div class="schedule-label-watermark">
+                        ${rangeStr} (${pipelineLength}m ${method}) ${dateStr} (${days}天)
+                    </div>
+                `;
+                
+                const marker = L.marker(offsetLatLng, {
+                    icon: L.divIcon({
+                        className: 'schedule-label-icon',
+                        html: labelHtml,
+                        iconSize: null,
+                        iconAnchor: [50, 10]
+                    }),
+                    zIndexOffset: 1000
+                });
+                
+                marker.addTo(map);
+                dateLabels.push(marker);
+                
+                // ========== 繪製更明顯的箭頭線 ==========
+                // 使用實線、較粗的線條、更飽和的顏色
+                const arrowStart = L.polyline([offsetLatLng, startCoord], {
+                    color: '#00796B',      // 更深的綠色
+                    weight: 2.5,           // 更粗的線條
+                    opacity: 0.8,          // 更高的不透明度
+                    dashArray: '5, 5'      // 更長的虛線段
+                }).addTo(map);
+                
+                const arrowEnd = L.polyline([offsetLatLng, endCoord], {
+                    color: '#00796B',
+                    weight: 2.5,
+                    opacity: 0.8,
+                    dashArray: '5, 5'
+                }).addTo(map);
+                
+                // 在起點和終點加上更大、更明顯的圓點標記
+                const startMarker = L.circleMarker(startCoord, {
+                    radius: 5,             // 增大半徑
+                    color: '#00796B',
+                    fillColor: '#00BFA5',  // 使用更亮的填充色
+                    fillOpacity: 0.9,
+                    weight: 2
+                }).addTo(map);
+                
+                const endMarker = L.circleMarker(endCoord, {
+                    radius: 5,
+                    color: '#00796B',
+                    fillColor: '#00BFA5',
+                    fillOpacity: 0.9,
+                    weight: 2
+                }).addTo(map);
+                
+                dateLabelArrows.push(arrowStart, arrowEnd, startMarker, endMarker);
+                visibleCount++;
+            });
+            
+            console.log(`顯示了 ${visibleCount} 個日期標註 (縮放等級: ${zoom})`);
+        }
+        
+        // 清除日期標註
+        function clearDateLabels() {
+            dateLabels.forEach(marker => map.removeLayer(marker));
+            dateLabels = [];
+            dateLabelArrows.forEach(arrow => map.removeLayer(arrow));
+            dateLabelArrows = [];
+        }
+        
+        // 格式化日期（YYYY/MM/DD）
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}/${m}/${d}`;
+        }
+        
+        // 根據距離取得座標點
+        function getCoordAtDistance(coords, targetDistance) {
+            let accumulated = 0;
+            
+            for (let i = 0; i < coords.length - 1; i++) {
+                const p1 = coords[i];
+                const p2 = coords[i + 1];
+                const segLength = getDistance(p1, p2);
+                
+                if (accumulated + segLength >= targetDistance) {
+                    const ratio = (targetDistance - accumulated) / segLength;
+                    return [
+                        p1[0] + (p2[0] - p1[0]) * ratio,
+                        p1[1] + (p2[1] - p1[1]) * ratio
+                    ];
+                }
+                
+                accumulated += segLength;
+            }
+            
+            return coords[coords.length - 1];
+        }
+        
+        // 計算兩點間距離（公尺）- Haversine 公式
+        function getDistance(p1, p2) {
+            const R = 6371000;
+            const lat1 = p1[0] * Math.PI / 180;
+            const lat2 = p2[0] * Math.PI / 180;
+            const dLat = (p2[0] - p1[0]) * Math.PI / 180;
+            const dLon = (p2[1] - p1[1]) * Math.PI / 180;
+            
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1) * Math.cos(lat2) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            
+            return R * c;
+        }
+        
+        // 供新視窗呼叫：刷新地圖上的日期標註
+        window.refreshDateLabels = async function() {
+            console.log('收到新視窗的更新通知，刷新日期標註...');
+            await loadGanttItemsForLabels();
+            if (dateLabelsVisible) {
+                showDateLabels();
+            }
+        };
+        
+        // 監聽來自甘特圖新視窗的訊息
+        window.addEventListener('message', async function(event) {
+            console.log('主頁面收到訊息:', event.data);
+            
+            if (event.data && event.data.type === 'ganttChanged') {
+                console.log('收到甘特圖變更通知，刷新日期標註...');
+                await loadGanttItemsForLabels();
+                if (dateLabelsVisible) {
+                    showDateLabels();
+                }
+            }
+        });
         
         console.log('管線施工進度管理系統 v2.0 - 簡化測試版');
         console.log('API URL:', API_URL);
