@@ -560,7 +560,65 @@
             font-size: 12px;
             display: none;
         }
-    </style>
+    
+/* 統計報表面板 */
+.stats-report-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3000;
+    background: white;
+    display: none;
+    width: 90%;
+    max-width: 1200px;
+    height: 80%;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    flex-direction: column;
+}
+
+.stats-report-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stats-report-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.stats-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.stats-report-table th,
+.stats-report-table td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+}
+
+.stats-report-table th {
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.stats-report-table tbody tr:hover {
+    background: #f5f5f5;
+}
+
+</style>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, "Microsoft JhengHei", sans-serif; height: 100vh; display: flex; flex-direction: column; }
@@ -881,7 +939,65 @@
         .editing-polyline {
             cursor: pointer;
         }
-    </style>
+    
+/* 統計報表面板 */
+.stats-report-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3000;
+    background: white;
+    display: none;
+    width: 90%;
+    max-width: 1200px;
+    height: 80%;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    flex-direction: column;
+}
+
+.stats-report-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stats-report-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.stats-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.stats-report-table th,
+.stats-report-table td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+}
+
+.stats-report-table th {
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.stats-report-table tbody tr:hover {
+    background: #f5f5f5;
+}
+
+</style>
 </head>
 <body>
     <div id="loadingScreen" class="loading-screen">
@@ -1283,7 +1399,12 @@
             
             const listDiv = document.createElement('div');
             listDiv.className = 'pipeline-list';
-            listDiv.innerHTML = '<h3>📋 工程清單</h3>';
+            listDiv.innerHTML = `
+                <h3>📋 工程清單</h3>
+                <div style="background:#FF9800;color:white;padding:14px;margin:10px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:15px;" onclick="toggleStatsReport()">
+                    📊 每月施工統計
+                </div>
+            `;
             
             pipelines.forEach(pipeline => {
                 const item = document.createElement('div');
@@ -1416,8 +1537,9 @@
                         const smallStart = startDist + (i * 10);
                         const smallEnd = Math.min(startDist + ((i + 1) * 10), endDist);
                         
-                        // 判斷這個小段是否完工（從 J 欄讀取）
-                        const isCompleted = statusArray[i] === '1';
+                        // 🆕 兼容舊格式 (0/1) 和新格式 (日期)
+                        const statusValue = statusArray[i] || '0';
+                        const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
                         
                         // 計算小段座標（縮短一點點，製造間隙）
                         const gapSize = 0.5; // 間隙 0.5m
@@ -1615,7 +1737,23 @@
         // 顯示小段彈出視窗
         function showSmallSegmentPopup(latlng, segment, smallIndex, smallStart, smallEnd, isCompleted) {
             const statusIcon = isCompleted ? '🟢' : '⚪';
-            const statusText = isCompleted ? '已完工' : '未完工';
+            
+            // 🆕 取得狀態值（可能是 "1" 或日期）
+            const smallSegmentsStatus = segment.smallSegments || '';
+            const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+            const statusValue = statusArray[smallIndex] || '0';
+            
+            // 判斷顯示文字
+            let statusText = '未完工';
+            if (isCompleted) {
+                if (statusValue === '1') {
+                    statusText = '已完工';
+                } else if (statusValue.includes('-')) {
+                    statusText = `完工日期：${statusValue}`;
+                } else {
+                    statusText = '已完工';
+                }
+            }
             
             const popup = L.popup()
                 .setLatLng(latlng)
@@ -1670,12 +1808,25 @@
             }
             
             try {
+                // 🆕 如果是標記完工，使用今天日期；如果取消完工，使用 "0"
+                let statusValue;
+                if (newStatus) {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = String(today.getMonth() + 1).padStart(2, '0');
+                    const day = String(today.getDate()).padStart(2, '0');
+                    statusValue = `${year}-${month}-${day}`;
+                    console.log('📅 使用日期:', statusValue);
+                } else {
+                    statusValue = '0';
+                }
+                
                 const url = API_URL + 
                     '?action=updateSmallSegment' +
                     '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
                     '&segmentNumber=' + segmentNumber +
                     '&smallIndex=' + smallIndex +
-                    '&status=' + (newStatus ? '1' : '0');
+                    '&status=' + encodeURIComponent(statusValue);
                 
                 console.log('呼叫 API:', url);
                 
@@ -1687,12 +1838,28 @@
                 if (result.success) {
                     map.closePopup();
                     
-                    // 重新載入工程（保持目前視角）
+                    // 🔧 重新載入段落資料，更新 allPipelines
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
                     const progressData = await progressRes.json();
-                    currentPipeline.segments = progressData.segments || [];
                     
+                    if (progressData.segments) {
+                        // 更新 allPipelines 中的段落資料
+                        const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                        if (pipelineIndex !== -1) {
+                            allPipelines[pipelineIndex].segments = progressData.segments;
+                            console.log('✅ 已更新 allPipelines 中的段落資料');
+                        }
+                        
+                        // 更新 currentPipeline 的段落資料
+                        currentPipeline.segments = progressData.segments;
+                        console.log('✅ 已更新 currentPipeline 的段落資料');
+                    }
+                    
+                    // 重新渲染地圖（keepView=true 保持視角和標記可見性）
                     showPipelineDetail(currentPipeline.id, true);
+                    
+                    // 🆕 重新載入統計面板（更新完工長度）
+                    showStatsPanel();
                 } else {
                     alert('❌ 更新失敗：' + (result.error || '未知錯誤'));
                 }
@@ -3276,6 +3443,64 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 .info-box { background: #e8f5e9; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; font-size: 10px; }
 .add-btn { position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; border-radius: 50%; background: #00695C; color: white; font-size: 22px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; z-index: 99; }
 .add-btn:hover { background: #004D40; transform: scale(1.1); }
+
+/* 統計報表面板 */
+.stats-report-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3000;
+    background: white;
+    display: none;
+    width: 90%;
+    max-width: 1200px;
+    height: 80%;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    flex-direction: column;
+}
+
+.stats-report-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stats-report-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.stats-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.stats-report-table th,
+.stats-report-table td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+}
+
+.stats-report-table th {
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.stats-report-table tbody tr:hover {
+    background: #f5f5f5;
+}
+
 </style>
 </head>
 <body>
@@ -3840,6 +4065,21 @@ window.addEventListener('message', async function(event) {
     }
 });
 </` + `script>
+
+<!-- 統計報表面板 -->
+<div class="stats-report-panel" id="statsReportPanel">
+    <div class="stats-report-header">
+        <div>
+            <h3 style="margin: 0; font-size: 18px;">📊 每月施工長度統計表</h3>
+            <div style="color: #666; font-size: 12px; margin-top: 5px;">各工程每月完工長度</div>
+        </div>
+        <button onclick="closeStatsReport()" style="padding: 8px 16px; background: #f5f5f5; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">✕ 關閉</button>
+    </div>
+    <div class="stats-report-content" id="statsReportContent">
+        <div style="text-align: center; padding: 50px; color: #999;">載入中...</div>
+    </div>
+</div>
+
 </body>
 </html>`;
         }
@@ -4496,7 +4736,10 @@ window.addEventListener('message', async function(event) {
                     const smallLength = Math.min(10, segLength - (i * 10));
                     totalLength += smallLength;
                     
-                    if (statusArray[i] === '1') {
+                    // 🆕 兼容新舊格式 (1 或日期)
+                    const statusValue = statusArray[i] || '0';
+                    const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
+                    if (isCompleted) {
                         completedLength += smallLength;
                         segCompleted += smallLength;
                     }
@@ -4679,7 +4922,10 @@ window.addEventListener('message', async function(event) {
                         const smallLength = Math.min(10, segLength - (i * 10));
                         totalLength += smallLength;
                         
-                        if (statusArray[i] === '1') {
+                    // 🆕 兼容新舊格式 (1 或日期)
+                    const statusValue = statusArray[i] || '0';
+                    const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
+                    if (isCompleted) {
                             completedLength += smallLength;
                             segCompleted += smallLength;
                         }
@@ -6603,20 +6849,19 @@ window.addEventListener('message', async function(event) {
                     
                     console.log('✅ 段落更新成功，開始重新載入資料...');
                     
-                    // 先關閉段落管理面板
-                    toggleSegmentPanel();
-                    
-                    // 等待 1 秒後重新載入地圖
-                    setTimeout(async () => {
-                        console.log('開始重新載入地圖...');
-                        await showPipelineDetail(currentPipeline.id, true);
-                        
-                        // 再等 500ms 後重新開啟段落管理面板
-                        setTimeout(() => {
-                            toggleSegmentPanel();
-                            console.log('段落管理面板已重新開啟');
-                        }, 500);
-                    }, 1000);
+                    // 🔧 重新載入段落資料
+                    const progressRes = await fetch(API_URL + "?action=getProgress&pipelineId=" + encodeURIComponent(currentPipeline.id));
+                    const progressData = await progressRes.json();
+                    if (progressData.segments) {
+                        const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                        if (pipelineIndex !== -1) allPipelines[pipelineIndex].segments = progressData.segments;
+                        currentPipeline.segments = progressData.segments;
+                        currentSegments = progressData.segments;
+                    }
+                    showPipelineDetail(currentPipeline.id, true);
+                    setTimeout(() => { showStatsPanel(); }, 50);
+                    renderSegmentTable();
+                    updateSegmentInfo();
                     
                     alert('✅ 段落更新成功！');
                 } else {
@@ -6659,20 +6904,19 @@ window.addEventListener('message', async function(event) {
                 if (result.success) {
                     console.log('✅ 段落刪除成功，開始重新載入資料...');
                     
-                    // 先關閉段落管理面板
-                    toggleSegmentPanel();
-                    
-                    // 等待 1 秒後重新載入地圖
-                    setTimeout(async () => {
-                        console.log('開始重新載入地圖...');
-                        await showPipelineDetail(currentPipeline.id, true);
-                        
-                        // 再等 500ms 後重新開啟段落管理面板
-                        setTimeout(() => {
-                            toggleSegmentPanel();
-                            console.log('段落管理面板已重新開啟');
-                        }, 500);
-                    }, 1000);
+                    // 🔧 重新載入段落資料
+                    const progressRes = await fetch(API_URL + "?action=getProgress&pipelineId=" + encodeURIComponent(currentPipeline.id));
+                    const progressData = await progressRes.json();
+                    if (progressData.segments) {
+                        const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                        if (pipelineIndex !== -1) allPipelines[pipelineIndex].segments = progressData.segments;
+                        currentPipeline.segments = progressData.segments;
+                        currentSegments = progressData.segments;
+                    }
+                    showPipelineDetail(currentPipeline.id, true);
+                    setTimeout(() => { showStatsPanel(); }, 50);
+                    renderSegmentTable();
+                    updateSegmentInfo();
                     
                     alert('✅ 段落刪除成功！');
                 } else {
@@ -7071,25 +7315,194 @@ window.addEventListener('message', async function(event) {
                 `;
             }
             
-            // 先關閉段落管理面板
-            toggleSegmentPanel();
+            // 🔧 重新載入段落資料，更新 allPipelines
+            console.log('🔄 重新載入段落資料...');
+            const progressResponse = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
+            const progressData = await progressResponse.json();
             
-            // 等待 1 秒後重新載入地圖
-            setTimeout(async () => {
-                console.log('開始重新載入地圖...');
-                await showPipelineDetail(currentPipeline.id, true);
+            if (progressData.segments) {
+                // 更新 allPipelines 中的段落資料
+                const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                if (pipelineIndex !== -1) {
+                    allPipelines[pipelineIndex].segments = progressData.segments;
+                    console.log('✅ 已更新 allPipelines 中的段落資料');
+                }
                 
-                // 再等 500ms 後重新開啟段落管理面板
-                setTimeout(() => {
-                    toggleSegmentPanel();
-                    console.log('段落管理面板已重新開啟');
-                }, 500);
-            }, 1000);
+                // 更新 currentPipeline 的段落資料
+                currentPipeline.segments = progressData.segments;
+                console.log('✅ 已更新 currentPipeline 的段落資料');
+                
+                // 更新 currentSegments（用於段落管理面板）
+                currentSegments = progressData.segments;
+                console.log('✅ 已更新 currentSegments');
+            }
+            
+            // 立即重新渲染地圖（不需要延遲）
+            console.log('🔄 重新渲染地圖...');
+            showPipelineDetail(currentPipeline.id, true);
+            
+            // 重新載入統計面板
+            showStatsPanel();
+            
+            // 更新段落表格
+            renderSegmentTable();
+            updateSegmentInfo();
         };
         
         console.log('管線施工進度管理系統 v3.5 - 段落管理版');
         console.log('API URL:', API_URL);
         console.log('請打開 F12 Console 查看載入狀態');
-    </script>
+    
+
+// ============================================
+// 📊 統計報表功能
+// ============================================
+
+// 顯示/隱藏統計報表
+function toggleStatsReport() {
+    const panel = document.getElementById('statsReportPanel');
+    const overlay = document.getElementById('overlay');
+    
+    if (panel.style.display === 'flex') {
+        panel.style.display = 'none';
+        overlay.style.display = 'none';
+    } else {
+        panel.style.display = 'flex';
+        overlay.style.display = 'block';
+        overlay.style.zIndex = '2999';
+        loadMonthlyReport();
+    }
+}
+
+function closeStatsReport() {
+    document.getElementById('statsReportPanel').style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
+}
+
+// 載入每月統計報表
+async function loadMonthlyReport() {
+    try {
+        const content = document.getElementById('statsReportContent');
+        content.innerHTML = '<div style="text-align: center; padding: 50px; color: #999;">載入中...</div>';
+        
+        // 🔧 只統計當前計畫
+        let projectName = '';
+        if (currentProject && currentProject.name) {
+            projectName = currentProject.name;
+        }
+        console.log('📊 統計報表 - 計畫:', projectName);
+        console.log('📊 currentProject:', currentProject);
+        console.log('📊 API URL:', API_URL + '?action=generateMonthlyReport&projectName=' + encodeURIComponent(projectName));
+        
+        const response = await fetch(API_URL + '?action=generateMonthlyReport&projectName=' + encodeURIComponent(projectName));
+        const result = await response.json();
+        console.log('📊 統計報表結果:', result);
+        console.log('📊 成功:', result.success);
+        console.log('📊 工程數:', result.pipelines ? result.pipelines.length : 0);
+        console.log('📊 月份數:', result.months ? result.months.length : 0);
+        
+        if (!result.success) {
+            content.innerHTML = '<div style="text-align: center; padding: 50px; color: #f44336;">❌ 載入失敗：' + result.error + '</div>';
+            return;
+        }
+        
+        if (!result.pipelines || result.pipelines.length === 0) {
+            console.log('📊 沒有工程資料');
+            console.log('📊 完整結果:', JSON.stringify(result, null, 2));
+            console.log('📊 allPipelines:', allPipelines.map(p => ({id: p.id, name: p.name, project: p.project, projectName: p.projectName})));
+            content.innerHTML = '<div style="text-align: center; padding: 50px; color: #999;">📊 尚無統計資料<br><br>查詢計畫：' + projectName + '<br>工程數：0<br><br>請檢查 Console 的 allPipelines</div>';
+            return;
+        }
+        
+        // 建立表格
+        let html = '<table class="stats-report-table">';
+        html += '<thead><tr>';
+        html += '<th style="text-align:left;padding-left:15px;">工程名稱</th>';
+        
+        // 月份欄位（格式：2026/01）
+        console.log('📊 開始處理月份:', result.months);
+        result.months.forEach(month => {
+            const [year, monthNum] = month.split('-');
+            html += `<th>${year}/${monthNum}</th>`;
+        });
+        
+        html += '<th>合計</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        // 資料列
+        result.pipelines.forEach(pipeline => {
+            html += '<tr>';
+            html += `<td style="text-align:left;padding-left:15px;">${pipeline.name}</td>`;
+            
+            let total = 0;
+            console.log('📊 開始處理月份:', result.months);
+        result.months.forEach(month => {
+                const length = pipeline.monthly[month] || 0;
+                total += length;
+                
+                if (length > 0) {
+                    html += `<td style="background: #e8f5e9; font-weight: 600;">${length}m</td>`;
+                } else {
+                    html += '<td style="color: #ccc;">-</td>';
+                }
+            });
+            
+            html += `<td style="background: #fff3e0; font-weight: bold;">${total}m</td>`;
+            html += '</tr>';
+        });
+        
+        // 月份總計列
+        html += '<tr style="background: #f5f5f5; font-weight: bold;">';
+        html += '<td style="text-align:left;padding-left:15px;">月份總計</td>';
+        
+        console.log('📊 開始處理月份:', result.months);
+        result.months.forEach(month => {
+            let monthTotal = 0;
+            result.pipelines.forEach(pipeline => {
+                monthTotal += pipeline.monthly[month] || 0;
+            });
+            html += `<td style="color: #667eea;">${monthTotal}m</td>`;
+        });
+        
+        // 整體總計
+        let grandTotal = 0;
+        result.pipelines.forEach(pipeline => {
+            console.log('📊 開始處理月份:', result.months);
+        result.months.forEach(month => {
+                grandTotal += pipeline.monthly[month] || 0;
+            });
+        });
+        html += `<td style="background: #667eea; color: white;">${grandTotal}m</td>`;
+        html += '</tr>';
+        
+        html += '</tbody></table>';
+        
+        content.innerHTML = html;
+        
+    } catch (error) {
+        console.error('載入統計報表錯誤:', error);
+        document.getElementById('statsReportContent').innerHTML = 
+            '<div style="text-align: center; padding: 50px; color: #f44336;">❌ 載入失敗：' + error.message + '</div>';
+    }
+}
+
+
+</script>
+
+<!-- 統計報表面板 -->
+<div class="stats-report-panel" id="statsReportPanel">
+    <div class="stats-report-header">
+        <div>
+            <h3 style="margin: 0; font-size: 18px;">📊 每月施工長度統計表</h3>
+            <div style="color: #666; font-size: 12px; margin-top: 5px;">各工程每月完工長度</div>
+        </div>
+        <button onclick="closeStatsReport()" style="padding: 8px 16px; background: #f5f5f5; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">✕ 關閉</button>
+    </div>
+    <div class="stats-report-content" id="statsReportContent">
+        <div style="text-align: center; padding: 50px; color: #999;">載入中...</div>
+    </div>
+</div>
+
 </body>
 </html>
