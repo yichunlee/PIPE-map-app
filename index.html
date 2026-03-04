@@ -38,6 +38,33 @@
             border: none !important;
         }
         
+        /* 懸停照片預覽 */
+        .marker-photo-preview {
+            position: absolute;
+            z-index: 10000;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            padding: 8px;
+            pointer-events: none;
+            max-width: 300px;
+        }
+        .marker-photo-preview img {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            display: block;
+        }
+        .marker-photo-preview-label {
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+        
         /* 右鍵選單項目 */
         .rcm-item {
             padding: 12px 16px;
@@ -723,9 +750,31 @@
         .stats-panel {
             position: absolute; top: 20px; right: 20px; background: white;
             padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000; max-width: 300px;
+            z-index: 1000; max-width: 300px; transition: all 0.3s ease;
         }
-        .stats-panel h3 { font-size: 13px; margin-bottom: 10px; color: #2c3e50; }
+        .stats-panel.collapsed {
+            padding: 8px 15px;
+        }
+        .stats-panel.collapsed .stats-content {
+            display: none;
+        }
+        .stats-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .stats-toggle-btn {
+            font-size: 16px;
+            color: #667eea;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .stats-panel.collapsed .stats-toggle-btn {
+            transform: rotate(180deg);
+        }
+        .stats-panel h3 { font-size: 13px; margin: 0; color: #2c3e50; }
         .stats-info { font-size: 12px; margin: 5px 0; }
         
         .hidden { display: none; }
@@ -1160,6 +1209,11 @@
         let currentPipeline = null;
         let allPolylines = [];
         
+        // 批次選取功能變數
+        let batchSelectMode = false;
+        let selectedSmallSegments = []; // {segmentNumber, smallIndex, polyline}
+        let lastClickedSmallSegment = null; // 用於 Shift 範圍選取
+        
         // 測量功能變數
         let measureMode = false;
         let measurePoints = [];
@@ -1400,9 +1454,8 @@
             const listDiv = document.createElement('div');
             listDiv.className = 'pipeline-list';
             listDiv.innerHTML = `
-                <h3>📋 工程清單</h3>
-                <div style="background:#FF9800;color:white;padding:14px;margin:10px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:15px;" onclick="toggleStatsReport()">
-                    📊 每月施工統計
+                <div style="background:#FF9800;color:white;padding:12px 14px;margin:10px 10px 15px 10px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:13px;" onclick="toggleStatsReport()">
+                    每月施工統計
                 </div>
             `;
             
@@ -1560,8 +1613,16 @@
                                     lineCap: 'round'
                                 }).addTo(map);
                                 
+                                // 儲存段落資訊到 polyline
+                                polyline.segmentData = { segment, smallIndex: i, originalColor: color, isCompleted };
+                                
                                 polyline.on('click', function(e) {
-                                    showSmallSegmentPopup(e.latlng, segment, i, smallStart, smallEnd, isCompleted);
+                                    handleSmallSegmentClick(e, segment, i, smallStart, smallEnd, isCompleted, polyline, color);
+                                });
+                                
+                                // 右鍵選單：段落操作
+                                polyline.on('contextmenu', function(e) {
+                                    showSegmentContextMenu(e, segment, color);
                                 });
                                 
                                 allPolylines.push(polyline);
@@ -1574,8 +1635,16 @@
                                     lineCap: 'round'
                                 }).addTo(map);
                                 
+                                // 儲存段落資訊到 polyline
+                                polyline.segmentData = { segment, smallIndex: i, originalColor: color, isCompleted };
+                                
                                 polyline.on('click', function(e) {
-                                    showSmallSegmentPopup(e.latlng, segment, i, smallStart, smallEnd, isCompleted);
+                                    handleSmallSegmentClick(e, segment, i, smallStart, smallEnd, isCompleted, polyline, color);
+                                });
+                                
+                                // 右鍵選單：段落操作
+                                polyline.on('contextmenu', function(e) {
+                                    showSegmentContextMenu(e, segment, color);
                                 });
                                 
                                 allPolylines.push(polyline);
@@ -1735,6 +1804,507 @@
         }
         
         // 顯示小段彈出視窗
+        // ========== 批次選取小段功能 ==========
+        
+        // 處理小段點擊（支持 Ctrl 多選、Shift 範圍選取）
+        function handleSmallSegmentClick(e, segment, smallIndex, smallStart, smallEnd, isCompleted, polyline, originalColor) {
+            const isCtrlPressed = e.originalEvent.ctrlKey || e.originalEvent.metaKey; // Mac 用 Cmd 鍵
+            const isShiftPressed = e.originalEvent.shiftKey;
+            
+            // Shift 範圍選取
+            if (isShiftPressed && lastClickedSmallSegment) {
+                selectRangeSmallSegments(lastClickedSmallSegment, {segment, smallIndex, polyline, originalColor});
+                showBatchPopup();
+                L.DomEvent.stopPropagation(e);
+                return;
+            }
+            
+            // Ctrl 多選
+            if (isCtrlPressed) {
+                toggleSelectSmallSegment(segment, smallIndex, polyline, originalColor);
+                lastClickedSmallSegment = {segment, smallIndex, polyline, originalColor};
+                
+                if (selectedSmallSegments.length > 0) {
+                    showBatchPopup();
+                } else {
+                    map.closePopup();
+                }
+                L.DomEvent.stopPropagation(e);
+                return;
+            }
+            
+            // 一般點擊：清除選取，顯示單個彈窗
+            clearSmallSegmentSelection();
+            showSmallSegmentPopup(e.latlng, segment, smallIndex, smallStart, smallEnd, isCompleted);
+            lastClickedSmallSegment = {segment, smallIndex, polyline, originalColor};
+        }
+        
+        // 切換選取單個小段
+        function toggleSelectSmallSegment(segment, smallIndex, polyline, originalColor) {
+            const existingIndex = selectedSmallSegments.findIndex(
+                s => s.segment.segmentNumber === segment.segmentNumber && s.smallIndex === smallIndex
+            );
+            
+            if (existingIndex >= 0) {
+                // 取消選取
+                const item = selectedSmallSegments[existingIndex];
+                item.polyline.setStyle({ 
+                    weight: item.isCompleted ? 8 : 4,
+                    color: item.originalColor,
+                    opacity: item.isCompleted ? 1 : 0.3
+                });
+                selectedSmallSegments.splice(existingIndex, 1);
+            } else {
+                // 加入選取
+                const smallSegmentsStatus = segment.smallSegments || '';
+                const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+                const statusValue = statusArray[smallIndex] || '0';
+                const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
+                
+                polyline.setStyle({ 
+                    weight: 10,
+                    color: '#FFD700',
+                    opacity: 1
+                });
+                selectedSmallSegments.push({
+                    segment,
+                    smallIndex,
+                    polyline,
+                    originalColor,
+                    isCompleted
+                });
+            }
+        }
+        
+        // 範圍選取小段（從 lastClicked 到當前點擊的小段）
+        function selectRangeSmallSegments(from, to) {
+            clearSmallSegmentSelection();
+            
+            // 如果在同一段落
+            if (from.segment.segmentNumber === to.segment.segmentNumber) {
+                const start = Math.min(from.smallIndex, to.smallIndex);
+                const end = Math.max(from.smallIndex, to.smallIndex);
+                
+                // 找到這個段落的所有小段 polylines
+                // 需要重新繪製時才能取得所有 polyline 引用，這裡簡化處理
+                for (let i = start; i <= end; i++) {
+                    toggleSelectSmallSegment(from.segment, i, from.polyline, from.originalColor);
+                }
+            } else {
+                // 跨段落選取較複雜，先選取兩個端點
+                toggleSelectSmallSegment(from.segment, from.smallIndex, from.polyline, from.originalColor);
+                toggleSelectSmallSegment(to.segment, to.smallIndex, to.polyline, to.originalColor);
+            }
+        }
+        
+        // 清除所有選取
+        function clearSmallSegmentSelection() {
+            selectedSmallSegments.forEach(item => {
+                // 確保 polyline 還在地圖上才設置樣式
+                if (map.hasLayer(item.polyline)) {
+                    item.polyline.setStyle({ 
+                        weight: item.isCompleted ? 8 : 4,
+                        color: item.originalColor,
+                        opacity: item.isCompleted ? 1 : 0.3
+                    });
+                }
+            });
+            selectedSmallSegments = [];
+        }
+        
+        // 顯示批次操作彈窗
+        function showBatchPopup() {
+            if (selectedSmallSegments.length === 0) return;
+            
+            const completedCount = selectedSmallSegments.filter(s => s.isCompleted).length;
+            const uncompletedCount = selectedSmallSegments.length - completedCount;
+            
+            const centerLat = selectedSmallSegments.reduce((sum, s) => 
+                sum + s.polyline.getLatLngs()[0].lat, 0) / selectedSmallSegments.length;
+            const centerLng = selectedSmallSegments.reduce((sum, s) => 
+                sum + s.polyline.getLatLngs()[0].lng, 0) / selectedSmallSegments.length;
+            
+            L.popup()
+                .setLatLng([centerLat, centerLng])
+                .setContent(`
+                    <div class="popup-title">已選取 ${selectedSmallSegments.length} 個小段</div>
+                    <div class="popup-info">✅ 已完工：${completedCount} 個</div>
+                    <div class="popup-info">⚪ 未完工：${uncompletedCount} 個</div>
+                    <div style="margin-top: 12px; display: flex; gap: 8px;">
+                        <button class="popup-button" onclick="batchMarkComplete()" style="flex: 1;">
+                            ✓ 全部標記完工
+                        </button>
+                        <button class="popup-button" onclick="batchMarkIncomplete()" style="flex: 1; background: #e74c3c;">
+                            ❌ 全部取消完工
+                        </button>
+                    </div>
+                    <button class="popup-button" onclick="clearSmallSegmentSelection(); map.closePopup();" style="background: #95a5a6; margin-top: 8px;">
+                        取消選取
+                    </button>
+                `)
+                .openOn(map);
+        }
+        
+        // 批次標記完工
+        window.batchMarkComplete = async function() {
+            if (selectedSmallSegments.length === 0) return;
+            
+            const confirmed = confirm(`確定要標記 ${selectedSmallSegments.length} 個小段為完工嗎？`);
+            if (!confirmed) return;
+            
+            showLoading(true, '正在批次更新...');
+            
+            try {
+                // 按段落分組
+                const segmentGroups = {};
+                for (const item of selectedSmallSegments) {
+                    const key = item.segment.segmentNumber;
+                    if (!segmentGroups[key]) {
+                        segmentGroups[key] = {
+                            segment: item.segment,
+                            smallIndexes: []
+                        };
+                    }
+                    segmentGroups[key].smallIndexes.push(item.smallIndex);
+                }
+                
+                // 取得今天日期
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                const statusValue = `${year}-${month}-${day}`;
+                
+                // 對每個段落進行批次更新
+                for (const segNum in segmentGroups) {
+                    const group = segmentGroups[segNum];
+                    const segment = group.segment;
+                    const segLength = segment.endDistance - segment.startDistance;
+                    const numSmallSegments = Math.ceil(segLength / 10);
+                    
+                    // 取得現有狀態
+                    const smallSegmentsStatus = segment.smallSegments || '';
+                    const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+                    
+                    // 補齊陣列長度
+                    while (statusArray.length < numSmallSegments) {
+                        statusArray.push('0');
+                    }
+                    
+                    // 更新選中的小段
+                    for (const idx of group.smallIndexes) {
+                        if (idx >= 0 && idx < statusArray.length) {
+                            statusArray[idx] = statusValue;
+                        }
+                    }
+                    
+                    // 一次性更新整個段落
+                    const statusString = statusArray.join(',');
+                    const url = API_URL + 
+                        '?action=updateWholeSegment' +
+                        '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                        '&segmentNumber=' + segNum +
+                        '&statusString=' + encodeURIComponent(statusString);
+                    
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        throw new Error(result.error || '更新失敗');
+                    }
+                }
+                
+                // 清空選取陣列（在重新載入前）
+                selectedSmallSegments = [];
+                lastClickedSmallSegment = null;
+                
+                // 重新載入資料
+                await reloadCurrentPipeline();
+                map.closePopup();
+                alert('✅ 批次更新完成！');
+            } catch (error) {
+                alert('❌ 批次更新失敗：' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        };
+        
+        // 批次標記未完工
+        window.batchMarkIncomplete = async function() {
+            if (selectedSmallSegments.length === 0) return;
+            
+            const confirmed = confirm(`確定要取消 ${selectedSmallSegments.length} 個小段的完工狀態嗎？`);
+            if (!confirmed) return;
+            
+            showLoading(true, '正在批次更新...');
+            
+            try {
+                // 按段落分組
+                const segmentGroups = {};
+                for (const item of selectedSmallSegments) {
+                    const key = item.segment.segmentNumber;
+                    if (!segmentGroups[key]) {
+                        segmentGroups[key] = {
+                            segment: item.segment,
+                            smallIndexes: []
+                        };
+                    }
+                    segmentGroups[key].smallIndexes.push(item.smallIndex);
+                }
+                
+                // 對每個段落進行批次更新
+                for (const segNum in segmentGroups) {
+                    const group = segmentGroups[segNum];
+                    const segment = group.segment;
+                    const segLength = segment.endDistance - segment.startDistance;
+                    const numSmallSegments = Math.ceil(segLength / 10);
+                    
+                    // 取得現有狀態
+                    const smallSegmentsStatus = segment.smallSegments || '';
+                    const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+                    
+                    // 補齊陣列長度
+                    while (statusArray.length < numSmallSegments) {
+                        statusArray.push('0');
+                    }
+                    
+                    // 更新選中的小段為未完工
+                    for (const idx of group.smallIndexes) {
+                        if (idx >= 0 && idx < statusArray.length) {
+                            statusArray[idx] = '0';
+                        }
+                    }
+                    
+                    // 一次性更新整個段落
+                    const statusString = statusArray.join(',');
+                    const url = API_URL + 
+                        '?action=updateWholeSegment' +
+                        '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                        '&segmentNumber=' + segNum +
+                        '&statusString=' + encodeURIComponent(statusString);
+                    
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        throw new Error(result.error || '更新失敗');
+                    }
+                }
+                
+                // 清空選取陣列（在重新載入前）
+                selectedSmallSegments = [];
+                lastClickedSmallSegment = null;
+                
+                // 重新載入資料
+                await reloadCurrentPipeline();
+                map.closePopup();
+                alert('✅ 批次更新完成！');
+            } catch (error) {
+                alert('❌ 批次更新失敗：' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        };
+        
+        // 直接更新小段狀態（不重新載入）
+        async function toggleSmallSegmentDirect(segmentNumber, smallIndex, newStatus) {
+            if (!currentPipeline || !currentPipeline.id) {
+                throw new Error('沒有選擇工程');
+            }
+            
+            let statusValue;
+            if (newStatus) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                statusValue = `${year}-${month}-${day}`;
+            } else {
+                statusValue = '0';
+            }
+            
+            const url = API_URL + 
+                '?action=updateSmallSegment' +
+                '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                '&segmentNumber=' + segmentNumber +
+                '&smallIndex=' + smallIndex +
+                '&status=' + encodeURIComponent(statusValue);
+            
+            const response = await fetch(url);
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || '更新失敗');
+            }
+        }
+        
+        // 重新載入當前工程
+        async function reloadCurrentPipeline() {
+            // 清空選取陣列（避免引用已被刪除的 polyline）
+            selectedSmallSegments = [];
+            lastClickedSmallSegment = null;
+            
+            const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
+            const progressData = await progressRes.json();
+            
+            if (progressData.segments) {
+                const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                if (pipelineIndex !== -1) {
+                    allPipelines[pipelineIndex].segments = progressData.segments;
+                }
+                currentPipeline.segments = progressData.segments;
+            }
+            
+            showPipelineDetail(currentPipeline.id, true);
+            setTimeout(() => { showStatsPanel(); }, 50);
+        }
+        
+        // ========== 段落右鍵選單功能 ==========
+        
+        function showSegmentContextMenu(e, segment, color) {
+            L.DomEvent.stopPropagation(e);
+            L.DomEvent.preventDefault(e);
+            
+            const segLength = segment.endDistance - segment.startDistance;
+            const numSmallSegments = Math.ceil(segLength / 10);
+            
+            // 計算完工狀態
+            const smallSegmentsStatus = segment.smallSegments || '';
+            const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+            let completedCount = 0;
+            for (let i = 0; i < numSmallSegments; i++) {
+                const statusValue = statusArray[i] || '0';
+                if (statusValue !== '0' && statusValue.trim() !== '') {
+                    completedCount++;
+                }
+            }
+            
+            const methodLabel = [segment.diameter, segment.pipeType, segment.method].filter(Boolean).join(' ');
+            
+            L.popup()
+                .setLatLng(e.latlng)
+                .setContent(`
+                    <div class="popup-title">段落 ${segment.segmentNumber}</div>
+                    <div class="popup-info">📏 ${segment.startDistance}m - ${segment.endDistance}m (${Math.round(segLength)}m)</div>
+                    <div class="popup-info">⚙️ ${methodLabel}</div>
+                    <div class="popup-info">📊 完工：${completedCount}/${numSmallSegments} 個小段</div>
+                    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                        <button class="popup-button" onclick="markWholeSegmentComplete(${segment.segmentNumber})">
+                            ✓ 標記整段完工
+                        </button>
+                        <button class="popup-button" onclick="markWholeSegmentIncomplete(${segment.segmentNumber})" style="background: #e74c3c;">
+                            ❌ 標記整段未完工
+                        </button>
+                    </div>
+                `)
+                .openOn(map);
+        }
+        
+        // 標記整個段落為完工
+        window.markWholeSegmentComplete = async function(segmentNumber) {
+            const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
+            if (!segment) {
+                alert('❌ 找不到段落！');
+                return;
+            }
+            
+            const segLength = segment.endDistance - segment.startDistance;
+            const numSmallSegments = Math.ceil(segLength / 10);
+            
+            const confirmed = confirm(`確定要標記段落 ${segmentNumber} 的全部 ${numSmallSegments} 個小段為完工嗎？`);
+            if (!confirmed) return;
+            
+            showLoading(true, '正在批次更新...');
+            
+            try {
+                // 取得今天日期
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                const statusValue = `${year}-${month}-${day}`;
+                
+                // 建立完整的狀態陣列
+                const statusArray = new Array(numSmallSegments).fill(statusValue);
+                const statusString = statusArray.join(',');
+                
+                // 一次性更新整個段落
+                const url = API_URL + 
+                    '?action=updateWholeSegment' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&segmentNumber=' + segmentNumber +
+                    '&statusString=' + encodeURIComponent(statusString);
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || '更新失敗');
+                }
+                
+                // 清空選取陣列（在重新載入前）
+                selectedSmallSegments = [];
+                lastClickedSmallSegment = null;
+                
+                await reloadCurrentPipeline();
+                map.closePopup();
+                alert('✅ 段落標記完成！');
+            } catch (error) {
+                alert('❌ 更新失敗：' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        };
+        
+        // 標記整個段落為未完工
+        window.markWholeSegmentIncomplete = async function(segmentNumber) {
+            const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
+            if (!segment) {
+                alert('❌ 找不到段落！');
+                return;
+            }
+            
+            const segLength = segment.endDistance - segment.startDistance;
+            const numSmallSegments = Math.ceil(segLength / 10);
+            
+            const confirmed = confirm(`確定要取消段落 ${segmentNumber} 的全部 ${numSmallSegments} 個小段的完工狀態嗎？`);
+            if (!confirmed) return;
+            
+            showLoading(true, '正在批次更新...');
+            
+            try {
+                // 建立完整的狀態陣列（全部為 0）
+                const statusArray = new Array(numSmallSegments).fill('0');
+                const statusString = statusArray.join(',');
+                
+                // 一次性更新整個段落
+                const url = API_URL + 
+                    '?action=updateWholeSegment' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&segmentNumber=' + segmentNumber +
+                    '&statusString=' + encodeURIComponent(statusString);
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || '更新失敗');
+                }
+                
+                // 清空選取陣列（在重新載入前）
+                selectedSmallSegments = [];
+                lastClickedSmallSegment = null;
+                
+                await reloadCurrentPipeline();
+                map.closePopup();
+                alert('✅ 段落標記完成！');
+            } catch (error) {
+                alert('❌ 更新失敗：' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        };
+        
         function showSmallSegmentPopup(latlng, segment, smallIndex, smallStart, smallEnd, isCompleted) {
             const statusIcon = isCompleted ? '🟢' : '⚪';
             
@@ -1872,6 +2442,46 @@
         // ========== 地圖備註功能 ==========
         let mapNotes = [];
         let noteMarkers = [];
+        let photoPreviewElement = null; // 照片預覽元素
+        
+        // 顯示照片預覽
+        function showPhotoPreview(e, photoUrl, label) {
+            // 移除舊的預覽
+            hidePhotoPreview();
+            
+            // 創建預覽元素
+            photoPreviewElement = document.createElement('div');
+            photoPreviewElement.className = 'marker-photo-preview';
+            
+            const img = document.createElement('img');
+            img.src = photoUrl;
+            img.onerror = function() {
+                hidePhotoPreview(); // 圖片載入失敗就隱藏
+            };
+            
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'marker-photo-preview-label';
+            labelDiv.textContent = label;
+            
+            photoPreviewElement.appendChild(img);
+            photoPreviewElement.appendChild(labelDiv);
+            document.body.appendChild(photoPreviewElement);
+            
+            // 定位預覽框（在標記旁邊）
+            const x = e.originalEvent.pageX + 15;
+            const y = e.originalEvent.pageY - 100;
+            
+            photoPreviewElement.style.left = x + 'px';
+            photoPreviewElement.style.top = y + 'px';
+        }
+        
+        // 隱藏照片預覽
+        function hidePhotoPreview() {
+            if (photoPreviewElement) {
+                photoPreviewElement.remove();
+                photoPreviewElement = null;
+            }
+        }
         
         // 載入地圖備註
         async function loadMapNotes() {
@@ -1918,48 +2528,53 @@
                         className: 'note-marker-custom',
                         html: `
                             <div style="
-                                background: #FFC107; 
-                                color: white; 
-                                width: 20px; 
-                                height: 20px; 
-                                border-radius: 50%; 
+                                color: #FF0000; 
+                                font-size: 24px;
+                                text-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 0 3px white;
                                 display: flex; 
                                 align-items: center; 
-                                justify-content: center; 
-                                font-size: 12px; 
-                                box-shadow: 0 2px 5px rgba(0,0,0,0.3); 
-                                border: 2px solid white;
+                                justify-content: center;
                                 cursor: pointer;
-                            ">📝</div>
+                            ">⭐</div>
                         `,
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10],
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12],
                         popupAnchor: [0, -12]
                     })
                 }).addTo(map);
                 
+                // 懸停預覽照片
+                if (note.photo) {
+                    marker.on('mouseover', function(e) {
+                        showPhotoPreview(e, note.photo, '⭐ 備註');
+                    });
+                    marker.on('mouseout', function() {
+                        hidePhotoPreview();
+                    });
+                }
+                
                 marker.bindPopup(`
                     <div style="min-width: 240px; max-width: 300px;" id="note-popup-${note.id}">
-                        <div style="font-weight: bold; margin-bottom: 8px; color: #FFC107;">📝 備註</div>
-                        ${note.photo ? `<img src="${note.photo}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;">` : ''}
+                        <div style="font-weight: bold; margin-bottom: 8px; color: #FF0000;">⭐ 備註</div>
+                        ${note.photo ? `<img src="${note.photo}" onclick="window.open('${note.photo}', '_blank')" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd; cursor: pointer;" title="點擊放大查看">` : ''}
                         <div id="note-text-view-${note.id}" style="margin-bottom: 8px; white-space: pre-wrap;">${note.text || ''}</div>
                         <textarea id="note-text-edit-${note.id}" style="display:none; width: 100%; height: 80px; padding: 6px; border: 1px solid #FFC107; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 13px; box-sizing: border-box;">${note.text || ''}</textarea>
                         <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px;">
                             ${note.creator || '未知'} · ${note.timestamp || ''}
                         </div>
-                        <div id="note-btns-view-${note.id}">
-                            <button onclick="startEditNote('${note.id}')" style="margin-top: 8px; padding: 5px 10px; background: #FFC107; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                                ✏️ 編輯備註
+                        <div id="note-btns-view-${note.id}" style="display: flex; gap: 5px; margin-top: 8px;">
+                            <button onclick="startEditNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #FFC107; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                ✏️ 編輯
                             </button>
-                            <button onclick="deleteMapNote('${note.id}')" style="margin-top: 5px; padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                                🗑️ 刪除備註
+                            <button onclick="deleteMapNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                🗑️ 刪除
                             </button>
                         </div>
-                        <div id="note-btns-edit-${note.id}" style="display:none;">
-                            <button onclick="saveEditNote('${note.id}')" style="margin-top: 8px; padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                                💾 儲存修改
+                        <div id="note-btns-edit-${note.id}" style="display:none; gap: 5px; margin-top: 8px;">
+                            <button onclick="saveEditNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                💾 儲存
                             </button>
-                            <button onclick="cancelEditNote('${note.id}')" style="margin-top: 5px; padding: 5px 10px; background: #e0e0e0; color: #666; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                            <button onclick="cancelEditNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #e0e0e0; color: #666; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
                                 取消
                             </button>
                         </div>
@@ -2152,7 +2767,7 @@
             document.getElementById('note-text-view-' + noteId).style.display = 'none';
             document.getElementById('note-text-edit-' + noteId).style.display = 'block';
             document.getElementById('note-btns-view-' + noteId).style.display = 'none';
-            document.getElementById('note-btns-edit-' + noteId).style.display = 'block';
+            document.getElementById('note-btns-edit-' + noteId).style.display = 'flex';
             document.getElementById('note-text-edit-' + noteId).focus();
         };
         
@@ -2160,7 +2775,7 @@
         window.cancelEditNote = function(noteId) {
             document.getElementById('note-text-view-' + noteId).style.display = 'block';
             document.getElementById('note-text-edit-' + noteId).style.display = 'none';
-            document.getElementById('note-btns-view-' + noteId).style.display = 'block';
+            document.getElementById('note-btns-view-' + noteId).style.display = 'flex';
             document.getElementById('note-btns-edit-' + noteId).style.display = 'none';
         };
         
@@ -2331,28 +2946,38 @@
                     console.log('⚠️ 沒有照片');
                 }
                 
+                // 懸停預覽照片
+                if (photoUrl) {
+                    marker.on('mouseover', function(e) {
+                        showPhotoPreview(e, photoUrl, '🔌 配電盤');
+                    });
+                    marker.on('mouseout', function() {
+                        hidePhotoPreview();
+                    });
+                }
+                
                 marker.bindPopup(`
                     <div style="min-width: 240px; max-width: 300px;" id="panel-popup-${panel.id}">
                         <div style="font-weight: bold; margin-bottom: 8px; color: #4CAF50;">🔌 配電盤/儀表箱</div>
-                        ${photoUrl ? `<img src="${photoUrl}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;" onerror="console.error('圖片載入失敗:', this.src); this.style.display='none'">` : '<div style="padding: 20px; text-align: center; color: #999; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px;">📷 無照片</div>'}
+                        ${photoUrl ? `<img src="${photoUrl}" onclick="window.open('${photoUrl}', '_blank')" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd; cursor: pointer;" title="點擊放大查看" onerror="console.error('圖片載入失敗:', this.src); this.style.display='none'">` : '<div style="padding: 20px; text-align: center; color: #999; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px;">📷 無照片</div>'}
                         <div id="panel-text-view-${panel.id}" style="margin-bottom: 8px; white-space: pre-wrap;">${panel.text || ''}</div>
                         <textarea id="panel-text-edit-${panel.id}" style="display:none; width: 100%; height: 80px; padding: 6px; border: 1px solid #4CAF50; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 13px; box-sizing: border-box;">${panel.text || ''}</textarea>
                         <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px;">
                             ${panel.creator || '未知'} · ${panel.timestamp || ''}
                         </div>
-                        <div id="panel-btns-view-${panel.id}">
-                            <button onclick="startEditPanel('${panel.id}')" style="margin-top: 8px; padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                        <div id="panel-btns-view-${panel.id}" style="display: flex; gap: 5px; margin-top: 8px;">
+                            <button onclick="startEditPanel('${panel.id}')" style="flex: 1; padding: 6px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
                                 ✏️ 編輯
                             </button>
-                            <button onclick="deletePanel('${panel.id}')" style="margin-top: 5px; padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                            <button onclick="deletePanel('${panel.id}')" style="flex: 1; padding: 6px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
                                 🗑️ 刪除
                             </button>
                         </div>
-                        <div id="panel-btns-edit-${panel.id}" style="display:none;">
-                            <button onclick="saveEditPanel('${panel.id}')" style="margin-top: 8px; padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
-                                💾 儲存修改
+                        <div id="panel-btns-edit-${panel.id}" style="display:none; gap: 5px; margin-top: 8px;">
+                            <button onclick="saveEditPanel('${panel.id}')" style="flex: 1; padding: 6px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                💾 儲存
                             </button>
-                            <button onclick="cancelEditPanel('${panel.id}')" style="margin-top: 5px; padding: 5px 10px; background: #e0e0e0; color: #666; border: none; border-radius: 4px; cursor: pointer; width: 100%;">
+                            <button onclick="cancelEditPanel('${panel.id}')" style="flex: 1; padding: 6px 8px; background: #e0e0e0; color: #666; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
                                 取消
                             </button>
                         </div>
@@ -2483,14 +3108,14 @@
             document.getElementById('panel-text-view-' + panelId).style.display = 'none';
             document.getElementById('panel-text-edit-' + panelId).style.display = 'block';
             document.getElementById('panel-btns-view-' + panelId).style.display = 'none';
-            document.getElementById('panel-btns-edit-' + panelId).style.display = 'block';
+            document.getElementById('panel-btns-edit-' + panelId).style.display = 'flex';
             document.getElementById('panel-text-edit-' + panelId).focus();
         };
         
         window.cancelEditPanel = function(panelId) {
             document.getElementById('panel-text-view-' + panelId).style.display = 'block';
             document.getElementById('panel-text-edit-' + panelId).style.display = 'none';
-            document.getElementById('panel-btns-view-' + panelId).style.display = 'block';
+            document.getElementById('panel-btns-view-' + panelId).style.display = 'flex';
             document.getElementById('panel-btns-edit-' + panelId).style.display = 'none';
         };
         
@@ -4749,7 +5374,7 @@ window.addEventListener('message', async function(event) {
                 const method = segment.method || '未設定';
                 const diameter = segment.diameter || '';
                 const pipeType = segment.pipeType || '';
-                const methodKey = method;
+                const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
                 const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
                 if (!methodStats[methodKey]) {
                     methodStats[methodKey] = { total: 0, completed: 0, label: methodLabel };
@@ -4761,10 +5386,14 @@ window.addEventListener('message', async function(event) {
             const overallPercent = totalLength > 0 ? Math.round((completedLength / totalLength) * 100) : 0;
             
             let statsHTML = `
-                <h3>📊 ${currentPipeline.name}</h3>
-                <div class="stats-info" style="font-size: 13px; font-weight: bold; color: #2c3e50; margin: 10px 0;">
-                    總進度：${overallPercent}% (${Math.round(completedLength)}m/${Math.round(totalLength)}m)
+                <div class="stats-panel-header" onclick="toggleStatsPanel(event)">
+                    <h3>📊 ${currentPipeline.name}</h3>
+                    <span class="stats-toggle-btn">▼</span>
                 </div>
+                <div class="stats-content" style="margin-top: 10px;">
+                    <div class="stats-info" style="font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;">
+                        總進度：${overallPercent}% (${Math.round(completedLength)}m/${Math.round(totalLength)}m)
+                    </div>
             `;
             
             // 儲存工法列表供里程碑使用（含管徑管種）
@@ -4773,10 +5402,14 @@ window.addEventListener('message', async function(event) {
                 .map(m => methodStats[m].label);
             
             // 顯示各工法統計
-            Object.keys(methodStats).forEach(method => {
-                const stats = methodStats[method];
+            Object.keys(methodStats).forEach(methodKey => {
+                const stats = methodStats[methodKey];
                 const percent = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-                const color = METHOD_COLORS[method] ? METHOD_COLORS[method].color : '#999999';
+                
+                // 從 methodKey 中提取施工方式（最後一個部分）
+                const methodParts = methodKey.split('-');
+                const actualMethod = methodParts[methodParts.length - 1];
+                const color = METHOD_COLORS[actualMethod] ? METHOD_COLORS[actualMethod].color : '#999999';
                 
                 statsHTML += `
                     <div class="stats-info" style="font-size: 11px; margin: 5px 0; padding-left: 10px; border-left: 3px solid ${color};">
@@ -4793,11 +5426,22 @@ window.addEventListener('message', async function(event) {
                 `;
             }
             
+            statsHTML += `</div>`; // 關閉 stats-content
+            
             const panel = document.createElement('div');
-            panel.className = 'stats-panel';
+            panel.className = 'stats-panel collapsed'; // 預設收起
             panel.innerHTML = statsHTML;
             document.body.appendChild(panel);
         }
+        
+        // 統計面板收合功能
+        window.toggleStatsPanel = function(event) {
+            event.stopPropagation();
+            const panel = document.querySelector('.stats-panel');
+            if (panel) {
+                panel.classList.toggle('collapsed');
+            }
+        };
         
         // ========== 計畫總覽路權範圍功能 ==========
         let projectPermitVisible = false;
@@ -4935,7 +5579,7 @@ window.addEventListener('message', async function(event) {
                     const method = segment.method || '未設定';
                     const diameter = segment.diameter || '';
                     const pipeType = segment.pipeType || '';
-                    const methodKey = method;
+                    const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
                     const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
                     if (!methodStats[methodKey]) {
                         methodStats[methodKey] = { total: 0, completed: 0, label: methodLabel };
@@ -4948,17 +5592,25 @@ window.addEventListener('message', async function(event) {
             const overallPercent = totalLength > 0 ? Math.round((completedLength / totalLength) * 100) : 0;
             
             let statsHTML = `
-                <h3>📊 ${currentProject.name}</h3>
-                <div class="stats-info" style="font-size: 13px; font-weight: bold; color: #2c3e50; margin: 10px 0;">
-                    總進度：${overallPercent}% (${Math.round(completedLength)}m/${Math.round(totalLength)}m)
+                <div class="stats-panel-header" onclick="toggleStatsPanel(event)">
+                    <h3>📊 ${currentProject.name}</h3>
+                    <span class="stats-toggle-btn">▼</span>
                 </div>
+                <div class="stats-content" style="margin-top: 10px;">
+                    <div class="stats-info" style="font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;">
+                        總進度：${overallPercent}% (${Math.round(completedLength)}m/${Math.round(totalLength)}m)
+                    </div>
             `;
             
             // 顯示各工法統計
-            Object.keys(methodStats).forEach(method => {
-                const stats = methodStats[method];
+            Object.keys(methodStats).forEach(methodKey => {
+                const stats = methodStats[methodKey];
                 const percent = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-                const color = METHOD_COLORS[method] ? METHOD_COLORS[method].color : '#999999';
+                
+                // 從 methodKey 中提取施工方式（最後一個部分）
+                const methodParts = methodKey.split('-');
+                const actualMethod = methodParts[methodParts.length - 1];
+                const color = METHOD_COLORS[actualMethod] ? METHOD_COLORS[actualMethod].color : '#999999';
                 
                 statsHTML += `
                     <div class="stats-info" style="font-size: 11px; margin: 5px 0; padding-left: 10px; border-left: 3px solid ${color};">
@@ -4967,8 +5619,10 @@ window.addEventListener('message', async function(event) {
                 `;
             });
             
+            statsHTML += `</div>`; // 關閉 stats-content
+            
             const panel = document.createElement('div');
-            panel.className = 'stats-panel';
+            panel.className = 'stats-panel collapsed'; // 預設收起
             panel.innerHTML = statsHTML;
             document.body.appendChild(panel);
         }
@@ -7487,6 +8141,93 @@ async function loadMonthlyReport() {
     }
 }
 
+// 匯出每月統計報表為 Excel
+async function exportMonthlyReportToExcel() {
+    try {
+        // 取得統計資料
+        let projectName = '';
+        if (currentProject && currentProject.name) {
+            projectName = currentProject.name;
+        }
+        
+        const response = await fetch(API_URL + '?action=generateMonthlyReport&projectName=' + encodeURIComponent(projectName));
+        const result = await response.json();
+        
+        if (!result.success || !result.pipelines || result.pipelines.length === 0) {
+            alert('❌ 無資料可匯出');
+            return;
+        }
+        
+        // 建立 CSV 內容（Excel 可以開啟 CSV）
+        let csv = '\uFEFF'; // UTF-8 BOM，讓 Excel 正確顯示中文
+        
+        // 標題
+        csv += `每月施工長度統計表\n`;
+        csv += `計畫名稱：${projectName}\n`;
+        csv += `匯出時間：${new Date().toLocaleString('zh-TW')}\n\n`;
+        
+        // 表頭
+        csv += '工程名稱,';
+        result.months.forEach(month => {
+            const [year, monthNum] = month.split('-');
+            csv += `${year}/${monthNum},`;
+        });
+        csv += '合計\n';
+        
+        // 資料列
+        result.pipelines.forEach(pipeline => {
+            csv += `${pipeline.name},`;
+            
+            let total = 0;
+            result.months.forEach(month => {
+                const length = pipeline.monthly[month] || 0;
+                total += length;
+                csv += `${length},`;
+            });
+            
+            csv += `${total}\n`;
+        });
+        
+        // 月份總計列
+        csv += '月份總計,';
+        result.months.forEach(month => {
+            let monthTotal = 0;
+            result.pipelines.forEach(pipeline => {
+                monthTotal += pipeline.monthly[month] || 0;
+            });
+            csv += `${monthTotal},`;
+        });
+        
+        // 整體總計
+        let grandTotal = 0;
+        result.pipelines.forEach(pipeline => {
+            result.months.forEach(month => {
+                grandTotal += pipeline.monthly[month] || 0;
+            });
+        });
+        csv += `${grandTotal}\n`;
+        
+        // 建立下載連結
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `每月施工統計_${projectName}_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert('✅ 匯出成功！');
+        
+    } catch (error) {
+        console.error('匯出失敗:', error);
+        alert('❌ 匯出失敗：' + error.message);
+    }
+}
+
 
 </script>
 
@@ -7494,10 +8235,14 @@ async function loadMonthlyReport() {
 <div class="stats-report-panel" id="statsReportPanel">
     <div class="stats-report-header">
         <div>
-            <h3 style="margin: 0; font-size: 18px;">📊 每月施工長度統計表</h3>
-            <div style="color: #666; font-size: 12px; margin-top: 5px;">各工程每月完工長度</div>
+            <h3 style="margin: 0; font-size: 18px;">各工程每月完工長度</h3>
         </div>
-        <button onclick="closeStatsReport()" style="padding: 8px 16px; background: #f5f5f5; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">✕ 關閉</button>
+        <div style="display: flex; gap: 8px;">
+            <button onclick="exportMonthlyReportToExcel()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;" title="匯出為 Excel 檔案">
+                📥 匯出 Excel
+            </button>
+            <button onclick="closeStatsReport()" style="padding: 8px 16px; background: #f5f5f5; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">✕ 關閉</button>
+        </div>
     </div>
     <div class="stats-report-content" id="statsReportContent">
         <div style="text-align: center; padding: 50px; color: #999;">載入中...</div>
