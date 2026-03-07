@@ -32,6 +32,66 @@
             color: white;
         }
         
+        /* 圖層切換按鈕 */
+        .layer-switch-button {
+            position: absolute;
+            top: 170px; /* 與眼睛按鈕交換位置 */
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 8px;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            cursor: pointer;
+            font-size: 18px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .layer-switch-button:hover {
+            background: #f4f4f4;
+        }
+        
+        /* 圖層面板 */
+        .layer-panel {
+            position: absolute;
+            top: 170px; /* 對齊圖層切換按鈕 */
+            left: 54px;
+            z-index: 1000;
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            min-width: 140px;
+        }
+        
+        .layer-option {
+            padding: 8px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            margin: 2px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .layer-option:hover {
+            background: #f0f0f0;
+        }
+        
+        .layer-option.active {
+            background: #e3f2fd;
+            color: #2196F3;
+            font-weight: 600;
+        }
+        
+        .layer-radio {
+            font-size: 16px;
+        }
+        
         /* 備註圖示樣式 */
         .note-marker-custom {
             background: transparent !important;
@@ -486,7 +546,7 @@
         /* 標記顯示/隱藏按鈕 */
         .permit-zone-button {
             position: absolute;
-            top: 170px;
+            top: 304px; /* 與圖層按鈕交換位置,放在測量按鈕下方 */
             left: 10px;
             z-index: 1000;
             background: white;
@@ -645,6 +705,41 @@
     background: #f5f5f5;
 }
 
+
+/* 分支繪製模式樣式 */
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Leaflet 圖層控制美化 */
+.leaflet-control-layers {
+    border-radius: 8px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    border: none !important;
+}
+
+.leaflet-control-layers-toggle {
+    width: 40px !important;
+    height: 40px !important;
+    background-size: 24px 24px !important;
+}
+
+.leaflet-control-layers-expanded {
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+}
+
+.leaflet-control-layers-base label {
+    padding: 6px 0 !important;
+    font-weight: 500 !important;
+}
 </style>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1060,6 +1155,19 @@
     <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
     
     <div id="measureButton" class="measure-button" title="測量距離">📏</div>
+    <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel()" title="切換底圖">🗺️</div>
+    <div id="layerPanel" class="layer-panel" style="display:none;">
+        <div style="font-weight:bold; margin-bottom:8px; color:#2196F3;">🗺️ 底圖選擇</div>
+        <div onclick="switchBaseLayer('street')" class="layer-option active" id="layer-street">
+            <span class="layer-radio">●</span> 街道圖
+        </div>
+        <div onclick="switchBaseLayer('satellite')" class="layer-option" id="layer-satellite">
+            <span class="layer-radio">○</span> 衛星圖
+        </div>
+        <div onclick="switchBaseLayer('topo')" class="layer-option" id="layer-topo">
+            <span class="layer-radio">○</span> 地形圖
+        </div>
+    </div>
     <div id="roadworkButton" class="roadwork-button" title="台中市挖掘許可" onclick="toggleRoadworkLayer()">🚧</div>
     <div id="permitZoneButton" class="permit-zone-button hidden" title="隱藏所有標記（備註/工作井/挖掘範圍）" onclick="toggleAllMarkers()">👁️</div>
     <div id="dateLabelButton" class="date-label-button hidden" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()">📅</div>
@@ -1146,6 +1254,10 @@
         </div>
         <div class="segment-panel-body">
             <div id="segmentPipelineInfo" style="background:#f5f5f5;padding:10px;border-radius:6px;margin-bottom:15px;font-size:13px;"></div>
+            
+            <!-- 🆕 視覺化分段面板（用於 MULTILINESTRING 分支選擇） -->
+            <div id="visualSegmentationPanel" style="display:none;"></div>
+            
             <table class="segment-table">
                 <thead>
                     <tr>
@@ -1176,6 +1288,12 @@
             <span>✏️</span>
             <span>編輯路徑</span>
         </div>
+        <!-- 編輯分支功能已隱藏 (保留程式碼以支援舊有 MULTILINESTRING 資料)
+        <div class="tool-item branch" onclick="selectTool('branch')">
+            <span>🌿</span>
+            <span>編輯分支</span>
+        </div>
+        -->
         <div class="tool-item segment" onclick="selectTool('segment')">
             <span>📋</span>
             <span>段落管理</span>
@@ -1188,9 +1306,9 @@
             <span>📅</span>
             <span>施工里程碑</span>
         </div>
-        <div class="tool-item" onclick="logout()" style="color: #666; border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px;">
-            <span>🔓</span>
-            <span>登出</span>
+        <div class="tool-item" onclick="selectTool('editPipeline')" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px;">
+            <span>✏️</span>
+            <span>編輯工程</span>
         </div>
     </div>
     
@@ -1231,7 +1349,27 @@
         let isEditingPath = false;
         let editingPolyline = null;
         let editingNodes = [];
+        let segmentBreakPoints = []; // 記錄分段點的索引位置
+        let originalSegmentBreaks = []; // 原始的分段點位置
+        let branchStructure = null; // 分支結構 { branches: [], junctionPoints: [] }
+        let editingBranches = []; // 編輯中的分支 polylines
+        let junctionMarkers = []; // 交叉點標記
         let originalCoords = [];
+        
+        // 分支繪製模式變數
+        let isBranchDrawingMode = false; // 是否在分支繪製模式
+        let branchDrawingNodes = []; // 正在繪製的分支節點
+        let branchDrawingLine = null; // 繪製中的分支預覽線
+        let branchStartNode = null; // 分支起始節點 {branchIndex, nodeIndex, coord}
+        let branchDrawingMarkers = []; // 繪製模式的標記
+        let branchDrawingHint = null; // 提示訊息 div
+        
+        // 🆕 分支編輯模式變數
+        let isBranchEditMode = false; // 是否在分支編輯模式
+        let branchEditJunctions = []; // Y接點標記 [{coord, marker, distance}]
+        let branchEditNewBranches = []; // 新繪製的支線 [{coords, polyline}]
+        let branchEditCurrentDrawing = null; // 當前正在繪製的支線 {startCoord, coords, polyline, markers}
+        let branchEditMainPolyline = null; // 主幹預覽線
         
         // 工法顏色配置（改用飽和度更高的顏色）
         const METHOD_COLORS = {
@@ -1279,6 +1417,22 @@
             return methodKeyColorMap[methodKey];
         }
         
+        // 🔍 解析段落資料中的 branchIndex (從備註欄位提取)
+        function parseBranchIndexFromSegments(segments) {
+            if (!segments || !Array.isArray(segments)) return segments;
+            
+            segments.forEach(seg => {
+                if (seg.notes && seg.notes.includes('branchIndex:')) {
+                    const match = seg.notes.match(/branchIndex:(\d+)/);
+                    if (match) {
+                        seg.branchIndex = parseInt(match[1], 10);
+                    }
+                }
+            });
+            
+            return segments;
+        }
+        
         // 初始化
         window.addEventListener('load', loadData);
         
@@ -1324,7 +1478,7 @@
                 
                 const progressResults = await Promise.all(progressPromises);
                 progressResults.forEach(({ pipeline, progressData }) => {
-                    pipeline.segments = progressData.segments || [];
+                    pipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
                     console.log(pipeline.name + ':', pipeline.segments.length, '個段落');
                 });
                 
@@ -1338,6 +1492,44 @@
             }
         }
         
+        // 重新載入工程資料(用於編輯/刪除後)
+        async function loadPipelines() {
+            console.log('🔄 重新載入工程資料...');
+            
+            // 重新載入計畫清單
+            const projectsRes = await fetch(API_URL + '?action=getProjects');
+            const projectsData = await projectsRes.json();
+            allProjects = projectsData.projects;
+            
+            // 重新載入所有工程
+            const pipelinePromises = allProjects.map(project => 
+                fetch(API_URL + '?action=getPipelines&projectName=' + encodeURIComponent(project.name))
+                    .then(res => res.json())
+            );
+            
+            const pipelinesResults = await Promise.all(pipelinePromises);
+            allPipelines = [];
+            pipelinesResults.forEach(data => {
+                if (data.pipelines) {
+                    allPipelines = allPipelines.concat(data.pipelines);
+                }
+            });
+            
+            // 重新載入進度
+            const progressPromises = allPipelines.map(pipeline =>
+                fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(pipeline.id))
+                    .then(res => res.json())
+                    .then(progressData => ({ pipeline, progressData }))
+            );
+            
+            const progressResults = await Promise.all(progressPromises);
+            progressResults.forEach(({ pipeline, progressData }) => {
+                pipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
+            });
+            
+            console.log('✅ 工程資料已重新載入');
+        }
+        
         function showLoading(show) {
             document.getElementById('loadingScreen').style.display = show ? 'flex' : 'none';
         }
@@ -1345,6 +1537,15 @@
         function showProjectSelector() {
             document.getElementById('projectSelector').classList.remove('hidden');
             if (map) clearMap(true);
+            
+            // 隱藏測量距離、挖掘許可和圖層切換按鈕
+            const measureBtn = document.getElementById('measureButton');
+            const roadworkBtn = document.getElementById('roadworkButton');
+            const layerBtn = document.getElementById('layerSwitchButton');
+            if (measureBtn) measureBtn.style.display = 'none';
+            if (roadworkBtn) roadworkBtn.style.display = 'none';
+            if (layerBtn) layerBtn.style.display = 'none';
+            
             renderProjectGrid();
         }
         
@@ -1357,14 +1558,25 @@
                 
                 const card = document.createElement('div');
                 card.className = 'project-card';
+                card.style.cursor = 'pointer';
                 card.onclick = () => showProjectPipelines(project.name);
                 card.innerHTML = `
                     <div class="project-card-title">${project.name}</div>
-                    <div class="project-card-info">📍 ${project.area}</div>
                     <div class="project-card-info">🏗️ ${projectPipelines.length} 個工程</div>
                 `;
+                
                 grid.appendChild(card);
             });
+            
+            // 新增「新增工程計畫」卡片
+            const addCard = document.createElement('div');
+            addCard.className = 'project-card';
+            addCard.style.cursor = 'pointer';
+            addCard.onclick = () => showAddPipelineFormWithAuth();
+            addCard.innerHTML = `
+                <div class="project-card-title">新增工程計畫</div>
+            `;
+            grid.appendChild(addCard);
         }
         
         function showProjectPipelines(projectName) {
@@ -1436,40 +1648,83 @@
             const total = projectPipelines.length;
             
             projectPipelines.forEach((pipeline, index) => {
-                const coords = parseLineString(pipeline.linestring);
-                coords.forEach(c => bounds.push(c));
-                
                 // HSL 均勻分配：色相 0~360 平均切割，飽和度和亮度固定
                 const hue = Math.round((index / total) * 360);
                 const color = 'hsl(' + hue + ', 80%, 45%)';
                 
-                const polyline = L.polyline(coords, {
-                    color: color,
-                    weight: 6,
-                    opacity: 0.8
-                }).addTo(map);
+                // 🆕 檢查是否為 MULTILINESTRING
+                const isMULTI = pipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
                 
-                // 在管線中點顯示固定標籤（彩色框線）
-                if (coords.length > 0) {
-                    const midIndex = Math.floor(coords.length / 2);
-                    const midPoint = coords[midIndex];
+                if (isMULTI) {
+                    // MULTILINESTRING：分別繪製每個分支
+                    const branchData = parseLineStringWithBranches(pipeline.linestring);
                     
-                    const labelTooltip = L.tooltip({
-                        permanent: true,
-                        direction: 'top',
-                        offset: [0, -10],
-                        className: 'pipeline-permanent-label',
-                        interactive: false
-                    })
-                    .setLatLng(midPoint)
-                    .setContent(`<span style="background: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: ${color}; border: 2px solid ${color}; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: inline-block;">${pipeline.name}</span>`)
-                    .addTo(map);
+                    branchData.branches.forEach((branch, branchIdx) => {
+                        branch.coords.forEach(c => bounds.push(c));
+                        
+                        const polyline = L.polyline(branch.coords, {
+                            color: color,
+                            weight: 6,
+                            opacity: 0.8
+                        }).addTo(map);
+                        
+                        polyline.on('click', () => showPipelineDetail(pipeline.id));
+                        allPolylines.push(polyline);
+                    });
                     
-                    allPolylines.push(labelTooltip);
+                    // 在第一個分支的中點顯示標籤
+                    if (branchData.branches.length > 0 && branchData.branches[0].coords.length > 0) {
+                        const mainBranch = branchData.branches[0].coords;
+                        const midIndex = Math.floor(mainBranch.length / 2);
+                        const midPoint = mainBranch[midIndex];
+                        
+                        const labelTooltip = L.tooltip({
+                            permanent: true,
+                            direction: 'top',
+                            offset: [0, -10],
+                            className: 'pipeline-permanent-label',
+                            interactive: false
+                        })
+                        .setLatLng(midPoint)
+                        .setContent(`<span style="background: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: ${color}; border: 2px solid ${color}; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: inline-block;">${pipeline.name}</span>`)
+                        .addTo(map);
+                        
+                        allPolylines.push(labelTooltip);
+                    }
+                    
+                } else {
+                    // 普通 LINESTRING：原本的邏輯
+                    const coords = parseLineString(pipeline.linestring);
+                    coords.forEach(c => bounds.push(c));
+                    
+                    const polyline = L.polyline(coords, {
+                        color: color,
+                        weight: 6,
+                        opacity: 0.8
+                    }).addTo(map);
+                    
+                    // 在管線中點顯示固定標籤（彩色框線）
+                    if (coords.length > 0) {
+                        const midIndex = Math.floor(coords.length / 2);
+                        const midPoint = coords[midIndex];
+                        
+                        const labelTooltip = L.tooltip({
+                            permanent: true,
+                            direction: 'top',
+                            offset: [0, -10],
+                            className: 'pipeline-permanent-label',
+                            interactive: false
+                        })
+                        .setLatLng(midPoint)
+                        .setContent(`<span style="background: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: ${color}; border: 2px solid ${color}; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: inline-block;">${pipeline.name}</span>`)
+                        .addTo(map);
+                        
+                        allPolylines.push(labelTooltip);
+                    }
+                    
+                    polyline.on('click', () => showPipelineDetail(pipeline.id));
+                    allPolylines.push(polyline);
                 }
-                
-                polyline.on('click', () => showPipelineDetail(pipeline.id));
-                allPolylines.push(polyline);
             });
             
             if (bounds.length > 0) {
@@ -1498,6 +1753,7 @@
             pipelines.forEach(pipeline => {
                 const item = document.createElement('div');
                 item.className = 'pipeline-item';
+                item.style.cursor = 'pointer';
                 item.onclick = () => {
                     showPipelineDetail(pipeline.id);
                     // 選擇工程後自動關閉列表
@@ -1506,10 +1762,20 @@
                     if (list) list.classList.remove('open');
                     if (toggle) toggle.textContent = '📋 工程列表';
                 };
-                item.innerHTML = `
-                    <div class="pipeline-item-name">${pipeline.name}</div>
-                    <div class="pipeline-item-info">📏 ${pipeline.segments.length} 個段落</div>
-                `;
+                
+                // 📝 工程名稱
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'pipeline-item-name';
+                nameDiv.textContent = pipeline.name;
+                
+                // 📏 段落資訊
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'pipeline-item-info';
+                infoDiv.textContent = `📏 ${pipeline.segments.length} 個段落`;
+                
+                item.appendChild(nameDiv);
+                item.appendChild(infoDiv);
+                
                 listDiv.appendChild(item);
             });
             
@@ -1547,6 +1813,14 @@
         function showPipelineDetail(pipelineId, keepView = false) {
             currentPipeline = allPipelines.find(p => p.id === pipelineId);
             
+            // 顯示測量距離、挖掘許可和圖層切換按鈕
+            const measureBtn = document.getElementById('measureButton');
+            const roadworkBtn = document.getElementById('roadworkButton');
+            const layerBtn = document.getElementById('layerSwitchButton');
+            if (measureBtn) measureBtn.style.display = 'block';
+            if (roadworkBtn) roadworkBtn.style.display = 'block';
+            if (layerBtn) layerBtn.style.display = 'block';
+            
             // 只在首次進入工程時重置標記可見性（編輯後重載時保持狀態）
             if (!keepView) {
                 allMarkersVisible = true;
@@ -1557,42 +1831,286 @@
             
             clearMap();
             
-            const coords = parseLineString(currentPipeline.linestring);
-            const totalLength = Math.round(calculateTotalLength(coords));
+            // 檢查是否為 MULTILINESTRING
+            const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
             
-            // 儲存管線總長度到 currentPipeline 物件
-            currentPipeline.length = totalLength;
-            
-            console.log('管線座標點數:', coords.length);
-            console.log('管線總長:', totalLength, 'm');
-            
-            // 如果沒有段落資料，顯示整條管線（備用方案）
-            if (currentPipeline.segments.length === 0) {
-                console.warn('⚠️ 沒有段落資料，顯示整條管線');
+            if (isMULTI) {
+                console.log('🌿 檢測到 MULTILINESTRING 格式');
                 
-                const polyline = L.polyline(coords, {
-                    color: '#e74c3c',
-                    weight: 8,
-                    opacity: 0.7
-                }).addTo(map);
+                // 解析分支結構
+                const branchData = parseLineStringWithBranches(currentPipeline.linestring);
+                console.log('   分支數:', branchData.branches.length);
+                console.log('   交叉點:', branchData.junctionPoints.length);
                 
-                polyline.on('click', function(e) {
-                    L.popup()
-                        .setLatLng(e.latlng)
-                        .setContent(`
-                            <div class="popup-title">${currentPipeline.name}</div>
-                            <div class="popup-info">⚠️ 尚未定義段落</div>
-                            <div class="popup-info">管線總長：約 ${totalLength}m</div>
-                            <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
-                                💡 請在 Google Sheets「施工進度」表中手動設定段落資料<br>
-                                或使用「🛠️ 工具 → 📋 段落管理」功能
-                            </div>
-                        `)
-                        .openOn(map);
+                // 計算總長度（所有分支加總）
+                let totalLength = 0;
+                branchData.branches.forEach(branch => {
+                    for (let i = 0; i < branch.coords.length - 1; i++) {
+                        totalLength += getDistance(branch.coords[i], branch.coords[i + 1]);
+                    }
+                });
+                totalLength = Math.round(totalLength);
+                currentPipeline.length = totalLength;
+                
+                console.log('   總長度:', totalLength, 'm');
+                
+                // 🆕 檢查是否有段落資料
+                if (currentPipeline.segments && currentPipeline.segments.length > 0) {
+                    console.log('🎨 開始繪製分支（含段落和小段）:');
+                    
+                    // 為每個分支繪製段落和小段
+                    branchData.branches.forEach((branch, branchIndex) => {
+                        // 🔍 Debug: 顯示所有段落的 branchIndex
+                        if (branchIndex === 0) {
+                            console.log('   📊 所有段落的 branchIndex 資訊:');
+                            currentPipeline.segments.forEach(seg => {
+                                console.log(`      ${seg.segmentNumber}: branchIndex=${seg.branchIndex !== undefined ? seg.branchIndex : '未定義'}, notes="${seg.notes || ''}"`);
+                            });
+                        }
+                        
+                        // 篩選屬於該分支的段落
+                        const branchSegments = currentPipeline.segments.filter(seg => {
+                            if (seg.branchIndex !== undefined) {
+                                return seg.branchIndex === branchIndex;
+                            }
+                            // 舊資料沒有 branchIndex，視為主幹（index 0）
+                            return branchIndex === 0;
+                        });
+                        
+                        console.log(`   分支 ${branchIndex}: ${branchSegments.length} 個段落`);
+                        
+                        if (branchSegments.length > 0) {
+                            // 有段落資料：繪製段落和小段
+                            branchSegments.forEach(segment => {
+                                const segLength = segment.endDistance - segment.startDistance;
+                                const numSmallSegments = Math.ceil(segLength / 10);
+                                
+                                console.log(`      🔹 段落 ${segment.segmentNumber}: ${segment.startDistance}-${segment.endDistance}m, 預計 ${numSmallSegments} 個小段`);
+                                
+                                // 計算該段落在分支上的實際座標
+                                const segmentCoords = getSegmentCoordsFromBranch(branch.coords, segment.startDistance, segment.endDistance);
+                                
+                                if (!segmentCoords || segmentCoords.length < 2) {
+                                    console.warn(`   ⚠️ 段落 ${segment.segmentNumber} 座標計算失敗: ${segmentCoords ? segmentCoords.length : 0} 點`);
+                                    return;
+                                }
+                                
+                                console.log(`         座標提取成功: ${segmentCoords.length} 個點`);
+                                
+                                // 解析小段狀態
+                                const smallSegmentsStatus = segment.smallSegments || '';
+                                const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+                                
+                                // 繪製每個10m小段
+                                let successCount = 0;
+                                for (let i = 0; i < numSmallSegments; i++) {
+                                    const smallStart = segment.startDistance + (i * 10);
+                                    const smallEnd = Math.min(segment.startDistance + ((i + 1) * 10), segment.endDistance);
+                                    
+                                    const smallCoords = getSegmentCoordsFromBranch(branch.coords, smallStart, smallEnd);
+                                    
+                                    if (!smallCoords || smallCoords.length < 2) {
+                                        console.warn(`         ⚠️ 小段 #${i} (${smallStart}-${smallEnd}m) 座標不足: ${smallCoords ? smallCoords.length : 0} 點`);
+                                        continue;
+                                    }
+                                    
+                                    const statusValue = statusArray[i] || '0';
+                                    const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
+                                    
+                                    // 🔧 根據施工方式決定顏色(與統計面板一致)
+                                    const diameter = segment.diameter || '';
+                                    const pipeType = segment.pipeType || '';
+                                    const method = segment.method || '';
+                                    const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
+                                    const color = getColorForMethodKey(methodKey);
+                                    
+                                    const polyline = L.polyline(smallCoords, {
+                                        color: color,
+                                        weight: isCompleted ? 6 : 3,  // 完工粗線,未完工細線
+                                        opacity: isCompleted ? 1 : 0.5
+                                    }).addTo(map);
+                                    
+                                    polyline.on('click', function(e) {
+                                        handleSmallSegmentClick(e, segment, i, smallStart, smallEnd, isCompleted, polyline, color);
+                                    });
+                                    
+                                    allPolylines.push(polyline);
+                                    successCount++;
+                                }
+                                console.log(`         ✅ 成功繪製 ${successCount}/${numSmallSegments} 個小段`);
+                                
+                                // 🏷️ 在段落中間添加標註
+                                const midPoint = (segment.startDistance + segment.endDistance) / 2;
+                                const midCoords = getSegmentCoordsFromBranch(branch.coords, midPoint - 5, midPoint + 5);
+                                if (midCoords.length > 0) {
+                                    const midLatLng = midCoords[Math.floor(midCoords.length / 2)];
+                                    
+                                    // 計算完成長度
+                                    const statusArray = (segment.smallSegments || '').split(',').map(s => s.trim());
+                                    let completedLength = 0;
+                                    for (let i = 0; i < numSmallSegments; i++) {
+                                        const statusValue = statusArray[i] || '0';
+                                        if (statusValue !== '0' && statusValue.trim() !== '') {
+                                            const smallLength = Math.min(10, segLength - (i * 10));
+                                            completedLength += smallLength;
+                                        }
+                                    }
+                                    
+                                    const diameter = segment.diameter || '';
+                                    const pipeType = segment.pipeType || '';
+                                    const method = segment.method || '';
+                                    const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
+                                    const color = getColorForMethodKey(methodKey);
+                                    const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
+                                    const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
+                                    
+                                    const label = L.marker(midLatLng, {
+                                        icon: L.divIcon({
+                                            className: 'segment-label',
+                                            html: `<div style="
+                                                background: transparent;
+                                                color: ${color};
+                                                padding: 3px 6px;
+                                                border-radius: 3px;
+                                                font-size: 10px;
+                                                font-weight: 700;
+                                                white-space: nowrap;
+                                                border: none;
+                                                pointer-events: none;
+                                                text-shadow: 
+                                                    -1px -1px 0 white,
+                                                    1px -1px 0 white,
+                                                    -1px 1px 0 white,
+                                                    1px 1px 0 white,
+                                                    0 0 3px white,
+                                                    0 0 3px white;
+                                            ">${labelText}</div>`,
+                                            iconSize: null,
+                                            iconAnchor: [-50, 15]
+                                        })
+                                    }).addTo(map);
+                                    
+                                    segmentLabels.push(label);
+                                }
+                            });
+                        } else {
+                            // 沒有段落資料：繪製整條分支
+                            const isMain = !branch.isBranch;
+                            const color = isMain ? '#e74c3c' : '#9C27B0';
+                            
+                            const polyline = L.polyline(branch.coords, {
+                                color: color,
+                                weight: isMain ? 8 : 6,
+                                opacity: 0.7
+                            }).addTo(map);
+                            
+                            polyline.on('click', function(e) {
+                                L.popup()
+                                    .setLatLng(e.latlng)
+                                    .setContent(`
+                                        <div class="popup-title">${currentPipeline.name}</div>
+                                        <div class="popup-info">分支 ${branchIndex + 1} / ${branchData.branches.length} (${isMain ? '主幹' : '分支'})</div>
+                                        <div class="popup-info">管線總長：約 ${totalLength}m</div>
+                                        <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
+                                            💡 此分支尚未建立段落<br>
+                                            請使用「🛠️ 工具 → 📋 段落管理」功能
+                                        </div>
+                                    `)
+                                    .openOn(map);
+                            });
+                            
+                            allPolylines.push(polyline);
+                        }
+                    });
+                } else {
+                    // 完全沒有段落資料：顯示整條管線
+                    console.log('🎨 開始繪製分支（無段落資料）:');
+                    branchData.branches.forEach((branch, index) => {
+                        const isMain = !branch.isBranch;
+                        const color = isMain ? '#e74c3c' : '#9C27B0';
+                        
+                        const polyline = L.polyline(branch.coords, {
+                            color: color,
+                            weight: isMain ? 8 : 6,
+                            opacity: 0.7
+                        }).addTo(map);
+                        
+                        polyline.on('click', function(e) {
+                            L.popup()
+                                .setLatLng(e.latlng)
+                                .setContent(`
+                                    <div class="popup-title">${currentPipeline.name}</div>
+                                    <div class="popup-info">分支 ${index + 1} / ${branchData.branches.length} (${isMain ? '主幹' : '分支'})</div>
+                                    <div class="popup-info">管線總長：約 ${totalLength}m</div>
+                                    <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
+                                        💡 請使用「🛠️ 工具 → 📋 段落管理」建立段落
+                                    </div>
+                                `)
+                                .openOn(map);
+                        });
+                        
+                        allPolylines.push(polyline);
+                    });
+                }
+                
+                console.log(`✅ 共繪製 ${branchData.branches.length} 條分支`);
+                
+                // 顯示交叉點標記
+                branchData.junctionPoints.forEach(junction => {
+                    const marker = L.marker(junction.coord, {
+                        icon: L.divIcon({
+                            className: 'junction-marker-display',
+                            iconSize: [16, 16],
+                            html: '<div style="font-size:16px;">⭐</div>'
+                        })
+                    }).addTo(map);
+                    
+                    marker.bindPopup(`
+                        <div class="popup-title">交叉點</div>
+                        <div class="popup-info">連接 ${junction.branches.length} 條分支</div>
+                    `);
+                    
+                    allPolylines.push(marker);
                 });
                 
-                allPolylines.push(polyline);
             } else {
+                // 原本的單一 LINESTRING 處理方式
+                const coords = parseLineString(currentPipeline.linestring);
+                const totalLength = Math.round(calculateTotalLength(coords));
+                
+                // 儲存管線總長度到 currentPipeline 物件
+                currentPipeline.length = totalLength;
+                
+                console.log('管線座標點數:', coords.length);
+                console.log('管線總長:', totalLength, 'm');
+            
+                // 如果沒有段落資料，顯示整條管線（備用方案）
+                if (currentPipeline.segments.length === 0) {
+                    console.warn('⚠️ 沒有段落資料，顯示整條管線');
+                    
+                    const polyline = L.polyline(coords, {
+                        color: '#e74c3c',
+                        weight: 8,
+                        opacity: 0.7
+                    }).addTo(map);
+                    
+                    polyline.on('click', function(e) {
+                        L.popup()
+                            .setLatLng(e.latlng)
+                            .setContent(`
+                                <div class="popup-title">${currentPipeline.name}</div>
+                                <div class="popup-info">⚠️ 尚未定義段落</div>
+                                <div class="popup-info">管線總長：約 ${totalLength}m</div>
+                                <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
+                                    💡 請在 Google Sheets「施工進度」表中手動設定段落資料<br>
+                                    或使用「🛠️ 工具 → 📋 段落管理」功能
+                                </div>
+                            `)
+                            .openOn(map);
+                    });
+                    
+                    allPolylines.push(polyline);
+                } else {
                 // 有段落資料，顯示已定義的段落
                 // 先排序段落（按起始距離）
                 const sortedSegments = [...currentPipeline.segments].sort((a, b) => a.startDistance - b.startDistance);
@@ -1643,10 +2161,10 @@
                         
                         if (smallCoords.length >= 2) {
                             if (isCompleted) {
-                                // 已完工：實線
+                                // 已完工：粗實線
                                 const polyline = L.polyline(smallCoords, {
                                     color: color,
-                                    weight: 8,
+                                    weight: 6,
                                     opacity: 1,
                                     lineCap: 'round'
                                 }).addTo(map);
@@ -1665,11 +2183,11 @@
                                 
                                 allPolylines.push(polyline);
                             } else {
-                                // 未完工：細線 + 淡色
+                                // 未完工：細線
                                 const polyline = L.polyline(smallCoords, {
                                     color: color,
-                                    weight: 4,           // 細線
-                                    opacity: 0.3,        // 很淡
+                                    weight: 3,
+                                    opacity: 0.5,
                                     lineCap: 'round'
                                 }).addTo(map);
                                 
@@ -1815,8 +2333,27 @@
                     }
                 });
             }
+            }  // 結束 MULTILINESTRING 的 else 區塊
             
-            if (!keepView) map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
+            // 調整地圖視角（兼容 MULTILINESTRING 和普通 LINESTRING）
+            if (!keepView) {
+                // 取得所有管線的座標來計算邊界
+                const allCoords = [];
+                if (isMULTI) {
+                    // MULTILINESTRING：合併所有分支的座標
+                    const branchData = parseLineStringWithBranches(currentPipeline.linestring);
+                    branchData.branches.forEach(branch => {
+                        allCoords.push(...branch.coords);
+                    });
+                } else {
+                    // 普通 LINESTRING：使用原本的 coords
+                    allCoords.push(...parseLineString(currentPipeline.linestring));
+                }
+                
+                if (allCoords.length > 0) {
+                    map.fitBounds(L.latLngBounds(allCoords), { padding: [50, 50] });
+                }
+            }
             
             // 更新統計面板
             showStatsPanel();
@@ -1893,7 +2430,7 @@
                     <div class="popup-info">🔧 管徑：${segment.diameter || '未設定'}</div>
                     <div class="popup-info">⚙️ 施工方式：${segment.method || '未設定'}</div>
                     <div class="popup-info">📊 狀態：${segment.status || '未施工'}</div>
-                    <button class="popup-button" onclick="editSegment(${segment.segmentNumber})">✏️ 編輯段落</button>
+                    <button class="popup-button" onclick="editSegment('${segment.segmentNumber}')">✏️ 編輯段落</button>
                 `)
                 .openOn(map);
         }
@@ -1903,6 +2440,12 @@
         
         // 處理小段點擊（支持 Ctrl 多選、Shift 範圍選取）
         function handleSmallSegmentClick(e, segment, smallIndex, smallStart, smallEnd, isCompleted, polyline, originalColor) {
+            // 🔧 視覺化分段模式下,禁用小段點擊
+            if (visualSegmentationMode) {
+                L.DomEvent.stopPropagation(e);
+                return;
+            }
+            
             const isCtrlPressed = e.originalEvent.ctrlKey || e.originalEvent.metaKey; // Mac 用 Cmd 鍵
             const isShiftPressed = e.originalEvent.shiftKey;
             
@@ -2243,11 +2786,13 @@
             const progressData = await progressRes.json();
             
             if (progressData.segments) {
+                const segments = parseBranchIndexFromSegments(progressData.segments);
+                
                 const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
                 if (pipelineIndex !== -1) {
-                    allPipelines[pipelineIndex].segments = progressData.segments;
+                    allPipelines[pipelineIndex].segments = segments;
                 }
-                currentPipeline.segments = progressData.segments;
+                currentPipeline.segments = segments;
             }
             
             showPipelineDetail(currentPipeline.id, true);
@@ -2284,10 +2829,10 @@
                     <div class="popup-info">⚙️ ${methodLabel}</div>
                     <div class="popup-info">📊 完工：${completedCount}/${numSmallSegments} 個小段</div>
                     <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-                        <button class="popup-button" onclick="markWholeSegmentComplete(${segment.segmentNumber})">
+                        <button class="popup-button" onclick="markWholeSegmentComplete('${segment.segmentNumber}')">
                             ✓ 標記整段完工
                         </button>
-                        <button class="popup-button" onclick="markWholeSegmentIncomplete(${segment.segmentNumber})" style="background: #e74c3c;">
+                        <button class="popup-button" onclick="markWholeSegmentIncomplete('${segment.segmentNumber}')" style="background: #e74c3c;">
                             ❌ 標記整段未完工
                         </button>
                     </div>
@@ -2432,7 +2977,7 @@
                     <div style="font-size: 11px; color: #666; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
                         所屬段落：段落${segment.segmentNumber} (${segment.startDistance}-${segment.endDistance}m)
                     </div>
-                    <button class="popup-button" onclick="toggleSmallSegment(${segment.segmentNumber}, ${smallIndex}, ${!isCompleted})">
+                    <button class="popup-button" onclick="toggleSmallSegment(&quot;${segment.segmentNumber}&quot;, ${smallIndex}, ${!isCompleted})">
                         ${isCompleted ? '❌ 標記未完工' : '✓ 標記完工'}
                     </button>
                 `)
@@ -2503,20 +3048,22 @@
                 if (result.success) {
                     map.closePopup();
                     
-                    // 🔧 重新載入段落資料，更新 allPipelines
+                    // 🔧 重新載入段落資料,更新 allPipelines
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
                     const progressData = await progressRes.json();
                     
                     if (progressData.segments) {
+                        const segments = parseBranchIndexFromSegments(progressData.segments);
+                        
                         // 更新 allPipelines 中的段落資料
                         const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
                         if (pipelineIndex !== -1) {
-                            allPipelines[pipelineIndex].segments = progressData.segments;
+                            allPipelines[pipelineIndex].segments = segments;
                             console.log('✅ 已更新 allPipelines 中的段落資料');
                         }
                         
                         // 更新 currentPipeline 的段落資料
-                        currentPipeline.segments = progressData.segments;
+                        currentPipeline.segments = segments;
                         console.log('✅ 已更新 currentPipeline 的段落資料');
                     }
                     
@@ -5426,7 +5973,7 @@ window.addEventListener('message', async function(event) {
                     <div style="margin-bottom: 10px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
                         💡 提示：如需修改段落範圍，請直接在 Google Sheets「施工進度」表中修改
                     </div>
-                    <button onclick="saveEditedSegment(${segmentNumber})" style="width: 100%; padding: 10px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px;">
+                    <button onclick="saveEditedSegment('${segmentNumber}')" style="width: 100%; padding: 10px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px;">
                         💾 儲存修改
                     </button>
                     <button onclick="map.closePopup()" style="width: 100%; padding: 8px; background: #e0e0e0; color: #666; border: none; border-radius: 6px; cursor: pointer; margin-top: 5px;">
@@ -5747,7 +6294,7 @@ window.addEventListener('message', async function(event) {
                     // 重新載入工程
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
                     const progressData = await progressRes.json();
-                    currentPipeline.segments = progressData.segments || [];
+                    currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
                     
                     showPipelineDetail(currentPipeline.id);
                 } else {
@@ -5808,11 +6355,31 @@ window.addEventListener('message', async function(event) {
                 zoomControl: false  // 完全不顯示縮放控制（所有裝置）
             }).setView([24.15, 120.65], 11);
             
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19,
-                maxNativeZoom: 19
-            }).addTo(map);
+            // 定義多種底圖圖層
+            const baseMaps = {
+                "街道圖": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19,
+                    maxNativeZoom: 19
+                }),
+                "衛星圖": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles © Esri',
+                    maxZoom: 19,
+                    maxNativeZoom: 18
+                }),
+                "地形圖": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenTopoMap contributors',
+                    maxZoom: 17,
+                    maxNativeZoom: 17
+                })
+            };
+            
+            // 預設使用街道圖
+            baseMaps["街道圖"].addTo(map);
+            
+            // 將底圖圖層存儲到全域變數供切換使用
+            window.currentBaseMaps = baseMaps;
+            window.currentBaseLayer = baseMaps["街道圖"];
             
             // 設定測量按鈕
             document.getElementById('measureButton').onclick = toggleMeasureMode;
@@ -5824,16 +6391,85 @@ window.addEventListener('message', async function(event) {
                 }
             });
             
-            // 右鍵選單（只在詳細檢視模式）
+            // 右鍵選單(只在詳細檢視模式)
             map.on('contextmenu', function(e) {
+                // 如果在分支編輯模式,處理支線完成
+                if (isBranchEditMode && branchEditCurrentDrawing) {
+                    L.DomEvent.stopPropagation(e);
+                    L.DomEvent.preventDefault(e);
+                    finishCurrentBranch();
+                    return;
+                }
+                
+                // 一般模式的右鍵選單
                 e.originalEvent.preventDefault();
                 if (currentPipeline && currentPipeline.id) {
                     showRightClickMenu(e.latlng, e.originalEvent.clientX, e.originalEvent.clientY);
                 }
             });
             
+            // 雙擊完成支線(分支編輯模式)
+            map.on('dblclick', function(e) {
+                if (isBranchEditMode && branchEditCurrentDrawing) {
+                    L.DomEvent.stopPropagation(e);
+                    finishCurrentBranch();
+                }
+            });
+            
             // 載入並顯示地圖備註
             loadMapNotes();
+        }
+        
+        // 切換圖層面板
+        function toggleLayerPanel() {
+            const panel = document.getElementById('layerPanel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+        
+        // 切換底圖
+        function switchBaseLayer(layerType) {
+            if (!window.currentBaseMaps || !map) return;
+            
+            // 移除當前底圖
+            if (window.currentBaseLayer) {
+                map.removeLayer(window.currentBaseLayer);
+            }
+            
+            // 加入新底圖
+            let newLayer;
+            if (layerType === 'street') {
+                newLayer = window.currentBaseMaps["街道圖"];
+            } else if (layerType === 'satellite') {
+                newLayer = window.currentBaseMaps["衛星圖"];
+            } else if (layerType === 'topo') {
+                newLayer = window.currentBaseMaps["地形圖"];
+            }
+            
+            if (newLayer) {
+                newLayer.addTo(map);
+                window.currentBaseLayer = newLayer;
+            }
+            
+            // 更新選項樣式
+            document.querySelectorAll('.layer-option').forEach(opt => {
+                opt.classList.remove('active');
+                const radio = opt.querySelector('.layer-radio');
+                if (radio) radio.textContent = '○';
+            });
+            
+            const activeOption = document.getElementById('layer-' + layerType);
+            if (activeOption) {
+                activeOption.classList.add('active');
+                const radio = activeOption.querySelector('.layer-radio');
+                if (radio) radio.textContent = '●';
+            }
+            
+            // 關閉面板
+            document.getElementById('layerPanel').style.display = 'none';
         }
         
         function toggleMeasureMode() {
@@ -5984,14 +6620,170 @@ window.addEventListener('message', async function(event) {
         }
         
         function parseLineString(lineString) {
-            const match = lineString.match(/LINESTRING\s*\(([^)]+)\)/i);
-            if (!match) return [];
+            // 支援三種格式：
+            // 1. LINESTRING(...) - 單段
+            // 2. LINESTRING(...)LINESTRING(...) - 多段線性
+            // 3. MULTILINESTRING((...), (...)) - 分支管線
             
-            const coords = match[1];
-            return coords.split(',').map(pair => {
-                const [lng, lat] = pair.trim().split(/\s+/).map(Number);
-                return [lat, lng];
+            const allCoords = [];
+            
+            // 檢查是否為 MULTILINESTRING
+            if (lineString.trim().toUpperCase().startsWith('MULTILINESTRING')) {
+                const content = lineString.match(/MULTILINESTRING\s*\((.*)\)\s*$/is);
+                if (content) {
+                    // 找出所有括號對
+                    let depth = 0;
+                    let segStart = -1;
+                    const segments = [];
+                    
+                    for (let i = 0; i < content[1].length; i++) {
+                        if (content[1][i] === '(') {
+                            if (depth === 0) segStart = i + 1;
+                            depth++;
+                        } else if (content[1][i] === ')') {
+                            depth--;
+                            if (depth === 0 && segStart !== -1) {
+                                segments.push(content[1].substring(segStart, i));
+                                segStart = -1;
+                            }
+                        }
+                    }
+                    
+                    // 解析每個線段
+                    segments.forEach(seg => {
+                        const coords = seg.trim();
+                        const segmentCoords = coords.split(',').map(pair => {
+                            const [lng, lat] = pair.trim().split(/\s+/).map(Number);
+                            return [lat, lng];
+                        });
+                        allCoords.push(...segmentCoords);
+                    });
+                }
+            } else {
+                // LINESTRING 格式
+                const matches = lineString.matchAll(/LINESTRING\s*\(([^)]+)\)/gi);
+                for (const match of matches) {
+                    const coords = match[1];
+                    const segmentCoords = coords.split(',').map(pair => {
+                        const [lng, lat] = pair.trim().split(/\s+/).map(Number);
+                        return [lat, lng];
+                    });
+                    allCoords.push(...segmentCoords);
+                }
+            }
+            
+            return allCoords;
+        }
+        
+        // 解析並返回分支結構
+        function parseLineStringWithBranches(lineString) {
+            const branches = [];
+            let junctionPoints = new Map(); // 交叉點座標 -> 相關分支
+            
+            // 檢查是否為 MULTILINESTRING
+            if (lineString.trim().toUpperCase().startsWith('MULTILINESTRING')) {
+                const content = lineString.match(/MULTILINESTRING\s*\((.*)\)\s*$/is);
+                if (content) {
+                    // 找出所有括號對
+                    let depth = 0;
+                    let segStart = -1;
+                    const segments = [];
+                    
+                    for (let i = 0; i < content[1].length; i++) {
+                        if (content[1][i] === '(') {
+                            if (depth === 0) segStart = i + 1;
+                            depth++;
+                        } else if (content[1][i] === ')') {
+                            depth--;
+                            if (depth === 0 && segStart !== -1) {
+                                segments.push(content[1].substring(segStart, i));
+                                segStart = -1;
+                            }
+                        }
+                    }
+                    
+                    // 解析每個線段
+                    segments.forEach((seg, index) => {
+                        const coords = seg.trim();
+                        const segmentCoords = coords.split(',').map(pair => {
+                            const [lng, lat] = pair.trim().split(/\s+/).map(Number);
+                            return [lat, lng];
+                        });
+                        
+                        branches.push({
+                            index: index,
+                            coords: segmentCoords,
+                            isBranch: index > 0
+                        });
+                        
+                        // 記錄端點以找出交叉點
+                        [segmentCoords[0], segmentCoords[segmentCoords.length - 1]].forEach(point => {
+                            const key = `${point[0].toFixed(6)},${point[1].toFixed(6)}`;
+                            if (!junctionPoints.has(key)) {
+                                junctionPoints.set(key, []);
+                            }
+                            junctionPoints.get(key).push(index);
+                        });
+                    });
+                }
+            } else {
+                // 普通 LINESTRING 或多段 LINESTRING
+                const result = parseLineStringWithBreaks(lineString);
+                branches.push({
+                    index: 0,
+                    coords: result.coords,
+                    isBranch: false,
+                    breakPoints: result.breakPoints || []
+                });
+            }
+            
+            // 找出真正的交叉點（連接多條分支的點）
+            const realJunctions = [];
+            junctionPoints.forEach((branchIndices, key) => {
+                if (branchIndices.length > 1) {
+                    const [lat, lng] = key.split(',').map(Number);
+                    realJunctions.push({
+                        coord: [lat, lng],
+                        branches: branchIndices
+                    });
+                }
             });
+            
+            return { 
+                branches, 
+                junctionPoints: realJunctions,
+                isMULTI: lineString.trim().toUpperCase().startsWith('MULTILINESTRING')
+            };
+        }
+        
+        // 新函數：解析 LINESTRING 並返回分段資訊
+        function parseLineStringWithBreaks(lineString) {
+            const matches = lineString.matchAll(/LINESTRING\s*\(([^)]+)\)/gi);
+            const allCoords = [];
+            const breakPoints = [];
+            
+            let currentIndex = 0;
+            let segmentIndex = 0;
+            
+            for (const match of matches) {
+                const coords = match[1];
+                const segmentCoords = coords.split(',').map(pair => {
+                    const [lng, lat] = pair.trim().split(/\s+/).map(Number);
+                    return [lat, lng];
+                });
+                
+                allCoords.push(...segmentCoords);
+                currentIndex += segmentCoords.length;
+                segmentIndex++;
+                
+                // 記錄每段的結束位置（最後一段除外）
+                const matchesArray = Array.from(lineString.matchAll(/LINESTRING\s*\(([^)]+)\)/gi));
+                if (segmentIndex < matchesArray.length) {
+                    breakPoints.push(currentIndex - 1);
+                }
+            }
+            
+            return { coords: allCoords, breakPoints: breakPoints };
         }
         
         function getSegmentCoords(allCoords, startDist, endDist) {
@@ -6125,7 +6917,7 @@ window.addEventListener('message', async function(event) {
                     // 重新載入工程
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
                     const progressData = await progressRes.json();
-                    currentPipeline.segments = progressData.segments || [];
+                    currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
                     
                     showPipelineDetail(currentPipeline.id);
                 } else {
@@ -6165,7 +6957,7 @@ window.addEventListener('message', async function(event) {
                     // 重新載入工程
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
                     const progressData = await progressRes.json();
-                    currentPipeline.segments = progressData.segments || [];
+                    currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
                     
                     showPipelineDetail(currentPipeline.id);
                 } else {
@@ -6289,7 +7081,7 @@ window.addEventListener('message', async function(event) {
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
                     const progressData = await progressRes.json();
                     
-                    currentPipeline.segments = progressData.segments || [];
+                    currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
                     console.log('更新後段落數:', currentPipeline.segments.length);
                     
                     // 重新顯示工程
@@ -6365,16 +7157,16 @@ window.addEventListener('message', async function(event) {
                 if (!showAllLabels && index % 2 === 1) return; // 縮放小時跳過一半標籤
                 
                 const label = item.label || '';
-                const segMatch = label.match(/段落(\d+)/);
+                const segMatch = label.match(/段落([\w-]+)/);  // 🔧 支援 B0-1 格式
                 const rangeMatch = label.match(/#(\d+)～#(\d+)/);
                 
                 if (!segMatch || !rangeMatch) return;
                 
-                const segmentNumber = parseInt(segMatch[1]);
+                const segmentNumber = segMatch[1];  // 🔧 保持為字串
                 const fromSmall = parseInt(rangeMatch[1]) - 1;
                 const toSmall = parseInt(rangeMatch[2]) - 1;
                 
-                const segment = currentPipeline.segments.find(s => s.segmentNumber === segmentNumber);
+                const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));  // 🔧 字串比對
                 if (!segment) return;
                 
                 const segmentLength = segment.endDistance - segment.startDistance;
@@ -6387,16 +7179,32 @@ window.addEventListener('message', async function(event) {
                 const startDistance = segment.startDistance + (validFrom * 10);
                 const endDistance = segment.startDistance + Math.min((validTo + 1) * 10, segmentLength);
                 
-                // 取得管線座標
-                const coords = parseLineString(currentPipeline.linestring);
-                const startCoord = getCoordAtDistance(coords, startDistance);
-                const endCoord = getCoordAtDistance(coords, endDistance);
+                // 🔧 取得管線座標(支援MULTILINESTRING)
+                const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
+                let startCoord, endCoord, labelCoord;
                 
-                if (!startCoord || !endCoord) return;
+                if (isMULTI) {
+                    // MULTILINESTRING: 從 branchIndex 獲取分支座標
+                    const branchData = parseLineStringWithBranches(currentPipeline.linestring);
+                    const branchIndex = segment.branchIndex !== undefined ? segment.branchIndex : 0;
+                    const branch = branchData.branches[branchIndex];
+                    
+                    if (branch) {
+                        startCoord = getCoordAtDistanceFromBranch(branch.coords, startDistance);
+                        endCoord = getCoordAtDistanceFromBranch(branch.coords, endDistance);
+                        const middleDistance = (startDistance + endDistance) / 2;
+                        labelCoord = getCoordAtDistanceFromBranch(branch.coords, middleDistance);
+                    }
+                } else {
+                    // 單一LINESTRING: 使用原有邏輯
+                    const coords = parseLineString(currentPipeline.linestring);
+                    startCoord = getCoordAtDistance(coords, startDistance);
+                    endCoord = getCoordAtDistance(coords, endDistance);
+                    const middleDistance = (startDistance + endDistance) / 2;
+                    labelCoord = getCoordAtDistance(coords, middleDistance);
+                }
                 
-                // 計算標籤位置（在起點和終點的中間）
-                const middleDistance = (startDistance + endDistance) / 2;
-                const labelCoord = getCoordAtDistance(coords, middleDistance);
+                if (!startCoord || !endCoord || !labelCoord) return;
                 
                 // ========== 智能偏移：根據管線方向判斷 ==========
                 // 計算管線方向（起點到終點的角度）
@@ -6570,6 +7378,11 @@ window.addEventListener('message', async function(event) {
             return coords[coords.length - 1];
         }
         
+        // 🆕 分支版本:根據距離獲取分支上的座標
+        function getCoordAtDistanceFromBranch(branchCoords, targetDistance) {
+            return getCoordAtDistance(branchCoords, targetDistance);
+        }
+        
         // 計算兩點間距離（公尺）- Haversine 公式
         function getDistance(p1, p2) {
             const R = 6371000;
@@ -6584,6 +7397,58 @@ window.addEventListener('message', async function(event) {
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             
             return R * c;
+        }
+        
+        // 🆕 從分支座標中提取指定距離範圍的座標片段
+        function getSegmentCoordsFromBranch(branchCoords, startDist, endDist) {
+            const result = [];
+            let accumulatedDist = 0;
+            let started = false;
+            
+            for (let i = 0; i < branchCoords.length - 1; i++) {
+                const p1 = branchCoords[i];
+                const p2 = branchCoords[i + 1];
+                const segDist = getDistance(p1, p2);
+                const nextAccDist = accumulatedDist + segDist;
+                
+                // 段落起點在這段線段內
+                if (!started && accumulatedDist <= startDist && startDist < nextAccDist) {
+                    // 內插起點座標
+                    const ratio = (startDist - accumulatedDist) / segDist;
+                    const startPoint = [
+                        p1[0] + (p2[0] - p1[0]) * ratio,
+                        p1[1] + (p2[1] - p1[1]) * ratio
+                    ];
+                    result.push(startPoint);
+                    started = true;
+                }
+                
+                // 🔧 修正：如果已經開始，加入下一個點 p2（在範圍內時）
+                if (started && nextAccDist <= endDist) {
+                    result.push(p2);
+                }
+                
+                // 段落終點在這段線段內
+                if (started && accumulatedDist < endDist && endDist < nextAccDist) {
+                    // 內插終點座標
+                    const ratio = (endDist - accumulatedDist) / segDist;
+                    const endPoint = [
+                        p1[0] + (p2[0] - p1[0]) * ratio,
+                        p1[1] + (p2[1] - p1[1]) * ratio
+                    ];
+                    result.push(endPoint);
+                    break;
+                }
+                
+                accumulatedDist = nextAccDist;
+            }
+            
+            // 檢查是否正確擷取到座標
+            if (result.length < 2) {
+                console.warn(`⚠️ getSegmentCoordsFromBranch 返回座標不足: ${result.length} 點 (${startDist}-${endDist}m)`);
+            }
+            
+            return result;
         }
         
         // 供新視窗呼叫：刷新地圖上的日期標註
@@ -6636,9 +7501,13 @@ window.addEventListener('message', async function(event) {
             // 顯示工具列
             document.getElementById('editModeToolbar').classList.add('active');
             
-            // 取得當前管線座標
-            const coords = parseLineString(currentPipeline.linestring);
-            originalCoords = JSON.parse(JSON.stringify(coords)); // 深拷貝
+            // 解析分支結構
+            branchStructure = parseLineStringWithBranches(currentPipeline.linestring);
+            
+            console.log('🎨 進入編輯模式');
+            console.log('   分支數:', branchStructure.branches.length);
+            console.log('   交叉點:', branchStructure.junctionPoints.length);
+            console.log('   格式:', branchStructure.isMULTI ? 'MULTILINESTRING' : 'LINESTRING');
             
             // 清除現有管線顯示
             allPolylines.forEach(layer => {
@@ -6647,35 +7516,836 @@ window.addEventListener('message', async function(event) {
                 }
             });
             
-            // 繪製可編輯的管線
-            editingPolyline = L.polyline(coords, {
-                color: '#FF6B35',
-                weight: 6,
-                opacity: 0.8,
-                className: 'editing-polyline'
-            }).addTo(map);
+            editingBranches = [];
+            editingNodes = [];
+            junctionMarkers = [];
             
-            // 在管線上加入點擊事件（新增節點）
-            editingPolyline.on('click', function(e) {
-                addNodeAtPosition(e.latlng);
+            console.log('🎨 開始繪製分支:');
+            
+            // 繪製每個分支
+            branchStructure.branches.forEach((branch, branchIndex) => {
+                const isMain = !branch.isBranch;
+                console.log(`   分支 ${branchIndex} (${isMain ? '主幹' : '分支'}): ${branch.coords.length} 個座標點`);
+                
+                const polyline = L.polyline(branch.coords, {
+                    color: isMain ? '#FF6B35' : '#9C27B0', // 主幹橙色，分支紫色
+                    weight: isMain ? 6 : 5,
+                    opacity: 0.8,
+                    className: isMain ? 'editing-polyline-main' : 'editing-polyline-branch'
+                }).addTo(map);
+                
+                // 在管線上點擊新增節點
+                polyline.on('click', function(e) {
+                    addNodeToBranch(e.latlng, branchIndex);
+                });
+                
+                editingBranches.push({
+                    polyline: polyline,
+                    index: branchIndex,
+                    isMain: isMain
+                });
+                
+                // 建立該分支的可拖曳節點
+                branch.coords.forEach((coord, nodeIndex) => {
+                    createEditableNode(coord, branchIndex, nodeIndex);
+                });
             });
             
-            // 建立可拖曳節點
-            createEditableNodes(coords);
+            console.log(`✅ 分支繪製完成，共 ${editingNodes.length} 個節點`);
             
-            console.log('🎨 進入編輯模式，共', coords.length, '個節點');
+            // 顯示交叉點
+            displayJunctionPoints();
         }
+        
+        // ========== MULTILINESTRING 分支編輯函數 ==========
+        
+        /**
+         * 建立單個可編輯節點
+         * @param {Array} coord - [lat, lng] 座標
+         * @param {Number} branchIndex - 分支索引
+         * @param {Number} nodeIndex - 節點在該分支中的索引
+         */
+        function createEditableNode(coord, branchIndex, nodeIndex) {
+            // 檢查是否為交叉點
+            const coordKey = `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+            let junctionData = null;
+            const isJunction = branchStructure.junctionPoints.some(jp => {
+                const jpKey = `${jp.coord[0].toFixed(6)},${jp.coord[1].toFixed(6)}`;
+                if (jpKey === coordKey) {
+                    junctionData = jp;
+                    return true;
+                }
+                return false;
+            });
+            
+            // 檢查是否為分支起點（分支的第一個節點）
+            const branch = branchStructure.branches[branchIndex];
+            const isBranchStart = branch.isBranch && nodeIndex === 0;
+            
+            // 設定節點圖示
+            let iconHtml, iconSize, className;
+            if (isJunction) {
+                // 交叉點：較大的黃色星星（現在可以拖曳！）
+                iconHtml = '<div style="font-size:20px;">⭐</div>';
+                iconSize = [24, 24];
+                className = 'path-node-marker junction-marker';
+            } else if (isBranchStart) {
+                // 分支起點：綠色圓圈
+                iconHtml = '<div style="background:#4CAF50;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>';
+                iconSize = [16, 16];
+                className = 'path-node-marker branch-start-marker';
+            } else {
+                // 普通節點：白色圓圈
+                iconHtml = '<div style="background:white;width:14px;height:14px;border-radius:50%;border:2px solid #333;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>';
+                iconSize = [14, 14];
+                className = 'path-node-marker';
+            }
+            
+            const marker = L.marker([coord[0], coord[1]], {
+                draggable: true, // 🆕 所有節點都可以拖曳（包括交叉點）
+                icon: L.divIcon({
+                    className: className,
+                    iconSize: iconSize,
+                    html: iconHtml
+                })
+            }).addTo(map);
+            
+            // 拖曳事件
+            marker.on('drag', function(e) {
+                if (isJunction) {
+                    // 🆕 交叉點拖曳：同步更新所有相關分支
+                    updateJunctionPosition(junctionData, e.latlng);
+                } else {
+                    // 普通節點拖曳：只更新該分支
+                    updateBranchPolyline(branchIndex);
+                }
+            });
+            
+            // 右鍵選單
+            marker.on('contextmenu', function(e) {
+                e.originalEvent.preventDefault();
+                showBranchNodeContextMenu(e, branchIndex, nodeIndex, isJunction, isBranchStart);
+            });
+            
+            // 儲存到 editingNodes 陣列
+            editingNodes.push({
+                marker: marker,
+                branchIndex: branchIndex,
+                nodeIndex: nodeIndex,
+                isJunction: isJunction,
+                isBranchStart: isBranchStart,
+                junctionData: junctionData  // 儲存交叉點資料
+            });
+        }
+        
+        /**
+         * 🆕 更新交叉點位置（同步更新所有相關分支）
+         */
+        function updateJunctionPosition(junctionData, newLatLng) {
+            if (!junctionData) return;
+            
+            const newCoord = [newLatLng.lat, newLatLng.lng];
+            
+            // 找出所有在這個交叉點上的節點
+            junctionData.branches.forEach(branchIdx => {
+                // 找出該分支在這個交叉點的節點（起點或終點）
+                const branch = branchStructure.branches[branchIdx];
+                if (!branch) return;
+                
+                // 檢查起點
+                if (branch.coords.length > 0) {
+                    const firstKey = `${branch.coords[0][0].toFixed(6)},${branch.coords[0][1].toFixed(6)}`;
+                    const junctionKey = `${junctionData.coord[0].toFixed(6)},${junctionData.coord[1].toFixed(6)}`;
+                    
+                    if (firstKey === junctionKey) {
+                        // 起點是交叉點，更新它
+                        branch.coords[0] = newCoord;
+                    }
+                    
+                    // 檢查終點
+                    const lastIdx = branch.coords.length - 1;
+                    const lastKey = `${branch.coords[lastIdx][0].toFixed(6)},${branch.coords[lastIdx][1].toFixed(6)}`;
+                    
+                    if (lastKey === junctionKey) {
+                        // 終點是交叉點，更新它
+                        branch.coords[lastIdx] = newCoord;
+                    }
+                }
+                
+                // 更新該分支的 polyline
+                updateBranchPolyline(branchIdx);
+            });
+            
+            // 更新交叉點資料
+            junctionData.coord = newCoord;
+        }
+        
+        /**
+         * 顯示交叉點標記
+         */
+        function displayJunctionPoints() {
+            // 清除舊的交叉點標記
+            junctionMarkers.forEach(m => map.removeLayer(m));
+            junctionMarkers = [];
+            
+            if (branchStructure.junctionPoints.length === 0) {
+                console.log('📍 無交叉點');
+                return;
+            }
+            
+            branchStructure.junctionPoints.forEach(junction => {
+                const [lat, lng] = junction.coord;
+                
+                // 交叉點標記已經在 createEditableNode 中建立了
+                // 這裡只需要顯示額外資訊（例如 tooltip）
+                
+                console.log(`📍 交叉點: (${lat.toFixed(6)}, ${lng.toFixed(6)}) - 連接分支 ${junction.branches.join(', ')}`);
+            });
+        }
+        
+        /**
+         * 更新指定分支的 polyline
+         * @param {Number} branchIndex - 分支索引
+         */
+        function updateBranchPolyline(branchIndex) {
+            // 找出該分支的所有節點
+            const branchNodes = editingNodes.filter(n => n.branchIndex === branchIndex);
+            
+            // 依照 nodeIndex 排序
+            branchNodes.sort((a, b) => a.nodeIndex - b.nodeIndex);
+            
+            // 取得座標
+            const coords = branchNodes.map(n => n.marker.getLatLng());
+            
+            // 更新 polyline
+            const branchData = editingBranches.find(b => b.index === branchIndex);
+            if (branchData && branchData.polyline) {
+                branchData.polyline.setLatLngs(coords);
+            }
+            
+            // 同步更新 branchStructure（以便保存時使用）
+            if (branchStructure.branches[branchIndex]) {
+                branchStructure.branches[branchIndex].coords = coords.map(ll => [ll.lat, ll.lng]);
+            }
+        }
+        
+        /**
+         * 在分支上新增節點
+         * @param {LatLng} latlng - 點擊位置
+         * @param {Number} branchIndex - 分支索引
+         */
+        function addNodeToBranch(latlng, branchIndex) {
+            if (!isEditingPath) return;
+            
+            const branchNodes = editingNodes.filter(n => n.branchIndex === branchIndex);
+            branchNodes.sort((a, b) => a.nodeIndex - b.nodeIndex);
+            
+            // 找出最接近的線段
+            let minDist = Infinity;
+            let insertAfterIndex = 0;
+            
+            for (let i = 0; i < branchNodes.length - 1; i++) {
+                const p1 = branchNodes[i].marker.getLatLng();
+                const p2 = branchNodes[i + 1].marker.getLatLng();
+                
+                // 計算點到線段的距離
+                const dist = getDistanceToSegment(latlng, p1, p2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    insertAfterIndex = i;
+                }
+            }
+            
+            // 新節點的 nodeIndex
+            const newNodeIndex = insertAfterIndex + 1;
+            
+            // 更新後面所有節點的 nodeIndex
+            editingNodes.forEach(n => {
+                if (n.branchIndex === branchIndex && n.nodeIndex >= newNodeIndex) {
+                    n.nodeIndex++;
+                }
+            });
+            
+            // 建立新節點
+            createEditableNode([latlng.lat, latlng.lng], branchIndex, newNodeIndex);
+            
+            // 更新 polyline
+            updateBranchPolyline(branchIndex);
+            
+            console.log(`✨ 在分支 ${branchIndex} 的位置 ${newNodeIndex} 新增節點`);
+        }
+        
+        /**
+         * 計算點到線段的距離（輔助函數）
+         */
+        function getDistanceToSegment(point, lineStart, lineEnd) {
+            const A = point.lat - lineStart.lat;
+            const B = point.lng - lineStart.lng;
+            const C = lineEnd.lat - lineStart.lat;
+            const D = lineEnd.lng - lineStart.lng;
+            
+            const dot = A * C + B * D;
+            const lenSq = C * C + D * D;
+            let param = -1;
+            
+            if (lenSq !== 0) param = dot / lenSq;
+            
+            let xx, yy;
+            if (param < 0) {
+                xx = lineStart.lat;
+                yy = lineStart.lng;
+            } else if (param > 1) {
+                xx = lineEnd.lat;
+                yy = lineEnd.lng;
+            } else {
+                xx = lineStart.lat + param * C;
+                yy = lineStart.lng + param * D;
+            }
+            
+            const dx = point.lat - xx;
+            const dy = point.lng - yy;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        /**
+         * 顯示分支節點的右鍵選單
+         */
+        function showBranchNodeContextMenu(e, branchIndex, nodeIndex, isJunction, isBranchStart) {
+            // 移除舊選單
+            const oldMenu = document.querySelector('.node-context-menu');
+            if (oldMenu) oldMenu.remove();
+            
+            // 建立選單
+            const menu = document.createElement('div');
+            menu.className = 'node-context-menu';
+            menu.style.cssText = `
+                position: fixed;
+                left: ${e.originalEvent.clientX}px;
+                top: ${e.originalEvent.clientY}px;
+                background: white;
+                border: 2px solid #333;
+                border-radius: 6px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 10000;
+                min-width: 180px;
+            `;
+            
+            // 根據節點類型顯示不同選項
+            if (isJunction) {
+                // 交叉點選單
+                menu.innerHTML = `
+                    <div class="rcm-item" onclick="createBranchFromJunction(${branchIndex}, ${nodeIndex})">
+                        <span>🌿</span> 建立分支
+                    </div>
+                    <div class="rcm-item" style="color:#999; cursor: default; font-size:11px;">
+                        <span>ℹ️</span> 連接 ${branchStructure.junctionPoints.find(jp => {
+                            const key = editingNodes.find(n => n.branchIndex === branchIndex && n.nodeIndex === nodeIndex);
+                            if (!key) return false;
+                            const ll = key.marker.getLatLng();
+                            const jpKey = `${jp.coord[0].toFixed(6)},${jp.coord[1].toFixed(6)}`;
+                            const nodeKey = `${ll.lat.toFixed(6)},${ll.lng.toFixed(6)}`;
+                            return jpKey === nodeKey;
+                        })?.branches.length || 0} 條分支
+                    </div>
+                `;
+            } else if (isBranchStart) {
+                // 分支起點選單
+                menu.innerHTML = `
+                    <div class="rcm-item" onclick="deleteNodeFromBranch(${branchIndex}, ${nodeIndex})">
+                        <span>🗑️</span> 刪除節點
+                    </div>
+                    <div class="rcm-item" onclick="deleteBranch(${branchIndex})" style="color:#F44336;">
+                        <span>❌</span> 刪除整個分支
+                    </div>
+                `;
+            } else {
+                // 普通節點選單
+                // 🆕 所有節點都能建立分支（不再限制只有主幹）
+                menu.innerHTML = `
+                    <div class="rcm-item" onclick="deleteNodeFromBranch(${branchIndex}, ${nodeIndex})">
+                        <span>🗑️</span> 刪除節點
+                    </div>
+                    <div class="rcm-item" onclick="createBranchFromNode(${branchIndex}, ${nodeIndex})">
+                        <span>🌿</span> 建立分支
+                    </div>
+                `;
+            }
+            
+            document.body.appendChild(menu);
+            
+            // 點擊其他地方關閉選單
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu() {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }, 0);
+            }, 100);
+        }
+        
+        /**
+         * 從分支中刪除節點
+         */
+        function deleteNodeFromBranch(branchIndex, nodeIndex) {
+            const branch = branchStructure.branches[branchIndex];
+            
+            // 檢查分支是否至少有 3 個節點（刪除後至少要剩 2 個）
+            const branchNodesCount = editingNodes.filter(n => n.branchIndex === branchIndex).length;
+            if (branchNodesCount <= 2) {
+                alert('❌ 每個分支至少需要 2 個節點！');
+                return;
+            }
+            
+            // 找出要刪除的節點
+            const nodeToDelete = editingNodes.find(n => 
+                n.branchIndex === branchIndex && n.nodeIndex === nodeIndex
+            );
+            
+            if (!nodeToDelete) return;
+            
+            // 移除標記
+            map.removeLayer(nodeToDelete.marker);
+            
+            // 從陣列中移除
+            const index = editingNodes.indexOf(nodeToDelete);
+            editingNodes.splice(index, 1);
+            
+            // 更新後面節點的 nodeIndex
+            editingNodes.forEach(n => {
+                if (n.branchIndex === branchIndex && n.nodeIndex > nodeIndex) {
+                    n.nodeIndex--;
+                }
+            });
+            
+            // 更新 polyline
+            updateBranchPolyline(branchIndex);
+            
+            console.log(`🗑️ 刪除分支 ${branchIndex} 的節點 ${nodeIndex}`);
+        }
+        
+        /**
+         * 刪除整個分支（階段 3 功能，目前僅顯示提示）
+         */
+        function deleteBranch(branchIndex) {
+            if (!confirm('確定要刪除整個分支嗎？')) return;
+            
+            // 移除該分支的所有節點標記
+            const branchNodes = editingNodes.filter(n => n.branchIndex === branchIndex);
+            branchNodes.forEach(n => map.removeLayer(n.marker));
+            
+            // 從 editingNodes 移除
+            editingNodes = editingNodes.filter(n => n.branchIndex !== branchIndex);
+            
+            // 移除 polyline
+            const branchData = editingBranches.find(b => b.index === branchIndex);
+            if (branchData && branchData.polyline) {
+                map.removeLayer(branchData.polyline);
+            }
+            editingBranches = editingBranches.filter(b => b.index !== branchIndex);
+            
+            // 從 branchStructure 移除
+            branchStructure.branches.splice(branchIndex, 1);
+            
+            // 重新索引剩餘分支
+            branchStructure.branches.forEach((b, i) => {
+                b.index = i;
+            });
+            
+            // 更新所有節點的 branchIndex
+            editingNodes.forEach(n => {
+                if (n.branchIndex > branchIndex) {
+                    n.branchIndex--;
+                }
+            });
+            
+            // 更新 editingBranches 的 index
+            editingBranches.forEach(b => {
+                if (b.index > branchIndex) {
+                    b.index--;
+                }
+            });
+            
+            // 重新計算交叉點
+            recalculateJunctions();
+            displayJunctionPoints();
+            
+            console.log(`❌ 已刪除分支 ${branchIndex}`);
+        }
+        
+        /**
+         * 從節點建立新分支（階段 3 功能，目前僅顯示提示）
+         */
+        /**
+         * 從節點建立新分支（階段 3 功能）
+         */
+        function createBranchFromNode(branchIndex, nodeIndex) {
+            // 找出起始節點
+            const startNode = editingNodes.find(n => 
+                n.branchIndex === branchIndex && n.nodeIndex === nodeIndex
+            );
+            
+            if (!startNode) {
+                console.error('❌ 找不到起始節點');
+                return;
+            }
+            
+            const startCoord = startNode.marker.getLatLng();
+            
+            console.log(`🌿 從分支 ${branchIndex} 的節點 ${nodeIndex} 建立新分支`);
+            console.log('   起始座標:', startCoord);
+            
+            // 儲存起始節點資訊
+            branchStartNode = {
+                branchIndex: branchIndex,
+                nodeIndex: nodeIndex,
+                coord: [startCoord.lat, startCoord.lng]
+            };
+            
+            // 進入分支繪製模式
+            enterBranchDrawingMode();
+        }
+        
+        /**
+         * 從交叉點建立新分支（階段 3 功能）
+         */
+        function createBranchFromJunction(branchIndex, nodeIndex) {
+            // 與 createBranchFromNode 相同邏輯
+            createBranchFromNode(branchIndex, nodeIndex);
+        }
+        
+        /**
+         * 進入分支繪製模式
+         */
+        function enterBranchDrawingMode() {
+            if (isBranchDrawingMode) {
+                console.warn('⚠️ 已經在分支繪製模式中');
+                return;
+            }
+            
+            isBranchDrawingMode = true;
+            branchDrawingNodes = [branchStartNode.coord]; // 第一個點是起始節點
+            branchDrawingMarkers = [];
+            
+            console.log('🎨 進入分支繪製模式');
+            
+            // 顯示提示訊息
+            showBranchDrawingHint();
+            
+            // 改變滑鼠游標
+            map.getContainer().style.cursor = 'crosshair';
+            
+            // 在起始節點顯示特殊標記
+            const startMarker = L.marker(branchStartNode.coord, {
+                icon: L.divIcon({
+                    className: 'branch-start-marker-drawing',
+                    iconSize: [20, 20],
+                    html: '<div style="background:#4CAF50;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(76,175,80,0.8);"></div>'
+                })
+            }).addTo(map);
+            branchDrawingMarkers.push(startMarker);
+            
+            // 監聽地圖點擊事件
+            map.on('click', onBranchDrawingClick);
+            
+            // 監聽鍵盤事件
+            document.addEventListener('keydown', onBranchDrawingKeyDown);
+        }
+        
+        /**
+         * 分支繪製模式：點擊地圖事件
+         */
+        function onBranchDrawingClick(e) {
+            if (!isBranchDrawingMode) return;
+            
+            const newCoord = [e.latlng.lat, e.latlng.lng];
+            branchDrawingNodes.push(newCoord);
+            
+            console.log(`✨ 新增分支節點 ${branchDrawingNodes.length - 1}:`, newCoord);
+            
+            // 新增節點標記
+            const marker = L.marker(newCoord, {
+                icon: L.divIcon({
+                    className: 'branch-drawing-node',
+                    iconSize: [14, 14],
+                    html: '<div style="background:#9C27B0;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>'
+                })
+            }).addTo(map);
+            branchDrawingMarkers.push(marker);
+            
+            // 更新預覽線
+            updateBranchDrawingLine();
+            
+            // 更新提示訊息
+            updateBranchDrawingHint();
+        }
+        
+        /**
+         * 分支繪製模式：鍵盤事件
+         */
+        function onBranchDrawingKeyDown(e) {
+            if (!isBranchDrawingMode) return;
+            
+            if (e.key === 'Escape') {
+                // ESC 取消
+                console.log('❌ 取消分支繪製');
+                exitBranchDrawingMode(false);
+            } else if (e.key === 'Enter') {
+                // Enter 完成
+                console.log('✅ 完成分支繪製');
+                completeBranchDrawing();
+            }
+        }
+        
+        /**
+         * 更新分支繪製預覽線
+         */
+        function updateBranchDrawingLine() {
+            // 移除舊的預覽線
+            if (branchDrawingLine) {
+                map.removeLayer(branchDrawingLine);
+            }
+            
+            // 繪製新的預覽線
+            branchDrawingLine = L.polyline(branchDrawingNodes, {
+                color: '#9C27B0',
+                weight: 5,
+                opacity: 0.6,
+                dashArray: '10, 5'  // 虛線
+            }).addTo(map);
+        }
+        
+        /**
+         * 顯示分支繪製提示訊息
+         */
+        function showBranchDrawingHint() {
+            branchDrawingHint = document.createElement('div');
+            branchDrawingHint.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(156, 39, 176, 0.95);
+                color: white;
+                padding: 20px 30px;
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+                z-index: 10000;
+                font-size: 14px;
+                text-align: center;
+                min-width: 300px;
+            `;
+            branchDrawingHint.innerHTML = `
+                <div style="font-size: 20px; margin-bottom: 10px;">🌿 分支繪製模式</div>
+                <div style="margin: 8px 0;">📍 點擊地圖建立分支路徑</div>
+                <div style="margin: 8px 0;">✅ <kbd>Enter</kbd> 完成</div>
+                <div style="margin: 8px 0;">❌ <kbd>Esc</kbd> 取消</div>
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); font-size: 12px;">
+                    已建立 <strong>0</strong> 個節點（至少需要 1 個）
+                </div>
+            `;
+            document.body.appendChild(branchDrawingHint);
+            
+            // 2秒後淡出提示
+            setTimeout(() => {
+                if (branchDrawingHint) {
+                    branchDrawingHint.style.transition = 'opacity 0.5s';
+                    branchDrawingHint.style.opacity = '0.3';
+                    branchDrawingHint.style.pointerEvents = 'none';
+                }
+            }, 2000);
+        }
+        
+        /**
+         * 更新分支繪製提示訊息
+         */
+        function updateBranchDrawingHint() {
+            if (!branchDrawingHint) return;
+            
+            const nodeCount = branchDrawingNodes.length - 1; // 扣掉起始節點
+            const lastLine = branchDrawingHint.querySelector('div:last-child');
+            if (lastLine) {
+                lastLine.innerHTML = `已建立 <strong>${nodeCount}</strong> 個節點${nodeCount >= 1 ? ' - 可按 Enter 完成' : '（至少需要 1 個）'}`;
+            }
+            
+            // 重新顯示提示
+            branchDrawingHint.style.opacity = '0.95';
+        }
+        
+        /**
+         * 完成分支繪製
+         */
+        function completeBranchDrawing() {
+            if (!isBranchDrawingMode) return;
+            
+            // 檢查至少有 2 個節點（起始節點 + 至少 1 個新節點）
+            if (branchDrawingNodes.length < 2) {
+                alert('❌ 分支至少需要 2 個節點（起始節點 + 至少 1 個新節點）');
+                return;
+            }
+            
+            console.log('✅ 分支繪製完成，共 ' + branchDrawingNodes.length + ' 個節點');
+            
+            // 建立新分支
+            const newBranchIndex = branchStructure.branches.length;
+            branchStructure.branches.push({
+                index: newBranchIndex,
+                coords: branchDrawingNodes.map(c => [...c]),  // 深拷貝
+                isBranch: true
+            });
+            
+            console.log(`🌿 新增分支 ${newBranchIndex}:`, branchDrawingNodes.length, '個節點');
+            
+            // 重新計算交叉點
+            recalculateJunctions();
+            
+            // 退出繪製模式
+            exitBranchDrawingMode(true);
+            
+            // 重新進入編輯模式以顯示新分支
+            refreshEditMode();
+        }
+        
+        /**
+         * 退出分支繪製模式
+         * @param {Boolean} save - 是否保存分支
+         */
+        function exitBranchDrawingMode(save) {
+            if (!isBranchDrawingMode) return;
+            
+            isBranchDrawingMode = false;
+            
+            // 移除提示訊息
+            if (branchDrawingHint) {
+                branchDrawingHint.remove();
+                branchDrawingHint = null;
+            }
+            
+            // 移除預覽線
+            if (branchDrawingLine) {
+                map.removeLayer(branchDrawingLine);
+                branchDrawingLine = null;
+            }
+            
+            // 移除標記
+            branchDrawingMarkers.forEach(m => map.removeLayer(m));
+            branchDrawingMarkers = [];
+            
+            // 恢復滑鼠游標
+            map.getContainer().style.cursor = '';
+            
+            // 移除事件監聽
+            map.off('click', onBranchDrawingClick);
+            document.removeEventListener('keydown', onBranchDrawingKeyDown);
+            
+            // 清空變數
+            branchDrawingNodes = [];
+            branchStartNode = null;
+            
+            console.log('🔙 退出分支繪製模式' + (save ? '（已保存）' : '（已取消）'));
+        }
+        
+        /**
+         * 刷新編輯模式（重新繪製所有分支和節點）
+         */
+        function refreshEditMode() {
+            if (!isEditingPath) return;
+            
+            console.log('🔄 刷新編輯模式');
+            
+            // 清除現有的編輯元素
+            editingBranches.forEach(branch => {
+                if (branch.polyline) map.removeLayer(branch.polyline);
+            });
+            editingNodes.forEach(node => {
+                if (node.marker) map.removeLayer(node.marker);
+            });
+            junctionMarkers.forEach(m => map.removeLayer(m));
+            
+            editingBranches = [];
+            editingNodes = [];
+            junctionMarkers = [];
+            
+            // 重新繪製所有分支
+            branchStructure.branches.forEach((branch, branchIndex) => {
+                const isMain = !branch.isBranch;
+                console.log(`   重新繪製分支 ${branchIndex} (${isMain ? '主幹' : '分支'}): ${branch.coords.length} 個節點`);
+                
+                const polyline = L.polyline(branch.coords, {
+                    color: isMain ? '#FF6B35' : '#9C27B0',
+                    weight: isMain ? 6 : 5,
+                    opacity: 0.8,
+                    className: isMain ? 'editing-polyline-main' : 'editing-polyline-branch'
+                }).addTo(map);
+                
+                polyline.on('click', function(e) {
+                    addNodeToBranch(e.latlng, branchIndex);
+                });
+                
+                editingBranches.push({
+                    polyline: polyline,
+                    index: branchIndex,
+                    isMain: isMain
+                });
+                
+                // 建立該分支的可拖曳節點
+                branch.coords.forEach((coord, nodeIndex) => {
+                    createEditableNode(coord, branchIndex, nodeIndex);
+                });
+            });
+            
+            // 顯示交叉點
+            displayJunctionPoints();
+            
+            console.log(`✅ 刷新完成，共 ${editingNodes.length} 個節點`);
+        }
+        
+        /**
+         * 重新計算交叉點（輔助函數）
+         */
+        function recalculateJunctions() {
+            const junctionMap = new Map();
+            
+            // 收集所有分支的端點
+            branchStructure.branches.forEach((branch, bIdx) => {
+                if (branch.coords.length > 0) {
+                    // 起點和終點
+                    [branch.coords[0], branch.coords[branch.coords.length - 1]].forEach(coord => {
+                        const key = `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+                        if (!junctionMap.has(key)) {
+                            junctionMap.set(key, []);
+                        }
+                        junctionMap.get(key).push(bIdx);
+                    });
+                }
+            });
+            
+            // 找出真正的交叉點（連接 2+ 條分支）
+            branchStructure.junctionPoints = [];
+            junctionMap.forEach((branches, key) => {
+                if (branches.length > 1) {
+                    const [lat, lng] = key.split(',').map(Number);
+                    branchStructure.junctionPoints.push({
+                        coord: [lat, lng],
+                        branches: [...new Set(branches)] // 去重
+                    });
+                }
+            });
+        }
+        
+        // ========== 原有的編輯函數（保留給單一 LINESTRING 用） ==========
         
         // 建立可編輯節點
         function createEditableNodes(coords) {
             editingNodes = [];
             
             coords.forEach((coord, index) => {
+                const isBreakPoint = segmentBreakPoints.includes(index);
+                
                 const marker = L.marker([coord[0], coord[1]], {
                     draggable: true,
                     icon: L.divIcon({
-                        className: 'path-node-marker',
-                        iconSize: [14, 14]
+                        className: isBreakPoint ? 'path-node-marker segment-break' : 'path-node-marker',
+                        iconSize: [14, 14],
+                        html: isBreakPoint ? '<div style="background:#FF0000;width:14px;height:14px;border-radius:50%;border:2px solid white;"></div>' : ''
                     })
                 }).addTo(map);
                 
@@ -6684,17 +8354,151 @@ window.addEventListener('message', async function(event) {
                     updatePolylineFromNodes();
                 });
                 
-                // 右鍵刪除節點
+                // 右鍵選單
                 marker.on('contextmenu', function(e) {
                     e.originalEvent.preventDefault();
-                    if (editingNodes.length > 2) {
-                        removeNode(index);
-                    } else {
-                        alert('⚠️ 路徑至少需要 2 個節點');
-                    }
+                    showNodeContextMenu(e, index);
                 });
                 
                 editingNodes.push(marker);
+            });
+        }
+        
+        // 顯示節點右鍵選單
+        function showNodeContextMenu(e, nodeIndex) {
+            // 移除舊選單
+            const oldMenu = document.querySelector('.node-context-menu');
+            if (oldMenu) oldMenu.remove();
+            
+            // 建立選單
+            const menu = document.createElement('div');
+            menu.className = 'node-context-menu';
+            menu.style.cssText = `
+                position: fixed;
+                left: ${e.originalEvent.clientX}px;
+                top: ${e.originalEvent.clientY}px;
+                background: white;
+                border: 2px solid #333;
+                border-radius: 6px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 10000;
+                min-width: 150px;
+            `;
+            
+            const isBreakPoint = segmentBreakPoints.includes(nodeIndex);
+            
+            // 選單項目
+            const items = [];
+            
+            // 刪除節點
+            if (editingNodes.length > 2) {
+                items.push({
+                    text: '🗑️ 刪除節點',
+                    color: '#f44336',
+                    action: () => removeNode(nodeIndex)
+                });
+            }
+            
+            // 分段/取消分段
+            if (nodeIndex > 0 && nodeIndex < editingNodes.length - 1) {
+                if (isBreakPoint) {
+                    items.push({
+                        text: '🔗 取消分段',
+                        color: '#2196F3',
+                        action: () => toggleSegmentBreak(nodeIndex)
+                    });
+                } else {
+                    items.push({
+                        text: '✂️ 在此分段',
+                        color: '#FF9800',
+                        action: () => toggleSegmentBreak(nodeIndex)
+                    });
+                }
+            }
+            
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.textContent = item.text;
+                div.style.cssText = `
+                    padding: 10px 15px;
+                    cursor: pointer;
+                    color: ${item.color};
+                    font-weight: 600;
+                    font-size: 13px;
+                `;
+                div.onmouseover = () => div.style.background = '#f5f5f5';
+                div.onmouseout = () => div.style.background = 'white';
+                div.onclick = () => {
+                    item.action();
+                    menu.remove();
+                };
+                menu.appendChild(div);
+            });
+            
+            document.body.appendChild(menu);
+            
+            // 點擊其他地方關閉選單
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu() {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }, 10);
+            });
+        }
+        
+        // 切換分段點
+        function toggleSegmentBreak(index) {
+            const breakIndex = segmentBreakPoints.indexOf(index);
+            if (breakIndex > -1) {
+                // 移除分段點
+                segmentBreakPoints.splice(breakIndex, 1);
+                console.log('🔗 取消分段於節點', index);
+            } else {
+                // 新增分段點
+                segmentBreakPoints.push(index);
+                segmentBreakPoints.sort((a, b) => a - b); // 排序
+                console.log('✂️ 在節點', index, '處分段');
+            }
+            
+            // 更新節點顯示
+            updateNodeIcons();
+            updateSegmentBreakMarkers();
+        }
+        
+        // 更新節點圖示（顯示分段點為紅色）
+        function updateNodeIcons() {
+            editingNodes.forEach((marker, index) => {
+                const isBreakPoint = segmentBreakPoints.includes(index);
+                marker.setIcon(L.divIcon({
+                    className: isBreakPoint ? 'path-node-marker segment-break' : 'path-node-marker',
+                    iconSize: [14, 14],
+                    html: isBreakPoint ? '<div style="background:#FF0000;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>' : ''
+                }));
+            });
+        }
+        
+        // 更新分段點標記（在地圖上顯示分段標籤）
+        function updateSegmentBreakMarkers() {
+            // 移除舊標記
+            const oldMarkers = document.querySelectorAll('.segment-break-label');
+            oldMarkers.forEach(m => {
+                const marker = m._leaflet_id;
+                // 找到並移除 Leaflet 標記
+            });
+            
+            // 在每個分段點旁邊顯示 "✂️ 分段點"
+            segmentBreakPoints.forEach(index => {
+                if (index < editingNodes.length) {
+                    const nodePos = editingNodes[index].getLatLng();
+                    const label = L.marker(nodePos, {
+                        icon: L.divIcon({
+                            className: 'segment-break-label',
+                            html: '<div style="background:#FF0000;color:white;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:bold;white-space:nowrap;margin-left:20px;box-shadow:0 2px 4px rgba(0,0,0,0.3);">✂️ 分段點</div>',
+                            iconSize: null,
+                            iconAnchor: [-10, 7]
+                        })
+                    }).addTo(map);
+                }
             });
         }
         
@@ -6731,25 +8535,37 @@ window.addEventListener('message', async function(event) {
             newMarker.on('contextmenu', function(e) {
                 e.originalEvent.preventDefault();
                 const idx = editingNodes.indexOf(newMarker);
-                if (editingNodes.length > 2) {
-                    removeNode(idx);
-                } else {
-                    alert('⚠️ 路徑至少需要 2 個節點');
-                }
+                showNodeContextMenu(e, idx);
             });
+            
+            // 調整分段點索引（在插入點之後的索引都要 +1）
+            segmentBreakPoints = segmentBreakPoints.map(bp => bp >= insertIndex ? bp + 1 : bp);
             
             editingNodes.splice(insertIndex, 0, newMarker);
             updatePolylineFromNodes();
+            updateNodeIcons();
+            updateSegmentBreakMarkers();
             
             console.log('➕ 新增節點於索引', insertIndex);
         }
         
         // 移除節點
         function removeNode(index) {
+            // 如果刪除的是分段點，移除該分段點
+            const breakIndex = segmentBreakPoints.indexOf(index);
+            if (breakIndex > -1) {
+                segmentBreakPoints.splice(breakIndex, 1);
+            }
+            
+            // 調整分段點索引（在刪除點之後的索引都要 -1）
+            segmentBreakPoints = segmentBreakPoints.map(bp => bp > index ? bp - 1 : bp);
+            
             const marker = editingNodes[index];
             map.removeLayer(marker);
             editingNodes.splice(index, 1);
             updatePolylineFromNodes();
+            updateNodeIcons();
+            updateSegmentBreakMarkers();
             
             console.log('➖ 刪除節點索引', index, '，剩餘', editingNodes.length, '個節點');
         }
@@ -6762,8 +8578,30 @@ window.addEventListener('message', async function(event) {
         
         // 儲存編輯
         async function savePathEdits() {
+            // 檢查是否為 MULTILINESTRING 編輯模式
+            console.log('🔍 保存前檢查:');
+            console.log('   branchStructure:', branchStructure);
+            console.log('   branches 數量:', branchStructure ? branchStructure.branches.length : 0);
+            console.log('   isMULTI 標記:', branchStructure ? branchStructure.isMULTI : false);
+            
+            // 判斷是否應該保存為 MULTILINESTRING
+            // 條件：有 branchStructure 且分支數 >= 2 (或原本就是 MULTILINESTRING)
+            const isMULTI = branchStructure && (
+                (branchStructure.isMULTI && branchStructure.branches.length >= 1) ||  // 原本是 MULTI，即使只剩 1 個分支也保持
+                branchStructure.branches.length > 1  // 或者現在有多個分支
+            );
+            
             // 第一階段確認：儲存路徑並清空段落
-            const confirmMessage = `⚠️ 儲存路徑變更
+            let segmentInfo = '';
+            if (isMULTI) {
+                segmentInfo = `\n📍 路徑包含 ${branchStructure.branches.length} 個分支（MULTILINESTRING）`;
+            } else if (segmentBreakPoints.length > 0) {
+                segmentInfo = `\n📍 路徑包含 ${segmentBreakPoints.length + 1} 個分段`;
+            } else {
+                segmentInfo = '\n📍 路徑為單一段落';
+            }
+            
+            const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
             
 新路徑將更新至 Google Sheets
 
@@ -6783,41 +8621,130 @@ window.addEventListener('message', async function(event) {
             }
             
             try {
-                // 取得新座標
-                const newCoords = editingNodes.map(marker => {
-                    const ll = marker.getLatLng();
-                    return [ll.lat, ll.lng];
-                });
-                
-                // 轉換為 LINESTRING 格式
-                const linestring = 'LINESTRING(' + 
-                    newCoords.map(c => c[1] + ' ' + c[0]).join(', ') + 
-                ')';
-                
-                // 計算新路徑長度
+                let linestring = '';
                 let newLength = 0;
-                for (let i = 0; i < newCoords.length - 1; i++) {
-                    const p1 = newCoords[i];
-                    const p2 = newCoords[i + 1];
-                    newLength += getDistance(p1, p2);
+                
+                // 根據是否為 MULTILINESTRING 產生不同格式
+                if (isMULTI) {
+                    // ========== MULTILINESTRING 模式 ==========
+                    console.log('📝 準備生成 MULTILINESTRING');
+                    console.log('   分支總數:', branchStructure.branches.length);
+                    console.log('   editingNodes 總數:', editingNodes.length);
+                    
+                    linestring = 'MULTILINESTRING(';
+                    
+                    branchStructure.branches.forEach((branch, branchIndex) => {
+                        // 取得該分支的所有節點（從 editingNodes）
+                        const branchNodes = editingNodes.filter(n => n.branchIndex === branchIndex);
+                        branchNodes.sort((a, b) => a.nodeIndex - b.nodeIndex);
+                        
+                        console.log(`   分支 ${branchIndex}:`, branchNodes.length, '個節點');
+                        
+                        const coords = branchNodes.map(n => {
+                            const ll = n.marker.getLatLng();
+                            return [ll.lat, ll.lng];
+                        });
+                        
+                        // 計算該分支長度
+                        for (let i = 0; i < coords.length - 1; i++) {
+                            newLength += getDistance(coords[i], coords[i + 1]);
+                        }
+                        
+                        // 加入該分支的座標字串（lng lat 格式）
+                        const coordStr = coords.map(c => `${c[1]} ${c[0]}`).join(', ');
+                        linestring += `(${coordStr})`;
+                        
+                        console.log(`   分支 ${branchIndex} 座標:`, coordStr.substring(0, 50) + '...');
+                        
+                        // 除了最後一個分支，其他都加逗號
+                        if (branchIndex < branchStructure.branches.length - 1) {
+                            linestring += ', ';
+                        }
+                    });
+                    
+                    linestring += ')';
+                    console.log('✅ MULTILINESTRING 生成完成');
+                    console.log('   完整字串:', linestring.substring(0, 100) + '...');
+                    
+                } else {
+                    // ========== 單一 LINESTRING 或多段 LINESTRING 模式 ==========
+                    
+                    // 取得新座標（從 marker 物件取得，兼容舊版和新版）
+                    const newCoords = editingNodes.map(node => {
+                        // 新版（物件）
+                        if (node.marker) {
+                            const ll = node.marker.getLatLng();
+                            return [ll.lat, ll.lng];
+                        }
+                        // 舊版（直接是 marker）
+                        const ll = node.getLatLng();
+                        return [ll.lat, ll.lng];
+                    });
+                    
+                    if (segmentBreakPoints.length === 0) {
+                        // 沒有分段點，生成單段 LINESTRING
+                        linestring = 'LINESTRING(' + 
+                            newCoords.map(c => c[1] + ' ' + c[0]).join(', ') + 
+                        ')';
+                    } else {
+                        // 有分段點，生成多段 LINESTRING
+                        const sortedBreaks = [...segmentBreakPoints].sort((a, b) => a - b);
+                        let startIndex = 0;
+                        
+                        sortedBreaks.forEach((breakIndex, i) => {
+                            const segmentCoords = newCoords.slice(startIndex, breakIndex + 1);
+                            linestring += 'LINESTRING(' + 
+                                segmentCoords.map(c => c[1] + ' ' + c[0]).join(', ') + 
+                            ')';
+                            startIndex = breakIndex; // 下一段從分段點開始（重複該點）
+                        });
+                        
+                        // 最後一段
+                        const lastSegmentCoords = newCoords.slice(startIndex);
+                        linestring += 'LINESTRING(' + 
+                            lastSegmentCoords.map(c => c[1] + ' ' + c[0]).join(', ') + 
+                        ')';
+                    }
+                    
+                    // 計算新路徑長度
+                    for (let i = 0; i < newCoords.length - 1; i++) {
+                        newLength += getDistance(newCoords[i], newCoords[i + 1]);
+                    }
                 }
+                
                 newLength = Math.round(newLength);
                 
                 console.log('📡 準備儲存新路徑');
+                console.log('   當前工程ID:', currentPipeline.id);
+                console.log('   當前工程名稱:', currentPipeline.name);
+                console.log('   格式:', isMULTI ? 'MULTILINESTRING' : 'LINESTRING');
+                console.log('   分支數:', isMULTI ? branchStructure.branches.length : 1);
+                console.log('   分段點:', segmentBreakPoints);
                 console.log('   LINESTRING:', linestring);
                 console.log('   新路徑長度:', newLength, 'm');
                 
-                // 呼叫 API 更新（會同時清空段落資料）
-                const url = API_URL + 
-                    '?action=updateLinestring' +
-                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
-                    '&linestring=' + encodeURIComponent(linestring);
-                
-                const response = await fetch(url);
+                // 使用 POST 請求（避免 URL 過長）
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        action: 'updateLinestring',
+                        pipelineId: currentPipeline.id,
+                        linestring: linestring
+                    })
+                });
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ 路徑已成功更新！\n\n施工進度段落資料已清空，請重新在 Google Sheets 設定。');
+                    let successMsg = '✅ 路徑已成功更新！';
+                    if (isMULTI) {
+                        successMsg += `\n\n🌿 已儲存為 MULTILINESTRING（${branchStructure.branches.length} 個分支）`;
+                    } else if (segmentBreakPoints.length > 0) {
+                        successMsg += `\n\n✂️ 路徑已分為 ${segmentBreakPoints.length + 1} 段`;
+                    }
+                    successMsg += '\n\n施工進度段落資料已清空，請重新在 Google Sheets 設定。';
+                    
+                    alert(successMsg);
                     
                     // 更新本地資料
                     currentPipeline.linestring = linestring;
@@ -6844,6 +8771,11 @@ window.addEventListener('message', async function(event) {
                 return;
             }
             
+            // 🆕 如果在分支繪製模式，先退出
+            if (isBranchDrawingMode) {
+                exitBranchDrawingMode(false);
+            }
+            
             isEditingPath = false;
             
             // 恢復按鈕狀態
@@ -6860,8 +8792,31 @@ window.addEventListener('message', async function(event) {
                 editingPolyline = null;
             }
             
-            editingNodes.forEach(marker => map.removeLayer(marker));
+            // 清理分支編輯元素
+            editingBranches.forEach(branch => {
+                if (branch.polyline) {
+                    map.removeLayer(branch.polyline);
+                }
+            });
+            editingBranches = [];
+            
+            junctionMarkers.forEach(m => map.removeLayer(m));
+            junctionMarkers = [];
+            
+            // 清理節點標記（兼容新舊格式）
+            editingNodes.forEach(node => {
+                if (node.marker) {
+                    // 新版（物件格式）
+                    map.removeLayer(node.marker);
+                } else {
+                    // 舊版（直接是 marker）
+                    map.removeLayer(node);
+                }
+            });
             editingNodes = [];
+            
+            // 重設分支結構
+            branchStructure = null;
             
             // 重新顯示管線
             if (currentPipeline) {
@@ -6931,6 +8886,9 @@ window.addEventListener('message', async function(event) {
                         toggleEditMode();
                     }
                     break;
+                case 'branch':
+                    toggleBranchEditMode();
+                    break;
                 case 'segment':
                     toggleSegmentPanel();
                     break;
@@ -6940,17 +8898,224 @@ window.addEventListener('message', async function(event) {
                 case 'milestone':
                     toggleMilestonePanel();
                     break;
+                case 'editPipeline':
+                    // 編輯工程
+                    if (!currentPipeline) {
+                        alert('⚠️ 請先選擇一個工程');
+                        return;
+                    }
+                    editPipelineFromTool();
+                    break;
             }
         }
         
-        // 登出功能
-        function logout() {
-            if (confirm('確定要登出嗎？\n\n登出後需要重新輸入密碼才能使用編輯功能。')) {
-                isAuthenticated = false;
-                document.getElementById('toolsDrawer').classList.remove('active');
-                alert('✅ 已登出');
+        // ==================== 編輯工程功能 ====================
+        
+        // 從工具抽屜呼叫(使用當前工程)
+        async function editPipelineFromTool() {
+            if (!currentPipeline) {
+                alert('⚠️ 請先選擇一個工程');
+                return;
             }
+            await editPipeline(currentPipeline);
         }
+        
+        // 從工具抽屜呼叫(使用當前工程)
+        
+        // 通用編輯工程函數
+        async function editPipeline(pipeline) {
+            // 建立遮罩層
+            const overlay = document.createElement('div');
+            overlay.id = 'editPipelineOverlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 9999;
+            `;
+            overlay.onclick = closeEditPipelineForm;
+            
+            const formDiv = document.createElement('div');
+            formDiv.id = 'editPipelineForm';
+            formDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 24px;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+                z-index: 10000;
+                width: 450px;
+                max-height: 80vh;
+                overflow-y: auto;
+            `;
+            formDiv.onclick = (e) => e.stopPropagation();
+            
+            // 建立計畫下拉選單選項
+            const projects = allProjects || [];
+            const projectOptions = projects.map(p => 
+                `<option value="${p.name}" ${p.name === pipeline.projectName ? 'selected' : ''}>${p.name}</option>`
+            ).join('');
+            
+            formDiv.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                    <h3 style="margin:0;color:#333;font-size:20px;">✏️ 編輯工程</h3>
+                    <button onclick="closeEditPipelineForm()" style="background:#f5f5f5;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:16px;">✕</button>
+                </div>
+                
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:600;color:#555;font-size:14px;">📋 計畫名稱</label>
+                    <select id="editPipelineProjectName" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;background:white;cursor:pointer;">
+                        ${projectOptions}
+                    </select>
+                </div>
+                
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:600;color:#555;font-size:14px;">🔢 工程編號</label>
+                    <input type="text" id="editPipelineId" value="${pipeline.id}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+                    <div style="font-size:11px;color:#999;margin-top:4px;">⚠️ 修改編號後,相關資料的工程ID也會更新</div>
+                </div>
+                
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:600;color:#555;font-size:14px;">🏗️ 工程名稱</label>
+                    <input type="text" id="editPipelineName" value="${pipeline.name}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+                </div>
+                
+                <div style="background:#fff3cd;padding:12px;border-radius:8px;margin-bottom:20px;font-size:12px;color:#856404;line-height:1.6;">
+                    ⚠️ 修改後會立即更新 Google Sheets<br>
+                    請確認資料正確後再儲存
+                </div>
+                
+                <div style="display:flex;gap:10px;margin-bottom:12px;">
+                    <button onclick="submitEditPipeline('${pipeline.id}')" style="flex:1;padding:14px;background:#2196F3;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:15px;">
+                        💾 儲存變更
+                    </button>
+                    <button onclick="closeEditPipelineForm()" style="padding:14px 20px;background:#f5f5f5;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+                        取消
+                    </button>
+                </div>
+                
+                <button onclick="confirmDeletePipeline('${pipeline.id}', '${pipeline.name.replace(/'/g, "\\'")}')" style="width:100%;padding:12px;background:#f44336;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;margin-top:8px;">
+                    🗑️ 刪除此工程
+                </button>
+            `;
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(formDiv);
+        }
+        
+        // 確認刪除工程(從編輯表單內呼叫)
+        window.confirmDeletePipeline = async function(pipelineId, pipelineName) {
+            const confirmMsg = `⚠️ 警告：即將刪除工程
+
+工程名稱：${pipelineName}
+工程編號：${pipelineId}
+
+⚠️ 此操作將會：
+• 刪除工程的路徑資料
+• 刪除所有施工進度段落
+• 刪除所有地圖備註
+• 刪除所有工作井、配電盤、路權範圍
+
+此操作無法復原！
+
+確定要刪除嗎？`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+            
+            // 二次確認
+            const typedName = prompt(`請輸入工程名稱「${pipelineName}」以確認刪除:`);
+            if (typedName !== pipelineName) {
+                alert('❌ 名稱不符，已取消刪除');
+                return;
+            }
+            
+            try {
+                const response = await fetch(API_URL + 
+                    '?action=deletePipeline' +
+                    '&pipelineId=' + encodeURIComponent(pipelineId));
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ 工程已刪除');
+                    closeEditPipelineForm();
+                    
+                    // 重新載入工程資料
+                    await loadPipelines();
+                    
+                    // 返回計畫頁面
+                    if (currentProject) {
+                        showProjectPipelines(currentProject.name);
+                    }
+                } else {
+                    alert('❌ 刪除失敗: ' + (result.error || '未知錯誤'));
+                }
+            } catch (error) {
+                console.error('刪除工程錯誤:', error);
+                alert('❌ 發生錯誤: ' + error.message);
+            }
+        };
+        
+        // 選擇計畫(編輯工程用)
+        
+        // 關閉編輯工程表單
+        window.closeEditPipelineForm = function() {
+            const overlay = document.getElementById('editPipelineOverlay');
+            const form = document.getElementById('editPipelineForm');
+            if (overlay) overlay.remove();
+            if (form) form.remove();
+        };
+        
+        // 提交編輯工程
+        window.submitEditPipeline = async function(oldPipelineId) {
+            const newProjectName = document.getElementById('editPipelineProjectName').value.trim();
+            const newPipelineId = document.getElementById('editPipelineId').value.trim();
+            const newPipelineName = document.getElementById('editPipelineName').value.trim();
+            
+            if (!newProjectName || !newPipelineId || !newPipelineName) {
+                alert('❌ 所有欄位都必須填寫');
+                return;
+            }
+            
+            if (!confirm(`確定要儲存變更嗎？\n\n計畫：${newProjectName}\n編號：${newPipelineId}\n名稱：${newPipelineName}`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(API_URL + 
+                    '?action=updatePipeline' +
+                    '&oldPipelineId=' + encodeURIComponent(oldPipelineId) +
+                    '&newPipelineId=' + encodeURIComponent(newPipelineId) +
+                    '&projectName=' + encodeURIComponent(newProjectName) +
+                    '&name=' + encodeURIComponent(newPipelineName));
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ 工程資料已更新');
+                    closeEditPipelineForm();
+                    
+                    // 重新載入工程資料
+                    await loadPipelines();
+                    
+                    // 重新顯示計畫工程列表
+                    if (currentProject) {
+                        showProjectPipelines(currentProject.name);
+                    }
+                } else {
+                    alert('❌ 更新失敗: ' + (result.error || '未知錯誤'));
+                }
+            } catch (error) {
+                console.error('編輯工程錯誤:', error);
+                alert('❌ 發生錯誤: ' + error.message);
+            }
+        };
         
         // 點擊地圖其他地方時關閉抽屜
         document.addEventListener('click', function(e) {
@@ -6972,6 +9137,11 @@ window.addEventListener('message', async function(event) {
         let segmentDividers = []; // 分段線標記 {distance: number, marker: L.Marker}
         let pipelineCoords = []; // 管線座標
         let isDraggingDivider = false; // 是否正在拖拉分段線
+        
+        // 🆕 MULTILINESTRING 支援
+        let currentBranchForSegmentation = 0; // 當前選擇的分支索引（用於段落管理）
+        let branchDataForSegmentation = null; // 分支資料（用於段落管理）
+        let currentBranchLength = 0; // 當前分支的長度（用於視覺化分段）
         
         // 切換視覺化分段模式
         function toggleVisualSegmentation() {
@@ -7043,8 +9213,26 @@ window.addEventListener('message', async function(event) {
         function enterVisualSegmentationMode() {
             console.log('📍 進入視覺化分段模式');
             
+            // 🆕 檢查是否為 MULTILINESTRING
+            const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
+            
+            if (isMULTI) {
+                // MULTILINESTRING：需要先選擇分支
+                branchDataForSegmentation = parseLineStringWithBranches(currentPipeline.linestring);
+                
+                console.log('🌿 檢測到 MULTILINESTRING，分支數:', branchDataForSegmentation.branches.length);
+                
+                // 顯示分支選擇面板
+                showBranchSelectionPanel();
+                return; // 等待使用者選擇分支
+            }
+            
+            // 單一 LINESTRING：原本的邏輯
             // 解析管線座標
             pipelineCoords = parseLineString(currentPipeline.linestring);
+            
+            // 🔧 設定管線長度
+            currentBranchLength = currentPipeline.length;
             
             // 檢查是否已有段落
             let adjustmentMode = false; // 微調模式
@@ -7089,6 +9277,156 @@ window.addEventListener('message', async function(event) {
             showVisualSegmentationPanel(adjustmentMode);
         }
         
+        // 🆕 顯示分支選擇面板
+        function showBranchSelectionPanel() {
+            // 隱藏段落表格
+            document.querySelector('.segment-table').style.display = 'none';
+            
+            // 建立分支選擇面板
+            const panelContainer = document.getElementById('visualSegmentationPanel');
+            if (!panelContainer) {
+                console.error('找不到 visualSegmentationPanel 元素');
+                return;
+            }
+            
+            let html = `
+                <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px;">
+                        🌿 請選擇要分段的分支
+                    </div>
+            `;
+            
+            branchDataForSegmentation.branches.forEach((branch, index) => {
+                const isMain = !branch.isBranch;
+                const label = isMain ? '主幹' : `分支 ${index}`;
+                
+                // 計算該分支長度
+                let branchLength = 0;
+                for (let i = 0; i < branch.coords.length - 1; i++) {
+                    branchLength += getDistance(branch.coords[i], branch.coords[i + 1]);
+                }
+                branchLength = Math.round(branchLength);
+                
+                const color = isMain ? '#e74c3c' : '#9C27B0';
+                const checked = index === currentBranchForSegmentation ? 'checked' : '';
+                
+                html += `
+                    <div style="margin: 10px 0; padding: 12px; background: white; border: 2px solid ${color}; border-radius: 6px; cursor: pointer;" onclick="selectBranchForSegmentation(${index})">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                            <input type="radio" name="branchSelection" value="${index}" ${checked} style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 600; color: ${color};">${label}</span>
+                            <span style="color: #666; font-size: 13px;">(${branchLength}m, ${branch.coords.length} 個節點)</span>
+                        </label>
+                    </div>
+                `;
+            });
+            
+            html += `
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button onclick="confirmBranchSelection()" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                        ✓ 確認選擇
+                    </button>
+                    <button onclick="cancelBranchSelection()" style="flex: 1; padding: 12px; background: #f5f5f5; color: #666; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                        ✕ 取消
+                    </button>
+                </div>
+            `;
+            
+            panelContainer.innerHTML = html;
+            panelContainer.style.display = 'block';
+        }
+        
+        // 🆕 選擇分支
+        function selectBranchForSegmentation(branchIndex) {
+            currentBranchForSegmentation = branchIndex;
+            console.log('選擇分支:', branchIndex);
+        }
+        
+        // 🆕 確認分支選擇
+        function confirmBranchSelection() {
+            const branch = branchDataForSegmentation.branches[currentBranchForSegmentation];
+            
+            console.log(`✅ 確認選擇分支 ${currentBranchForSegmentation}`);
+            
+            // 設定該分支的座標
+            pipelineCoords = branch.coords;
+            
+            // 🔧 計算該分支的長度
+            let branchLength = 0;
+            for (let i = 0; i < branch.coords.length - 1; i++) {
+                branchLength += getDistance(branch.coords[i], branch.coords[i + 1]);
+            }
+            currentBranchLength = Math.round(branchLength); // 🆕 儲存當前分支長度
+            console.log(`   分支長度: ${currentBranchLength}m`);
+            
+            // 篩選該分支的段落
+            const branchSegments = currentSegments.filter(seg => {
+                // 如果段落有 branchIndex 屬性，檢查是否匹配
+                if (seg.branchIndex !== undefined) {
+                    return seg.branchIndex === currentBranchForSegmentation;
+                }
+                // 舊資料沒有 branchIndex，視為主幹（index 0）
+                return currentBranchForSegmentation === 0;
+            });
+            
+            let adjustmentMode = false;
+            
+            if (branchSegments.length > 0) {
+                const choice = confirm(
+                    `分支已有 ${branchSegments.length} 個段落\n\n` +
+                    `【確定】= 微調現有段落位置（只能拖拉調整）\n` +
+                    `【取消】= 清空重新分段（可新增分段線）`
+                );
+                
+                if (choice) {
+                    adjustmentMode = true;
+                    const sortedSegments = [...branchSegments].sort((a, b) => a.startDistance - b.startDistance);
+                    
+                    sortedSegments.forEach((seg, index) => {
+                        if (index < sortedSegments.length - 1) {
+                            addSegmentDivider(seg.endDistance);
+                        }
+                    });
+                    
+                    updateVisualSegmentationPanel();
+                } else {
+                    showVisualSegmentationGuide();
+                    map.on('click', onMapClickAddDivider);
+                }
+            } else {
+                showVisualSegmentationGuide();
+                map.on('click', onMapClickAddDivider);
+            }
+            
+            // 隱藏分支選擇面板，顯示操作說明
+            document.getElementById('visualSegmentationPanel').style.display = 'none';
+            document.querySelector('.segment-table').style.display = 'none';
+            showVisualSegmentationPanel(adjustmentMode);
+        }
+        
+        // 🆕 取消分支選擇
+        function cancelBranchSelection() {
+            console.log('❌ 取消分支選擇');
+            
+            // 退出視覺化分段模式
+            visualSegmentationMode = false;
+            const buttonsContainer = document.getElementById('segmentPanelButtons');
+            buttonsContainer.innerHTML = `
+                <button onclick="toggleVisualSegmentation()" class="btn-visual-segment" style="width:100%;">🎯 視覺化分段</button>
+            `;
+            
+            // 隱藏分支選擇面板
+            document.getElementById('visualSegmentationPanel').style.display = 'none';
+            
+            // 恢復段落表格
+            document.querySelector('.segment-table').style.display = 'table';
+            
+            // 重置變數
+            branchDataForSegmentation = null;
+            currentBranchForSegmentation = 0;
+        }
+        
         // 退出視覺化分段模式
         function exitVisualSegmentationMode() {
             console.log('📍 退出視覺化分段模式');
@@ -7097,10 +9435,30 @@ window.addEventListener('message', async function(event) {
             const hasDividers = segmentDividers.length > 0;
             
             if (hasDividers) {
-                // 詢問是否儲存
+                // 有分段線：詢問是否儲存
                 if (confirm('是否要根據分段線建立段落？')) {
                     createSegmentsFromDividers();
                     return; // createSegmentsFromDividers 會處理清理工作
+                }
+            } else {
+                // 🆕 沒有分段線：詢問是否要建立整條為一個段落
+                const isMULTI = branchDataForSegmentation !== null;
+                
+                if (isMULTI) {
+                    // MULTILINESTRING：詢問是否建立整條分支為一個段落
+                    const branch = branchDataForSegmentation.branches[currentBranchForSegmentation];
+                    const branchLabel = branch.isBranch ? `分支 ${currentBranchForSegmentation}` : '主幹';
+                    
+                    if (confirm(`沒有分段線。\n\n是否要將整條${branchLabel}建立為一個段落？`)) {
+                        createWholeBranchSegment();
+                        return;
+                    }
+                } else {
+                    // 單一 LINESTRING：詢問是否建立整條為一個段落
+                    if (confirm('沒有分段線。\n\n是否要將整條管線建立為一個段落？')) {
+                        createWholeLineSegment();
+                        return;
+                    }
                 }
             }
             
@@ -7118,14 +9476,51 @@ window.addEventListener('message', async function(event) {
             hideVisualSegmentationPanel();
         }
         
+        // 🆕 建立整條分支為一個段落（MULTILINESTRING）
+        async function createWholeBranchSegment() {
+            const branch = branchDataForSegmentation.branches[currentBranchForSegmentation];
+            
+            // 計算分支長度
+            let branchLength = 0;
+            for (let i = 0; i < branch.coords.length - 1; i++) {
+                branchLength += getDistance(branch.coords[i], branch.coords[i + 1]);
+            }
+            branchLength = Math.round(branchLength);
+            
+            console.log(`📏 建立整條分支為一個段落，長度: ${branchLength}m`);
+            
+            // 建立單一段落
+            const segments = [{
+                start: 0,
+                end: branchLength
+            }];
+            
+            // 顯示段落設定表單
+            showBatchSegmentForm(segments);
+        }
+        
+        // 🆕 建立整條管線為一個段落（單一 LINESTRING）
+        async function createWholeLineSegment() {
+            const totalLength = currentPipeline.length || 0;
+            
+            console.log(`📏 建立整條管線為一個段落，長度: ${totalLength}m`);
+            
+            // 建立單一段落
+            const segments = [{
+                start: 0,
+                end: totalLength
+            }];
+            
+            // 顯示段落設定表單
+            showBatchSegmentForm(segments);
+        }
+        
         // 在地圖上點擊新增分段線
         function onMapClickAddDivider(e) {
             if (!visualSegmentationMode) return;
             
-            // 必須按住 Ctrl 或 Shift 鍵才能新增分段線
-            if (!e.originalEvent.ctrlKey && !e.originalEvent.shiftKey) {
-                return;
-            }
+            // 🔧 單純點擊即可新增分段線(視覺化分段模式專用)
+            // 不需要按任何鍵,避免與小段操作衝突
             
             // 計算點擊位置在管線上的距離
             const clickPoint = [e.latlng.lat, e.latlng.lng];
@@ -7138,13 +9533,18 @@ window.addEventListener('message', async function(event) {
         
         // 新增分段線標記
         function addSegmentDivider(distance) {
+            // 🔧 取得當前管線/分支的總長度
+            const totalLength = branchDataForSegmentation !== null 
+                ? currentBranchLength 
+                : currentPipeline.length;
+            
             // 檢查是否在起點或終點（不允許）
             if (distance < 1) {
                 console.log('⚠️ 不能在起點 (0m) 放置分段線');
                 return;
             }
-            if (distance >= currentPipeline.length - 1) {
-                console.log('⚠️ 不能在終點放置分段線');
+            if (distance >= totalLength - 1) {
+                console.log(`⚠️ 不能在終點 (${totalLength}m) 放置分段線`);
                 return;
             }
             
@@ -7204,16 +9604,21 @@ window.addEventListener('message', async function(event) {
                 isDraggingDivider = false;
                 this._icon.classList.remove('dragging');
                 
+                // 🔧 取得當前管線/分支的總長度
+                const totalLength = branchDataForSegmentation !== null 
+                    ? currentBranchLength 
+                    : currentPipeline.length;
+                
                 // 計算最終位置（使用 marker 的當前位置）
                 const latlng = this.getLatLng();
                 const newPos = [latlng.lat, latlng.lng];
                 const newDistance = findNearestPointOnLine(newPos, pipelineCoords);
                 
-                console.log('拖拉結束，距離:', newDistance);
+                console.log('拖拉結束，距離:', newDistance, '總長度:', totalLength);
                 
                 if (newDistance !== null) {
                     // 檢查是否太靠近起點或終點
-                    if (newDistance < 5 || newDistance >= currentPipeline.length - 5) {
+                    if (newDistance < 5 || newDistance >= totalLength - 5) {
                         // 自動刪除這條分段線
                         console.log('🗑️ 拖拉到邊界，自動刪除分段線');
                         console.log('刪除前分段線數量:', segmentDividers.length);
@@ -7319,6 +9724,17 @@ window.addEventListener('message', async function(event) {
                 
                 if (result.success) {
                     currentSegments = result.segments || [];
+                    
+                    // 🆕 解析備註中的分支編號
+                    currentSegments.forEach(seg => {
+                        if (seg.notes && seg.notes.includes('branchIndex:')) {
+                            const match = seg.notes.match(/branchIndex:(\d+)/);
+                            if (match) {
+                                seg.branchIndex = parseInt(match[1]);
+                            }
+                        }
+                    });
+                    
                     renderSegmentTable();
                     updateSegmentInfo();
                 } else {
@@ -7368,29 +9784,104 @@ window.addEventListener('message', async function(event) {
             tbody.innerHTML = '';
             
             if (currentSegments.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="padding:30px;color:#999;font-size:12px;">尚無段落資料</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="padding:30px;color:#999;font-size:12px;">尚無段落資料</td></tr>';
                 return;
             }
             
+            // 🆕 檢查是否為 MULTILINESTRING
+            const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
+            
+            // 🆕 如果是 MULTILINESTRING，修改表頭
+            const table = document.querySelector('.segment-table');
+            if (isMULTI) {
+                table.querySelector('thead tr').innerHTML = `
+                    <th style="width:60px;">分支</th>
+                    <th style="width:40px;">段落</th>
+                    <th style="width:55px;">起始(m)</th>
+                    <th style="width:55px;">結束(m)</th>
+                    <th style="width:50px;">長度</th>
+                    <th style="width:45px;">管徑</th>
+                    <th style="width:45px;">管種</th>
+                    <th style="width:55px;">方式</th>
+                    <th style="width:70px;">操作</th>
+                `;
+            } else {
+                table.querySelector('thead tr').innerHTML = `
+                    <th style="width:45px;">段落</th>
+                    <th style="width:60px;">起始(m)</th>
+                    <th style="width:60px;">結束(m)</th>
+                    <th style="width:55px;">長度</th>
+                    <th style="width:50px;">管徑</th>
+                    <th style="width:50px;">管種</th>
+                    <th style="width:60px;">方式</th>
+                    <th style="width:70px;">操作</th>
+                `;
+            }
+            
             // 按段落編號排序
-            currentSegments.sort((a, b) => a.segmentNumber - b.segmentNumber);
+            currentSegments.sort((a, b) => {
+                // 🆕 如果有 branchIndex，先按分支排序
+                if (a.branchIndex !== undefined && b.branchIndex !== undefined) {
+                    if (a.branchIndex !== b.branchIndex) {
+                        return a.branchIndex - b.branchIndex;
+                    }
+                }
+                // 再按段落編號排序
+                const aNum = typeof a.segmentNumber === 'string' ? parseInt(a.segmentNumber.split('-')[1]) : a.segmentNumber;
+                const bNum = typeof b.segmentNumber === 'string' ? parseInt(b.segmentNumber.split('-')[1]) : b.segmentNumber;
+                return aNum - bNum;
+            });
             
             currentSegments.forEach(seg => {
                 const length = parseFloat(seg.endDistance) - parseFloat(seg.startDistance);
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="font-weight:bold;">#${seg.segmentNumber}</td>
-                    <td>${Math.round(seg.startDistance)}</td>
-                    <td>${Math.round(seg.endDistance)}</td>
-                    <td style="font-weight:600;color:#667eea;">${Math.round(length)}</td>
-                    <td>${seg.diameter || '-'}</td>
-                    <td>${seg.pipeType || '-'}</td>
-                    <td style="font-size:10px;">${seg.method || '-'}</td>
-                    <td style="white-space:nowrap;">
-                        <button class="btn-edit-segment" onclick="editSegmentForm(${seg.segmentNumber})">編輯</button>
-                        <button class="btn-delete-segment" onclick="deleteSegmentConfirm(${seg.segmentNumber})">刪除</button>
-                    </td>
-                `;
+                
+                // 🆕 解析分支資訊
+                let branchLabel = '';
+                let segmentLabel = seg.segmentNumber;
+                
+                if (isMULTI && seg.branchIndex !== undefined) {
+                    const branchIndex = seg.branchIndex;
+                    branchLabel = branchIndex === 0 ? '主幹' : `分支${branchIndex}`;
+                    
+                    // 從段落編號中提取純數字
+                    if (typeof seg.segmentNumber === 'string' && seg.segmentNumber.includes('-')) {
+                        segmentLabel = seg.segmentNumber.split('-')[1];
+                    }
+                    
+                    const branchColor = branchIndex === 0 ? '#e74c3c' : '#9C27B0';
+                    
+                    row.innerHTML = `
+                        <td style="font-weight:bold;color:${branchColor};">${branchLabel}</td>
+                        <td style="font-weight:bold;">#${segmentLabel}</td>
+                        <td>${Math.round(seg.startDistance)}</td>
+                        <td>${Math.round(seg.endDistance)}</td>
+                        <td style="font-weight:600;color:#667eea;">${Math.round(length)}</td>
+                        <td>${seg.diameter || '-'}</td>
+                        <td>${seg.pipeType || '-'}</td>
+                        <td style="font-size:10px;">${seg.method || '-'}</td>
+                        <td style="white-space:nowrap;">
+                            <button class="btn-edit-segment" onclick="editSegmentForm('${seg.segmentNumber}')">編輯</button>
+                            <button class="btn-delete-segment" onclick="deleteSegmentConfirm('${seg.segmentNumber}')">刪除</button>
+                        </td>
+                    `;
+                } else {
+                    // 普通 LINESTRING
+                    row.innerHTML = `
+                        <td style="font-weight:bold;">#${seg.segmentNumber}</td>
+                        <td>${Math.round(seg.startDistance)}</td>
+                        <td>${Math.round(seg.endDistance)}</td>
+                        <td style="font-weight:600;color:#667eea;">${Math.round(length)}</td>
+                        <td>${seg.diameter || '-'}</td>
+                        <td>${seg.pipeType || '-'}</td>
+                        <td style="font-size:10px;">${seg.method || '-'}</td>
+                        <td style="white-space:nowrap;">
+                            <button class="btn-edit-segment" onclick="editSegmentForm('${seg.segmentNumber}')">編輯</button>
+                            <button class="btn-delete-segment" onclick="deleteSegmentConfirm('${seg.segmentNumber}')">刪除</button>
+                        </td>
+                    `;
+                }
+                
                 tbody.appendChild(row);
             });
         }
@@ -7585,7 +10076,7 @@ window.addEventListener('message', async function(event) {
                     </div>
                     
                     <div style="display:flex;gap:10px;">
-                        <button onclick="confirmEditSegment(${segmentNumber})" style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">儲存</button>
+                        <button onclick="confirmEditSegment('${segmentNumber}')" style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">儲存</button>
                         <button onclick="closeCustomDialog()" style="flex:1;padding:10px;background:#f5f5f5;color:#666;border:none;border-radius:4px;cursor:pointer;font-size:14px;">取消</button>
                     </div>
                 </div>
@@ -7617,7 +10108,7 @@ window.addEventListener('message', async function(event) {
                 const url = API_URL + 
                     '?action=updateSegment' +
                     '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
-                    '&segmentNumber=' + segmentNumber +
+                    '&segmentNumber=' + encodeURIComponent(segmentNumber) +
                     '&startDistance=' + Math.round(startDist) +
                     '&endDistance=' + Math.round(endDist) +
                     '&diameter=' + encodeURIComponent(diameter) +
@@ -7638,9 +10129,9 @@ window.addEventListener('message', async function(event) {
                     const progressData = await progressRes.json();
                     if (progressData.segments) {
                         const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
-                        if (pipelineIndex !== -1) allPipelines[pipelineIndex].segments = progressData.segments;
+                        if (pipelineIndex !== -1) allPipelines[pipelineIndex].segments = parseBranchIndexFromSegments(progressData.segments);
                         currentPipeline.segments = progressData.segments;
-                        currentSegments = progressData.segments;
+                        currentSegments = parseBranchIndexFromSegments(progressData.segments);
                     }
                     showPipelineDetail(currentPipeline.id, true);
                     setTimeout(() => { showStatsPanel(); }, 50);
@@ -7693,9 +10184,9 @@ window.addEventListener('message', async function(event) {
                     const progressData = await progressRes.json();
                     if (progressData.segments) {
                         const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
-                        if (pipelineIndex !== -1) allPipelines[pipelineIndex].segments = progressData.segments;
+                        if (pipelineIndex !== -1) allPipelines[pipelineIndex].segments = parseBranchIndexFromSegments(progressData.segments);
                         currentPipeline.segments = progressData.segments;
-                        currentSegments = progressData.segments;
+                        currentSegments = parseBranchIndexFromSegments(progressData.segments);
                     }
                     showPipelineDetail(currentPipeline.id, true);
                     setTimeout(() => { showStatsPanel(); }, 50);
@@ -7832,7 +10323,7 @@ window.addEventListener('message', async function(event) {
                     ⚠️ 微調模式：無法新增分段線
                 </div>
             ` : `
-                <div>✂️ <strong>Ctrl + 點擊管線</strong>新增分段線</div>
+                <div>✂️ <strong>點擊管線</strong>新增分段線</div>
                 <div>🖱️ <strong>拖拉分段線</strong>調整位置</div>
                 <div>🗑️ <strong>右鍵分段線</strong>刪除</div>
             `;
@@ -7882,6 +10373,9 @@ window.addEventListener('message', async function(event) {
                 return;
             }
             
+            // 🔧 使用已儲存的分支長度
+            const totalLength = currentBranchLength || currentPipeline.length;
+            
             // 計算預覽段落
             const segments = [];
             let prevDistance = 0;
@@ -7896,12 +10390,12 @@ window.addEventListener('message', async function(event) {
                 prevDistance = divider.distance;
             });
             
-            // 最後一段
+            // 最後一段：使用分支長度
             segments.push({
                 num: sortedDividers.length + 1,
                 start: prevDistance,
-                end: currentPipeline.length,
-                length: currentPipeline.length - prevDistance
+                end: totalLength,
+                length: totalLength - prevDistance
             });
             
             // 顯示預覽
@@ -7923,7 +10417,6 @@ window.addEventListener('message', async function(event) {
                         <div style="font-size:32px;margin-bottom:10px;">🎯</div>
                         <div style="font-weight:bold;margin-bottom:8px;">視覺化分段模式</div>
                         <div style="font-size:12px;color:#666;line-height:1.6;">
-                            按住 <strong style="color:#667eea;">Ctrl</strong> 鍵<br>
                             點擊管線新增分段線
                         </div>
                     </div>
@@ -7941,6 +10434,11 @@ window.addEventListener('message', async function(event) {
             // 排序分段線
             const sortedDividers = [...segmentDividers].sort((a, b) => a.distance - b.distance);
             
+            // 🔧 使用已儲存的分支長度
+            const branchLength = currentBranchLength || currentPipeline.length;
+            
+            console.log(`📏 分支總長度: ${branchLength}m (使用 currentBranchLength)`);
+            
             // 計算段落
             const segments = [];
             let prevDistance = 0;
@@ -7953,10 +10451,10 @@ window.addEventListener('message', async function(event) {
                 prevDistance = divider.distance;
             });
             
-            // 最後一段
+            // 🆕 最後一段：使用分支長度
             segments.push({
                 start: prevDistance,
-                end: currentPipeline.length
+                end: branchLength
             });
             
             // 顯示段落設定表單
@@ -8014,27 +10512,72 @@ window.addEventListener('message', async function(event) {
         window.confirmBatchSegments = async function(segments) {
             console.log('📋 批次建立段落:', segments);
             
+            // 🆕 檢查是否為 MULTILINESTRING 模式
+            const isMULTI = branchDataForSegmentation !== null;
+            const branchIndex = isMULTI ? currentBranchForSegmentation : undefined;
+            
+            if (isMULTI) {
+                console.log('🌿 MULTILINESTRING 模式，分支索引:', branchIndex);
+            }
+            
             // 檢查是否有現有段落
             if (currentSegments.length > 0) {
-                if (!confirm(`⚠️ 目前已有 ${currentSegments.length} 個段落\n\n批次建立會刪除所有現有段落並重新建立\n\n確定要繼續嗎？`)) {
-                    return;
-                }
+                console.log('📋 目前段落列表:', currentSegments.map(s => ({
+                    segNum: s.segmentNumber,
+                    branchIdx: s.branchIndex,
+                    start: s.startDistance,
+                    end: s.endDistance
+                })));
                 
-                // 刪除所有現有段落
-                console.log('🗑️ 刪除現有段落...');
-                for (const seg of currentSegments) {
-                    try {
-                        await fetch(API_URL + 
-                            '?action=deleteSegment' +
-                            '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
-                            '&segmentNumber=' + seg.segmentNumber
-                        );
-                    } catch (error) {
-                        console.error('刪除段落錯誤:', error);
+                // 🆕 如果是 MULTILINESTRING，只刪除該分支的段落
+                const segmentsToDelete = isMULTI 
+                    ? currentSegments.filter(s => {
+                        console.log(`   檢查段落 ${s.segmentNumber}: branchIndex=${s.branchIndex}, 目標=${branchIndex}`);
+                        return s.branchIndex === branchIndex;
+                    })
+                    : currentSegments;
+                
+                console.log(`🔍 找到 ${segmentsToDelete.length} 個需要刪除的段落:`, segmentsToDelete.map(s => s.segmentNumber));
+                
+                if (segmentsToDelete.length > 0) {
+                    if (!confirm(`⚠️ 目前已有 ${segmentsToDelete.length} 個段落\n\n批次建立會刪除這些段落並重新建立\n\n確定要繼續嗎？`)) {
+                        return;
+                    }
+                    
+                    // 刪除段落
+                    console.log(`🗑️ 開始刪除 ${segmentsToDelete.length} 個現有段落...`);
+                    for (const seg of segmentsToDelete) {
+                        try {
+                            const deleteUrl = API_URL + 
+                                '?action=deleteSegment' +
+                                '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                                '&segmentNumber=' + encodeURIComponent(seg.segmentNumber);
+                            
+                            console.log(`   刪除段落: ${seg.segmentNumber}, URL: ${deleteUrl}`);
+                            
+                            const response = await fetch(deleteUrl);
+                            const result = await response.json();
+                            
+                            if (result.success) {
+                                console.log(`   ✅ 成功刪除段落 ${seg.segmentNumber}`);
+                            } else {
+                                console.error(`   ❌ 刪除段落 ${seg.segmentNumber} 失敗:`, result.error);
+                            }
+                        } catch (error) {
+                            console.error(`   ❌ 刪除段落 ${seg.segmentNumber} 錯誤:`, error);
+                        }
+                    }
+                    
+                    // 從列表中移除
+                    if (isMULTI) {
+                        const beforeCount = currentSegments.length;
+                        currentSegments = currentSegments.filter(s => s.branchIndex !== branchIndex);
+                        console.log(`🗑️ 前端列表清理: ${beforeCount} → ${currentSegments.length}`);
+                    } else {
+                        currentSegments = [];
+                        console.log(`🗑️ 前端列表清空`);
                     }
                 }
-                // 清空當前段落列表
-                currentSegments = [];
             }
             
             let successCount = 0;
@@ -8046,17 +10589,31 @@ window.addEventListener('message', async function(event) {
                 const pipeType = document.getElementById(`seg${i}_pipeType`).value;
                 const method = document.getElementById(`seg${i}_method`).value;
                 
+                // 🆕 段落編號：如果是 MULTILINESTRING，格式為 "分支索引-段落號"
+                const segmentNumber = isMULTI 
+                    ? `B${branchIndex}-${i + 1}`  // 例如：B0-1, B1-1, B2-1
+                    : (i + 1);
+                
+                // 🆕 備註中記錄分支索引（用於後端識別）
+                const notes = isMULTI ? `branchIndex:${branchIndex}` : '';
+                
+                console.log(`🔧 建立段落 ${i + 1}/${segments.length}:`);
+                console.log(`   isMULTI: ${isMULTI}`);
+                console.log(`   branchIndex: ${branchIndex} (type: ${typeof branchIndex})`);
+                console.log(`   segmentNumber: ${segmentNumber}`);
+                console.log(`   notes: "${notes}"`);
+                
                 try {
                     const url = API_URL + 
                         '?action=addSegment' +
                         '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
-                        '&segmentNumber=' + (i + 1) +
+                        '&segmentNumber=' + encodeURIComponent(segmentNumber) +
                         '&startDistance=' + Math.round(seg.start) +
                         '&endDistance=' + Math.round(seg.end) +
                         '&diameter=' + encodeURIComponent(diameter) +
                         '&pipeType=' + encodeURIComponent(pipeType) +
                         '&method=' + encodeURIComponent(method) +
-                        '&notes=';
+                        '&notes=' + encodeURIComponent(notes);
                     
                     const response = await fetch(url);
                     const result = await response.json();
@@ -8065,11 +10622,11 @@ window.addEventListener('message', async function(event) {
                         successCount++;
                     } else {
                         errorCount++;
-                        console.error(`段落 ${i + 1} 建立失敗:`, result.error);
+                        console.error(`段落 ${segmentNumber} 建立失敗:`, result.error);
                     }
                 } catch (error) {
                     errorCount++;
-                    console.error(`段落 ${i + 1} 建立錯誤:`, error);
+                    console.error(`段落 ${segmentNumber} 建立錯誤:`, error);
                 }
             }
             
@@ -8105,10 +10662,21 @@ window.addEventListener('message', async function(event) {
             const progressData = await progressResponse.json();
             
             if (progressData.segments) {
+                // 🆕 解析備註中的分支編號
+                progressData.segments.forEach(seg => {
+                    if (seg.notes && seg.notes.includes('branchIndex:')) {
+                        const match = seg.notes.match(/branchIndex:(\d+)/);
+                        if (match) {
+                            seg.branchIndex = parseInt(match[1]);
+                            console.log(`   解析段落 ${seg.segmentNumber} 的 branchIndex: ${seg.branchIndex}`);
+                        }
+                    }
+                });
+                
                 // 更新 allPipelines 中的段落資料
                 const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
                 if (pipelineIndex !== -1) {
-                    allPipelines[pipelineIndex].segments = progressData.segments;
+                    allPipelines[pipelineIndex].segments = parseBranchIndexFromSegments(progressData.segments);
                     console.log('✅ 已更新 allPipelines 中的段落資料');
                 }
                 
@@ -8117,8 +10685,14 @@ window.addEventListener('message', async function(event) {
                 console.log('✅ 已更新 currentPipeline 的段落資料');
                 
                 // 更新 currentSegments（用於段落管理面板）
-                currentSegments = progressData.segments;
-                console.log('✅ 已更新 currentSegments');
+                currentSegments = parseBranchIndexFromSegments(progressData.segments);
+                console.log('✅ 已更新 currentSegments，段落數:', currentSegments.length);
+                console.log('   段落詳情:', currentSegments.map(s => ({
+                    segNum: s.segmentNumber,
+                    branchIdx: s.branchIndex,
+                    start: s.startDistance,
+                    end: s.endDistance
+                })));
             }
             
             // 立即重新渲染地圖（不需要延遲）
@@ -8356,6 +10930,873 @@ async function exportMonthlyReportToExcel() {
         console.error('匯出失敗:', error);
         alert('❌ 匯出失敗：' + error.message);
     }
+}
+
+
+// ==================== 分支編輯功能 ====================
+
+function toggleBranchEditMode() {
+    if (!currentPipeline) {
+        alert('⚠️ 請先選擇一個工程');
+        return;
+    }
+    
+    // 檢查是否已經是 MULTILINESTRING
+    const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
+    if (isMULTI) {
+        alert('⚠️ 此工程已經是 MULTILINESTRING 格式\n\n如需編輯分支,請使用「編輯路徑」功能');
+        return;
+    }
+    
+    if (!isBranchEditMode) {
+        startBranchEditMode();
+    } else {
+        cancelBranchEdit();
+    }
+}
+
+function startBranchEditMode() {
+    isBranchEditMode = true;
+    
+    // 清除現有圖層
+    clearMap();
+    
+    // 解析主幹座標
+    const mainCoords = parseLineString(currentPipeline.linestring);
+    
+    // 繪製主幹(紅色半透明)
+    branchEditMainPolyline = L.polyline(mainCoords, {
+        color: '#e74c3c',
+        weight: 6,
+        opacity: 0.5
+    }).addTo(map);
+    
+    // 顯示操作提示
+    showBranchEditPanel();
+    
+    // 監聽地圖點擊
+    map.on('click', onBranchEditMapClick);
+    
+    console.log('✅ 進入分支編輯模式');
+}
+
+function showBranchEditPanel() {
+    const panel = document.createElement('div');
+    panel.id = 'branchEditPanel';
+    panel.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        z-index: 1001;
+        min-width: 320px;
+        max-width: 400px;
+    `;
+    
+    const junctionCount = branchEditJunctions.length;
+    const branchCount = branchEditNewBranches.length;
+    const isDrawing = branchEditCurrentDrawing !== null;
+    
+    panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+            <h3 style="margin:0;color:#333;font-size:18px;">🌿 分支編輯</h3>
+            <button onclick="cancelBranchEdit()" style="background:#f5f5f5;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:14px;">✕</button>
+        </div>
+        
+        <div style="background:#f8f9fa;padding:12px;border-radius:6px;margin-bottom:15px;">
+            <div style="font-size:13px;color:#666;margin-bottom:8px;">
+                📍 Y接點: <strong style="color:#e74c3c;">${junctionCount}</strong> 個
+            </div>
+            <div style="font-size:13px;color:#666;">
+                🌿 新支線: <strong style="color:#4CAF50;">${branchCount}</strong> 條
+            </div>
+        </div>
+        
+        <div style="background:#e3f2fd;padding:12px;border-radius:6px;margin-bottom:15px;font-size:12px;color:#1976d2;line-height:1.6;">
+            ${isDrawing ? 
+                '✏️ <strong>繪製中...</strong><br>點擊新增節點<br>雙擊或右鍵完成支線' :
+                '📍 <strong>步驟1:</strong> 點擊主幹標記Y接點<br>🌿 <strong>步驟2:</strong> 點擊Y接點開始繪製支線'
+            }
+        </div>
+        
+        <div style="display:flex;gap:8px;flex-direction:column;">
+            ${isDrawing ? `
+                <button onclick="finishCurrentBranch()" style="width:100%;padding:12px;background:#4CAF50;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px;">
+                    ✓ 完成此支線
+                </button>
+                <button onclick="cancelCurrentBranch()" style="width:100%;padding:10px;background:#ff9800;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">
+                    ✕ 取消此支線
+                </button>
+            ` : ''}
+            
+            <button onclick="previewBranchResult()" style="width:100%;padding:12px;background:#2196F3;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px;" ${junctionCount === 0 ? 'disabled' : ''}>
+                👁️ 預覽結果
+            </button>
+            
+            <button onclick="saveBranchEdits()" style="width:100%;padding:12px;background:#4CAF50;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px;" ${junctionCount === 0 ? 'disabled' : ''}>
+                💾 儲存到 Google Sheets
+            </button>
+            
+            <button onclick="clearAllBranchEdits()" style="width:100%;padding:10px;background:#f44336;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;" ${junctionCount === 0 && branchCount === 0 ? 'disabled' : ''}>
+                🗑️ 清除所有編輯
+            </button>
+        </div>
+    `;
+    
+    // 移除舊面板
+    const oldPanel = document.getElementById('branchEditPanel');
+    if (oldPanel) oldPanel.remove();
+    
+    document.body.appendChild(panel);
+}
+
+function onBranchEditMapClick(e) {
+    if (!isBranchEditMode) return;
+    
+    if (branchEditCurrentDrawing) {
+        // 繪製模式:新增節點
+        addBranchNode(e.latlng);
+    } else {
+        // 檢查是否點擊在Y接點附近
+        let clickedJunction = null;
+        for (let junction of branchEditJunctions) {
+            const distance = map.distance(e.latlng, junction.coord);
+            if (distance < 20) { // 20m內
+                clickedJunction = junction;
+                break;
+            }
+        }
+        
+        if (clickedJunction) {
+            // 開始從Y接點繪製支線
+            startDrawingBranch(clickedJunction);
+        } else {
+            // 在主幹上新增Y接點
+            addJunctionPoint(e.latlng);
+        }
+    }
+}
+
+function addJunctionPoint(latlng) {
+    const mainCoords = parseLineString(currentPipeline.linestring);
+    const clickPoint = [latlng.lat, latlng.lng];
+    
+    // 找到最近的管線點
+    const nearestPoint = findNearestPointOnLineCoords(clickPoint, mainCoords);
+    if (!nearestPoint) return;
+    
+    const distance = findDistanceOnLine(nearestPoint.coord, mainCoords);
+    
+    // 檢查是否太接近已有的Y接點
+    for (let junction of branchEditJunctions) {
+        if (Math.abs(junction.distance - distance) < 10) {
+            alert('⚠️ 此位置太接近已有的Y接點(距離<10m)');
+            return;
+        }
+    }
+    
+    // 建立Y接點標記
+    const marker = L.marker(nearestPoint.coord, {
+        icon: L.divIcon({
+            className: 'junction-marker-edit',
+            html: '<div style="width:20px;height:20px;background:#ff5722;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        }),
+        draggable: false
+    }).addTo(map);
+    
+    marker.bindPopup(`
+        <div style="text-align:center;padding:8px;">
+            <div style="font-weight:bold;margin-bottom:4px;">Y 接點</div>
+            <div style="font-size:12px;color:#666;">約 ${Math.round(distance)}m</div>
+            <button onclick="removeJunction(${branchEditJunctions.length})" style="margin-top:8px;padding:6px 12px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
+                🗑️ 刪除
+            </button>
+        </div>
+    `);
+    
+    branchEditJunctions.push({
+        coord: nearestPoint.coord,
+        marker: marker,
+        distance: distance
+    });
+    
+    updateBranchEditPanel();
+    console.log(`✅ 新增 Y接點 at ${Math.round(distance)}m`);
+}
+
+function removeJunction(index) {
+    if (index >= 0 && index < branchEditJunctions.length) {
+        map.closePopup();
+        const junction = branchEditJunctions[index];
+        map.removeLayer(junction.marker);
+        branchEditJunctions.splice(index, 1);
+        updateBranchEditPanel();
+    }
+}
+
+function startDrawingBranch(junction) {
+    branchEditCurrentDrawing = {
+        startCoord: junction.coord,
+        coords: [junction.coord],
+        polyline: null,
+        markers: []
+    };
+    
+    updateBranchEditPanel();
+    console.log('✏️ 開始繪製支線');
+}
+
+function addBranchNode(latlng) {
+    if (!branchEditCurrentDrawing) return;
+    
+    const coord = [latlng.lat, latlng.lng];
+    branchEditCurrentDrawing.coords.push(coord);
+    
+    // 更新預覽線
+    if (branchEditCurrentDrawing.polyline) {
+        map.removeLayer(branchEditCurrentDrawing.polyline);
+    }
+    
+    branchEditCurrentDrawing.polyline = L.polyline(branchEditCurrentDrawing.coords, {
+        color: '#4CAF50',
+        weight: 4,
+        opacity: 0.7,
+        dashArray: '10, 5'
+    }).addTo(map);
+    
+    // 新增節點標記
+    const marker = L.circleMarker(latlng, {
+        radius: 4,
+        fillColor: '#4CAF50',
+        fillOpacity: 1,
+        weight: 2,
+        color: 'white'
+    }).addTo(map);
+    
+    branchEditCurrentDrawing.markers.push(marker);
+    
+    console.log(`  新增節點 #${branchEditCurrentDrawing.coords.length}`);
+}
+
+function finishCurrentBranch() {
+    if (!branchEditCurrentDrawing || branchEditCurrentDrawing.coords.length < 2) {
+        alert('⚠️ 支線至少需要2個點');
+        return;
+    }
+    
+    // 清除預覽線和標記
+    if (branchEditCurrentDrawing.polyline) {
+        map.removeLayer(branchEditCurrentDrawing.polyline);
+    }
+    branchEditCurrentDrawing.markers.forEach(m => map.removeLayer(m));
+    
+    // 繪製最終支線
+    const finalPolyline = L.polyline(branchEditCurrentDrawing.coords, {
+        color: '#9C27B0',
+        weight: 5,
+        opacity: 0.7
+    }).addTo(map);
+    
+    branchEditNewBranches.push({
+        coords: branchEditCurrentDrawing.coords,
+        polyline: finalPolyline
+    });
+    
+    console.log(`✅ 完成支線 (${branchEditCurrentDrawing.coords.length} 個節點)`);
+    
+    branchEditCurrentDrawing = null;
+    updateBranchEditPanel();
+}
+
+function cancelCurrentBranch() {
+    if (!branchEditCurrentDrawing) return;
+    
+    // 清除預覽線和標記
+    if (branchEditCurrentDrawing.polyline) {
+        map.removeLayer(branchEditCurrentDrawing.polyline);
+    }
+    branchEditCurrentDrawing.markers.forEach(m => map.removeLayer(m));
+    
+    branchEditCurrentDrawing = null;
+    updateBranchEditPanel();
+    console.log('❌ 取消繪製支線');
+}
+
+function clearAllBranchEdits() {
+    if (!confirm('確定要清除所有編輯嗎？')) return;
+    
+    // 清除Y接點
+    branchEditJunctions.forEach(j => map.removeLayer(j.marker));
+    branchEditJunctions = [];
+    
+    // 清除支線
+    branchEditNewBranches.forEach(b => map.removeLayer(b.polyline));
+    branchEditNewBranches = [];
+    
+    // 清除當前繪製
+    if (branchEditCurrentDrawing) {
+        cancelCurrentBranch();
+    }
+    
+    updateBranchEditPanel();
+    console.log('🗑️ 已清除所有編輯');
+}
+
+function updateBranchEditPanel() {
+    showBranchEditPanel();
+}
+
+function previewBranchResult() {
+    const multilinestring = buildMULTILINESTRING();
+    
+    const previewDiv = document.createElement('div');
+    previewDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 24px;
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        z-index: 2000;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow: auto;
+    `;
+    
+    previewDiv.innerHTML = `
+        <h3 style="margin:0 0 16px 0;color:#333;">📋 MULTILINESTRING 預覽</h3>
+        <div style="background:#f5f5f5;padding:12px;border-radius:6px;font-family:monospace;font-size:11px;word-break:break-all;margin-bottom:16px;max-height:400px;overflow:auto;">
+            ${multilinestring}
+        </div>
+        <button onclick="this.parentElement.remove()" style="width:100%;padding:10px;background:#2196F3;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+            關閉
+        </button>
+    `;
+    
+    document.body.appendChild(previewDiv);
+}
+
+async function saveBranchEdits() {
+    if (branchEditJunctions.length === 0) {
+        alert('⚠️ 尚未建立任何Y接點');
+        return;
+    }
+    
+    if (!confirm(`確定要儲存嗎？\n\nY接點: ${branchEditJunctions.length} 個\n新支線: ${branchEditNewBranches.length} 條\n\n儲存後將更新 Google Sheets`)) {
+        return;
+    }
+    
+    const multilinestring = buildMULTILINESTRING();
+    
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                action: 'updateLinestring',
+                projectId: currentProject.id,
+                pipelineId: currentPipeline.id,
+                linestring: multilinestring
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ 儲存成功！\n\n系統將重新載入工程資料');
+            
+            // 更新本地資料
+            currentPipeline.linestring = multilinestring;
+            
+            // 退出編輯模式並重新載入
+            cancelBranchEdit();
+            loadPipelineData(currentPipeline.id);
+        } else {
+            alert('❌ 儲存失敗：' + (result.error || '未知錯誤'));
+        }
+    } catch (error) {
+        console.error('儲存錯誤:', error);
+        alert('❌ 儲存失敗：' + error.message);
+    }
+}
+
+function buildMULTILINESTRING() {
+    const mainCoords = parseLineString(currentPipeline.linestring);
+    
+    // 根據Y接點距離排序
+    const sortedJunctions = [...branchEditJunctions].sort((a, b) => a.distance - b.distance);
+    
+    // 分割主幹為多個分支
+    const branches = [];
+    let lastSplit = 0;
+    
+    sortedJunctions.forEach(junction => {
+        // 找到Y接點在主幹上的索引
+        const junctionIndex = findClosestIndexOnLine(junction.coord, mainCoords);
+        
+        if (junctionIndex > lastSplit) {
+            // 新增主幹片段
+            const segment = mainCoords.slice(lastSplit, junctionIndex + 1);
+            branches.push(segment);
+            lastSplit = junctionIndex;
+        }
+    });
+    
+    // 新增最後一段主幹
+    if (lastSplit < mainCoords.length - 1) {
+        branches.push(mainCoords.slice(lastSplit));
+    }
+    
+    // 如果沒有Y接點,整條就是主幹
+    if (branches.length === 0) {
+        branches.push(mainCoords);
+    }
+    
+    // 新增支線
+    branchEditNewBranches.forEach(branch => {
+        branches.push(branch.coords);
+    });
+    
+    // 組成 MULTILINESTRING
+    const branchStrings = branches.map(branch => {
+        const coordStrings = branch.map(coord => `${coord[1]} ${coord[0]}`).join(', ');
+        return `(${coordStrings})`;
+    });
+    
+    return `MULTILINESTRING(${branchStrings.join(', ')})`;
+}
+
+function findClosestIndexOnLine(coord, lineCoords) {
+    let minDist = Infinity;
+    let closestIndex = 0;
+    
+    for (let i = 0; i < lineCoords.length; i++) {
+        const dist = getDistance(coord, lineCoords[i]);
+        if (dist < minDist) {
+            minDist = dist;
+            closestIndex = i;
+        }
+    }
+    
+    return closestIndex;
+}
+
+function findNearestPointOnLineCoords(clickPoint, lineCoords) {
+    let minDistance = Infinity;
+    let nearestPoint = null;
+    
+    for (let i = 0; i < lineCoords.length - 1; i++) {
+        const p1 = lineCoords[i];
+        const p2 = lineCoords[i + 1];
+        
+        // 計算點到線段的最近點
+        const point = closestPointOnSegment(clickPoint, p1, p2);
+        const dist = getDistance(clickPoint, point);
+        
+        if (dist < minDistance) {
+            minDistance = dist;
+            nearestPoint = { coord: point, segmentIndex: i };
+        }
+    }
+    
+    return nearestPoint;
+}
+
+function closestPointOnSegment(point, lineStart, lineEnd) {
+    const [px, py] = point;
+    const [x1, y1] = lineStart;
+    const [x2, y2] = lineEnd;
+    
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    
+    if (dx === 0 && dy === 0) return lineStart;
+    
+    const t = Math.max(0, Math.min(1, 
+        ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+    ));
+    
+    return [x1 + t * dx, y1 + t * dy];
+}
+
+function findDistanceOnLine(targetCoord, lineCoords) {
+    let totalDist = 0;
+    let found = false;
+    
+    for (let i = 0; i < lineCoords.length - 1; i++) {
+        const p1 = lineCoords[i];
+        const p2 = lineCoords[i + 1];
+        
+        // 檢查目標點是否在此線段上
+        const closestPt = closestPointOnSegment(targetCoord, p1, p2);
+        const distToSegment = getDistance(targetCoord, closestPt);
+        
+        if (distToSegment < 1) { // 1m內
+            // 計算到此點的距離
+            totalDist += getDistance(p1, closestPt);
+            found = true;
+            break;
+        }
+        
+        totalDist += getDistance(p1, p2);
+    }
+    
+    return totalDist;
+}
+
+function cancelBranchEdit() {
+    isBranchEditMode = false;
+    
+    // 清除所有標記和線條
+    if (branchEditMainPolyline) {
+        map.removeLayer(branchEditMainPolyline);
+        branchEditMainPolyline = null;
+    }
+    
+    branchEditJunctions.forEach(j => map.removeLayer(j.marker));
+    branchEditJunctions = [];
+    
+    branchEditNewBranches.forEach(b => map.removeLayer(b.polyline));
+    branchEditNewBranches = [];
+    
+    if (branchEditCurrentDrawing) {
+        cancelCurrentBranch();
+    }
+    
+    // 移除面板
+    const panel = document.getElementById('branchEditPanel');
+    if (panel) panel.remove();
+    
+    // 移除地圖監聽
+    map.off('click', onBranchEditMapClick);
+    
+    // 重新載入工程
+    if (currentPipeline) {
+        loadPipelineData(currentPipeline.id);
+    }
+    
+    console.log('❌ 退出分支編輯模式');
+}
+
+
+// ==================== 新增工程功能 ====================
+
+// 帶密碼驗證的新增工程表單
+async function showAddPipelineFormWithAuth() {
+    // 檢查是否已驗證
+    if (!isAuthenticated) {
+        const password = prompt('🔐 請輸入密碼以新增工程:');
+        
+        if (password === null) {
+            return; // 取消
+        }
+        
+        if (password !== EDIT_PASSWORD) {
+            alert('❌ 密碼錯誤');
+            return;
+        }
+        
+        // 驗證成功
+        isAuthenticated = true;
+    }
+    
+    // 顯示新增工程表單
+    showAddPipelineForm();
+}
+
+async function showAddPipelineForm() {
+    showAddPipelineFormForProject(null);
+}
+
+// 新增工程表單(可帶入計畫名稱)
+async function showAddPipelineFormForProject(projectName = null) {
+    // 使用已載入的計畫列表
+    const projects = allProjects || [];
+    console.log('📋 載入的計畫:', projects);
+    
+    // 取得地圖中心座標
+    const center = map ? map.getCenter() : { lat: 24.1477, lng: 120.6736 };
+    
+    // 建立遮罩層
+    const overlay = document.createElement('div');
+    overlay.id = 'addPipelineOverlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 9999;
+    `;
+    overlay.onclick = closeAddPipelineForm;
+    
+    const formDiv = document.createElement('div');
+    formDiv.id = 'addPipelineForm';
+    formDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        z-index: 10000;
+        width: 450px;
+        max-height: 80vh;
+        overflow-y: auto;
+    `;
+    formDiv.onclick = (e) => e.stopPropagation();
+    
+    // 建立計畫下拉選單選項
+    const projectOptions = projects.map(p => 
+        `<option value="${p.name}" ${projectName && p.name === projectName ? 'selected' : ''}>${p.name}</option>`
+    ).join('');
+    
+    // 如果沒有帶入計畫名稱,加入預設選項
+    const defaultOption = projectName ? '' : '<option value="" disabled selected>請選擇計畫</option>';
+    
+    formDiv.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h3 style="margin:0;color:#333;font-size:20px;">➕ 新增工程</h3>
+            <button onclick="closeAddPipelineForm()" style="background:#f5f5f5;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:16px;">✕</button>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:600;color:#555;font-size:14px;">📋 計畫名稱</label>
+            <select id="addPipelineProjectSelect" onchange="handleProjectSelectChange()" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;background:white;cursor:pointer;">
+                ${defaultOption}
+                ${projectOptions}
+                <option value="__NEW__">➕ 新增計畫...</option>
+            </select>
+            <input type="text" id="addPipelineProjectName" placeholder="請輸入新計畫名稱" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-top:8px;display:none;">
+        </div>
+        
+        <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:600;color:#555;font-size:14px;">🔢 工程編號</label>
+            <input type="text" id="addPipelineId" placeholder="例如: BU11040112" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+            <div style="font-size:11px;color:#999;margin-top:4px;">⚠️ 必填</div>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:600;color:#555;font-size:14px;">🏗️ 工程名稱</label>
+            <input type="text" id="addPipelineName" placeholder="例如: 鯉魚潭場第二送水管工程-管(一)" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+        </div>
+        
+        <div style="background:#e3f2fd;padding:12px;border-radius:8px;margin-bottom:20px;font-size:13px;color:#1565c0;line-height:1.6;">
+            💡 <strong>預設路徑</strong><br>
+            系統將在地圖中心生成一條短路徑(2個點)<br>
+            儲存後可用「✏️ 編輯路徑」調整
+        </div>
+        
+        <div style="background:#fff3cd;padding:12px;border-radius:8px;margin-bottom:20px;font-size:12px;color:#856404;line-height:1.6;">
+            ⚠️ 儲存後會立即寫入 Google Sheets<br>
+            請確認資料正確後再儲存
+        </div>
+        
+        <div style="display:flex;gap:10px;">
+            <button onclick="submitAddPipeline()" style="flex:1;padding:14px;background:#4CAF50;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:15px;">
+                💾 儲存工程
+            </button>
+            <button onclick="closeAddPipelineForm()" style="padding:14px 20px;background:#f5f5f5;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+                取消
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    document.body.appendChild(formDiv);
+}
+
+async function loadAllProjects() {
+    try {
+        const response = await fetch(`${API_URL}?action=getProjects`);
+        const result = await response.json();
+        
+        console.log('🔍 getProjects API 回應:', result);
+        
+        if (result.success) {
+            console.log('✅ projects 陣列:', result.projects);
+            return result.projects || [];
+        }
+        console.log('❌ API success=false');
+        return [];
+    } catch (error) {
+        console.error('載入計畫列表失敗:', error);
+        return [];
+    }
+}
+
+function selectProject(projectName) {
+    // 清除所有按鈕的選中狀態
+    const buttons = document.querySelectorAll('[id^="projectBtn_"]');
+    buttons.forEach(btn => {
+        btn.style.background = 'white';
+        btn.style.borderColor = '#ddd';
+        btn.classList.remove('selected');
+    });
+    
+    // 設置當前按鈕為選中
+    event.target.style.background = '#e3f2fd';
+    event.target.style.borderColor = '#2196F3';
+    event.target.classList.add('selected');
+    
+    // 更新顯示欄位
+    document.getElementById('addPipelineProjectName').value = projectName;
+    document.getElementById('addPipelineNewProject').style.display = 'none';
+}
+
+function showNewProjectInput() {
+    // 清除所有按鈕的選中狀態
+    const buttons = document.querySelectorAll('[id^="projectBtn_"]');
+    buttons.forEach(btn => {
+        btn.style.background = 'white';
+        btn.style.borderColor = '#ddd';
+        btn.classList.remove('selected');
+    });
+    
+    // 清空並顯示新計畫輸入框
+    document.getElementById('addPipelineProjectName').value = '';
+    const newProjectInput = document.getElementById('addPipelineNewProject');
+    newProjectInput.style.display = 'block';
+    newProjectInput.focus();
+}
+
+async function submitAddPipeline() {
+    const projectSelect = document.getElementById('addPipelineProjectSelect');
+    const projectNameInput = document.getElementById('addPipelineProjectName');
+    const pipelineIdInput = document.getElementById('addPipelineId');
+    const nameInput = document.getElementById('addPipelineName');
+    
+    // 取得計畫名稱
+    let projectName;
+    if (projectSelect.value === '__NEW__') {
+        // 新增計畫模式
+        projectName = projectNameInput.value.trim();
+        if (!projectName) {
+            alert('⚠️ 請輸入新計畫名稱');
+            projectNameInput.focus();
+            return;
+        }
+    } else if (projectSelect.value) {
+        // 選擇既有計畫
+        projectName = projectSelect.value;
+    } else {
+        alert('⚠️ 請選擇計畫');
+        return;
+    }
+    
+    // 驗證工程編號(必填)
+    const pipelineId = pipelineIdInput.value.trim();
+    if (!pipelineId) {
+        alert('⚠️ 請輸入工程編號');
+        pipelineIdInput.focus();
+        return;
+    }
+    
+    // 驗證工程名稱
+    const pipelineName = nameInput.value.trim();
+    if (!pipelineName) {
+        alert('⚠️ 請輸入工程名稱');
+        nameInput.focus();
+        return;
+    }
+    
+    const area = '台中市'; // 固定地區
+    
+    // 生成預設的 MULTILINESTRING (地圖中心的兩個點)
+    const center = map ? map.getCenter() : { lat: 24.1477, lng: 120.6736 };
+    const lat1 = center.lat;
+    const lng1 = center.lng;
+    
+    // 第二個點往東偏移約20m (經度+0.0002度 ≈ 20m)
+    const lat2 = center.lat;
+    const lng2 = center.lng + 0.0002;
+    
+    const linestring = `MULTILINESTRING((${lng1} ${lat1}, ${lng2} ${lat2}))`;
+    
+    // 確認訊息
+    const confirmMsg = `確定要新增以下工程嗎?\n\n工程編號: ${pipelineId}\n計畫: ${projectName}\n工程: ${pipelineName}\n\n將自動生成短路徑供後續編輯`;
+    
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    try {
+        const params = {
+            action: 'addPipeline',
+            projectName: projectName,
+            pipelineName: pipelineName,
+            area: area,
+            linestring: linestring,
+            customPipelineId: pipelineId
+        };
+        
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(params)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            closeAddPipelineForm();
+            alert('✅ 新增成功!\n\n系統將重新載入工程列表');
+            
+            // 重新載入所有資料
+            await loadData();
+            
+            // 等待資料載入完成後,自動顯示新工程
+            if (result.pipelineId) {
+                setTimeout(() => {
+                    const newPipeline = allPipelines.find(p => p.id === result.pipelineId);
+                    if (newPipeline) {
+                        console.log('✅ 自動載入新工程:', result.pipelineId);
+                        showPipelineDetail(result.pipelineId);
+                    } else {
+                        console.warn('⚠️ 找不到新工程,請手動選擇');
+                    }
+                }, 2000);
+            }
+        } else {
+            alert('❌ 新增失敗:\n' + (result.error || '未知錯誤'));
+        }
+    } catch (error) {
+        console.error('新增工程失敗:', error);
+        alert('❌ 新增失敗:\n' + error.message);
+    }
+}
+
+// 處理計畫下拉選單切換
+window.handleProjectSelectChange = function() {
+    const select = document.getElementById('addPipelineProjectSelect');
+    const input = document.getElementById('addPipelineProjectName');
+    
+    if (select.value === '__NEW__') {
+        // 顯示新增計畫輸入框
+        input.style.display = 'block';
+        input.focus();
+    } else {
+        // 隱藏新增計畫輸入框
+        input.style.display = 'none';
+        input.value = '';
+    }
+};
+
+function closeAddPipelineForm() {
+    const form = document.getElementById('addPipelineForm');
+    const overlay = document.getElementById('addPipelineOverlay');
+    if (form) form.remove();
+    if (overlay) overlay.remove();
 }
 
 
