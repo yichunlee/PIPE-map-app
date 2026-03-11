@@ -1598,9 +1598,90 @@ kbd {
             if (currentUser) {
                 userAvatar.src = currentUser.picture || '';
                 userName.textContent = currentUser.name || '';
-                userRole.textContent = currentUser.role === 'admin' ? '👑 管理員' : '👤 使用者';
+                userRole.textContent = getRoleLabel(currentUser.role);
                 userInfoDiv.style.display = 'flex';
+            } else {
+                // 訪客模式：顯示登入按鈕
+                userAvatar.src = '';
+                userName.textContent = '訪客模式';
+                userRole.textContent = '🔑 點擊登入';
+                userInfoDiv.style.display = 'flex';
+                userInfoDiv.style.cursor = 'pointer';
+                userInfoDiv.onclick = function() {
+                    window.location.href = 'login.html';
+                };
             }
+        }
+        
+        // ==================== 三級權限系統 ====================
+        // 角色等級: user(一般使用者) < supervisor(監造單位) < admin(管理員)
+        // 
+        // 訪客(未登入)：瀏覽地圖、查看資料
+        // user：標記完工、備註/面板/人孔/路證
+        // supervisor：段落管理、工程管理、分支編輯、甘特圖、里程碑
+        // admin：所有功能 + 工具抽屜 + 使用者管理
+        
+        // 角色等級數值（用於比較）
+        function getRoleLevel(role) {
+            switch(role) {
+                case 'admin': return 3;
+                case 'supervisor': return 2;
+                case 'user': return 1;
+                default: return 0;
+            }
+        }
+        
+        // 角色中文名稱
+        function getRoleLabel(role) {
+            switch(role) {
+                case 'admin': return '👑 管理員';
+                case 'supervisor': return '🔧 監造單位';
+                case 'user': return '👤 一般使用者';
+                default: return '👁️ 訪客';
+            }
+        }
+        
+        // 檢查登入狀態 - 用於 user 等級操作（標記完工、備註、面板、人孔、路證）
+        // 回傳 true = 已登入可繼續；false = 未登入已提示
+        function requireLogin() {
+            if (currentUser) return true;
+            const shouldLogin = confirm('🔐 此操作需要登入 Google 帳號\n\n點擊「確定」前往登入頁面');
+            if (shouldLogin) {
+                window.location.href = 'login.html';
+            }
+            return false;
+        }
+        
+        // 檢查監造權限 - 用於 supervisor 等級操作（段落、分支、甘特圖、里程碑）
+        function requireSupervisor() {
+            if (!currentUser) {
+                const shouldLogin = confirm('🔐 此操作需要登入 Google 帳號\n\n點擊「確定」前往登入頁面');
+                if (shouldLogin) {
+                    window.location.href = 'login.html';
+                }
+                return false;
+            }
+            if (getRoleLevel(currentUser.role) < 2) {
+                alert('⛔ 此功能需要「監造單位」以上權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
+                return false;
+            }
+            return true;
+        }
+        
+        // 檢查管理員權限 - 用於 admin 等級操作（工程 CRUD）
+        function requireAdmin() {
+            if (!currentUser) {
+                const shouldLogin = confirm('🔐 此操作需要登入 Google 帳號\n\n點擊「確定」前往登入頁面');
+                if (shouldLogin) {
+                    window.location.href = 'login.html';
+                }
+                return false;
+            }
+            if (currentUser.role !== 'admin') {
+                alert('⛔ 此功能需要「管理員」權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
+                return false;
+            }
+            return true;
         }
         
         // 初始化 - 自動載入資料（不強制登入）
@@ -1611,8 +1692,8 @@ kbd {
             const userInfoStr = sessionStorage.getItem('userInfo');
             
             if (!userInfoStr) {
-                // 未登入，但允許查看地圖
-                console.log('👁️ 訪客模式 - 可以查看地圖，使用工具需要登入');
+                // 未登入 → 訪客模式（可瀏覽，修改時再要求登入）
+                console.log('👁️ 訪客模式 - 可瀏覽地圖與資料，修改時需登入');
                 currentUser = null;
                 userToken = null;
             } else {
@@ -1621,7 +1702,7 @@ kbd {
                     
                     // 檢查登入是否過期 (24小時)
                     if (Date.now() - userInfo.timestamp > 24 * 60 * 60 * 1000) {
-                        console.log('⏰ 登入已過期');
+                        console.log('⏰ 登入已過期，切換為訪客模式');
                         sessionStorage.removeItem('userInfo');
                         currentUser = null;
                         userToken = null;
@@ -2820,6 +2901,7 @@ kbd {
         
         // 批次標記完工
         window.batchMarkComplete = async function() {
+            if (!requireLogin()) return;
             if (selectedSmallSegments.length === 0) return;
             
             const confirmed = confirm(`確定要標記 ${selectedSmallSegments.length} 個小段為完工嗎？`);
@@ -2936,6 +3018,7 @@ kbd {
         
         // 批次標記未完工
         window.batchMarkIncomplete = async function() {
+            if (!requireLogin()) return;
             if (selectedSmallSegments.length === 0) return;
             
             const confirmed = confirm(`確定要取消 ${selectedSmallSegments.length} 個小段的完工狀態嗎？`);
@@ -3167,6 +3250,7 @@ kbd {
         
         // 標記整個段落為完工
         window.markWholeSegmentComplete = async function(segmentNumber) {
+            if (!requireLogin()) return;
             const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
                 alert('❌ 找不到段落！');
@@ -3254,6 +3338,7 @@ kbd {
         
         // 標記整個段落為未完工
         window.markWholeSegmentIncomplete = async function(segmentNumber) {
+            if (!requireLogin()) return;
             const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
                 alert('❌ 找不到段落！');
@@ -3373,6 +3458,7 @@ kbd {
         
         // 切換小段狀態
         window.toggleSmallSegment = async function(segmentNumber, smallIndex, newStatus) {
+            if (!requireLogin()) return;
             console.log('========== 切換小段 DEBUG ==========');
             console.log('currentPipeline:', currentPipeline);
             console.log('currentPipeline.id:', currentPipeline ? currentPipeline.id : 'currentPipeline is null');
@@ -3705,6 +3791,7 @@ kbd {
         
         // 儲存地圖備註
         window.saveMapNote = async function(lat, lng) {
+            if (!requireLogin()) return;
             const text = document.getElementById('noteText').value.trim();
             const creator = document.getElementById('noteCreator').value.trim() || '匿名';
             const photoInput = document.getElementById('notePhoto');
@@ -3771,6 +3858,7 @@ kbd {
         
         // 刪除地圖備註
         window.deleteMapNote = async function(noteId) {
+            if (!requireLogin()) return;
             if (!confirm('確定要刪除這個備註嗎？')) {
                 return;
             }
@@ -3811,6 +3899,7 @@ kbd {
         
         // 儲存編輯後的備註
         window.saveEditNote = async function(noteId) {
+            if (!requireLogin()) return;
             const newText = document.getElementById('note-text-edit-' + noteId).value.trim();
             if (!newText) {
                 alert('備註內容不能為空！');
@@ -4049,6 +4138,7 @@ kbd {
         
         // 儲存配電盤標記
         window.savePanel = async function(lat, lng) {
+            if (!requireLogin()) return;
             const text = document.getElementById('panelText').value.trim();
             const creator = document.getElementById('panelCreator').value.trim() || '匿名';
             const photoInput = document.getElementById('panelPhoto');
@@ -4112,6 +4202,7 @@ kbd {
         
         // 刪除配電盤標記
         window.deletePanel = async function(panelId) {
+            if (!requireLogin()) return;
             if (!confirm('確定要刪除這個配電盤標記嗎？')) {
                 return;
             }
@@ -4150,6 +4241,7 @@ kbd {
         };
         
         window.saveEditPanel = async function(panelId) {
+            if (!requireLogin()) return;
             const newText = document.getElementById('panel-text-edit-' + panelId).value.trim();
             if (!newText) {
                 alert('備註內容不能為空！');
@@ -4464,6 +4556,7 @@ kbd {
         };
         
         window.saveNewShaft = async function(lat, lng) {
+            if (!requireLogin()) return;
             const name = document.getElementById('sf_name').value.trim();
             if (!name) { alert('請輸入名稱！'); return; }
             const payload = {
@@ -4512,6 +4605,7 @@ kbd {
         };
         
         window.saveEditShaft = async function(shaftId) {
+            if (!requireLogin()) return;
             const name = document.getElementById('sf_name').value.trim();
             if (!name) { alert('請輸入名稱！'); return; }
             const qs = '?action=updateShaft&shaftId=' + encodeURIComponent(shaftId) +
@@ -4538,6 +4632,7 @@ kbd {
         };
         
         window.deleteShaft = async function(shaftId) {
+            if (!requireLogin()) return;
             if (!confirm('確定要刪除這個工作井嗎？')) return;
             try {
                 const response = await fetch(API_URL + '?action=deleteShaft&shaftId=' + encodeURIComponent(shaftId));
@@ -4722,6 +4817,7 @@ kbd {
         }
         
         async function savePermitZone(points) {
+            if (!requireLogin()) return;
             const status = document.getElementById('pz_status').value;
             const permitNo = document.getElementById('pz_permitNo').value.trim();
             const notes = document.getElementById('pz_notes').value.trim();
@@ -4925,6 +5021,7 @@ kbd {
         }
         
         async function updatePermitZone(zoneId) {
+            if (!requireLogin()) return;
             const status = document.getElementById('pz_status').value;
             const permitDateStart = document.getElementById('pz_permitDateStart').value;
             const permitDateEnd = document.getElementById('pz_permitDateEnd').value;
@@ -4954,6 +5051,7 @@ kbd {
         }
         
         async function deletePermitZone(zoneId) {
+            if (!requireLogin()) return;
             if (!confirm('確定要刪除這個範圍嗎？')) return;
             try {
                 const response = await fetch(API_URL + '?action=deletePermitZone&zoneId=' + encodeURIComponent(zoneId));
@@ -9257,9 +9355,9 @@ window.addEventListener('message', async function(event) {
             loginItem.style.display = 'none';
             toolsContainer.style.display = 'block';
             
-            // 檢查管理員權限
-            if (currentUser.role !== 'admin') {
-                alert('⛔ 此功能需要管理員權限\n\n您目前的角色: ' + (currentUser.role === 'user' ? '👤 一般使用者' : currentUser.role) + '\n\n請聯絡管理員升級您的權限\n(在 Google Sheets「使用者清單」修改角色為 admin)');
+            // 檢查監造單位以上權限
+            if (getRoleLevel(currentUser.role) < 2) {
+                alert('⛔ 此功能需要「監造單位」以上權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
                 return;
             }
             
@@ -9317,8 +9415,8 @@ window.addEventListener('message', async function(event) {
         
         // 通用編輯工程函數
         async function editPipeline(pipeline) {
-            // 🔐 OAuth2 權限檢查 - 只有管理員可以編輯工程
-            if (!checkAdminPermission()) {
+            // 🔐 權限檢查 - 管理員可以編輯工程
+            if (!requireAdmin()) {
                 return;
             }
             
@@ -9409,6 +9507,7 @@ window.addEventListener('message', async function(event) {
         
         // 確認刪除工程(從編輯表單內呼叫)
         window.confirmDeletePipeline = async function(pipelineId, pipelineName) {
+            if (!requireAdmin()) return;
             const confirmMsg = `⚠️ 警告：即將刪除工程
 
 工程名稱：${pipelineName}
@@ -9473,6 +9572,7 @@ window.addEventListener('message', async function(event) {
         
         // 提交編輯工程
         window.submitEditPipeline = async function(oldPipelineId) {
+            if (!requireAdmin()) return;
             const newProjectName = document.getElementById('editPipelineProjectName').value.trim();
             const newPipelineId = document.getElementById('editPipelineId').value.trim();
             const newPipelineName = document.getElementById('editPipelineName').value.trim();
@@ -9876,6 +9976,7 @@ window.addEventListener('message', async function(event) {
         
         // 🆕 建立整條分支為一個段落（MULTILINESTRING）
         async function createWholeBranchSegment() {
+            if (!requireSupervisor()) return;
             const branch = branchDataForSegmentation.branches[currentBranchForSegmentation];
             
             // 計算分支長度
@@ -9899,6 +10000,7 @@ window.addEventListener('message', async function(event) {
         
         // 🆕 建立整條管線為一個段落（單一 LINESTRING）
         async function createWholeLineSegment() {
+            if (!requireSupervisor()) return;
             const totalLength = currentPipeline.length || 0;
             
             console.log(`📏 建立整條管線為一個段落，長度: ${totalLength}m`);
@@ -10356,6 +10458,7 @@ window.addEventListener('message', async function(event) {
         
         // 確認新增段落
         async function confirmAddSegment() {
+            if (!requireSupervisor()) return;
             const startDist = parseFloat(document.getElementById('segStartDist').value);
             const endDist = parseFloat(document.getElementById('segEndDist').value);
             const diameter = document.getElementById('segDiameter').value.trim();
@@ -10485,6 +10588,7 @@ window.addEventListener('message', async function(event) {
         
         // 確認編輯段落
         async function confirmEditSegment(segmentNumber) {
+            if (!requireSupervisor()) return;
             const startDist = parseFloat(document.getElementById('editStartDist').value);
             const endDist = parseFloat(document.getElementById('editEndDist').value);
             const diameter = document.getElementById('editDiameter').value.trim();
@@ -10565,6 +10669,7 @@ window.addEventListener('message', async function(event) {
         
         // 刪除段落
         async function deleteSegment(segmentNumber) {
+            if (!requireSupervisor()) return;
             try {
                 const response = await fetch(API_URL + 
                     '?action=deleteSegment' +
@@ -10824,6 +10929,7 @@ window.addEventListener('message', async function(event) {
         
         // 根據分段線建立段落
         async function createSegmentsFromDividers() {
+            if (!requireSupervisor()) return;
             if (segmentDividers.length === 0) {
                 alert('⚠️ 沒有分段線，無法建立段落');
                 return;
@@ -11682,6 +11788,7 @@ function previewBranchResult() {
 }
 
 async function saveBranchEdits() {
+            if (!requireSupervisor()) return;
     if (branchEditJunctions.length === 0) {
         alert('⚠️ 尚未建立任何Y接點');
         return;
@@ -11888,8 +11995,8 @@ function cancelBranchEdit() {
 
 // 帶密碼驗證的新增工程表單
 async function showAddPipelineFormWithAuth() {
-    // 🔐 OAuth2 權限檢查 - 只有管理員可以新增工程
-    if (!checkAdminPermission()) {
+    // 🔐 權限檢查 - 管理員可以新增工程
+    if (!requireAdmin()) {
         return;
     }
     
@@ -12057,6 +12164,7 @@ function showNewProjectInput() {
 }
 
 async function submitAddPipeline() {
+            if (!requireAdmin()) return;
     const projectSelect = document.getElementById('addPipelineProjectSelect');
     const projectNameInput = document.getElementById('addPipelineProjectName');
     const pipelineIdInput = document.getElementById('addPipelineId');
@@ -12258,7 +12366,7 @@ function closeAddPipelineForm() {
                         email: payload.email,
                         name: payload.name,
                         picture: payload.picture,
-                        role: result.role // 'admin' 或 'user'
+                        role: result.role // 'admin', 'supervisor', 或 'user'
                     };
                     
                     // 顯示使用者資訊
@@ -12293,7 +12401,7 @@ function closeAddPipelineForm() {
             
             userAvatar.src = currentUser.picture;
             userName.textContent = currentUser.name;
-            userRole.textContent = currentUser.role === 'admin' ? '👑 管理員' : '👤 使用者';
+            userRole.textContent = getRoleLabel(currentUser.role);
             
             userInfoDiv.style.display = 'flex';
         }
@@ -12324,7 +12432,7 @@ function closeAddPipelineForm() {
             
             // 檢查管理員權限
             if (currentUser.role !== 'admin') {
-                alert('⛔ 此功能需要管理員權限\n\n您目前的角色: ' + (currentUser.role === 'user' ? '👤 一般使用者' : currentUser.role) + '\n\n請聯絡管理員升級您的權限');
+                alert('⛔ 此功能需要「管理員」權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
                 return false;
             }
             
