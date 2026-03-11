@@ -304,14 +304,15 @@ function getPipelines(projectName) {
     const data = sheet.getDataRange().getValues();
     const pipelines = [];
     
-    // 工程清單欄位結構: A=工程編號, B=工程名稱, C=計畫名稱, D=LINESTRING
+    // 工程清單欄位結構: A=工程編號, B=工程名稱, C=計畫名稱, D=LINESTRING, E=備註
     for (let i = 1; i < data.length; i++) {
       if (data[i][2] === projectName) {  // C欄 = 計畫名稱
         pipelines.push({
           id: data[i][0],           // A欄 = 工程編號
           name: data[i][1],         // B欄 = 工程名稱  
           projectName: data[i][2],  // C欄 = 計畫名稱
-          linestring: data[i][3]    // D欄 = LINESTRING
+          linestring: data[i][3],   // D欄 = LINESTRING
+          notes: data[i][4] || ''   // E欄 = 備註
         });
       }
     }
@@ -1528,79 +1529,6 @@ function uploadPhotoToDrive(base64Data, recordId, folderType) {
     throw error;
   }
 }
-
-// 更新管線路徑 (LINESTRING) 並清空段落資料
-function updateLinestring(pipelineId, newLinestring) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const pipelineSheet = ss.getSheetByName('工程清單');
-    
-    if (!pipelineSheet) {
-      return { success: false, error: '找不到「工程清單」工作表' };
-    }
-    
-    // 找到對應工程的列
-    const data = pipelineSheet.getDataRange().getValues();
-    let targetRow = -1;
-    
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === pipelineId) {
-        targetRow = i + 1; // Sheets 從 1 開始
-        break;
-      }
-    }
-    
-    if (targetRow === -1) {
-      return { success: false, error: '找不到工程 ID: ' + pipelineId };
-    }
-    
-    // 更新 LINESTRING (假設在 D 欄，索引 4)
-    pipelineSheet.getRange(targetRow, 4).setValue(newLinestring);
-    
-    Logger.log('✅ 已更新工程 ' + pipelineId + ' 的路徑');
-    Logger.log('新 LINESTRING: ' + newLinestring);
-    
-    // 清空該工程的所有段落資料
-    let deletedCount = 0;
-    const progressSheet = ss.getSheetByName('施工進度');
-    
-    if (progressSheet) {
-      const progressData = progressSheet.getDataRange().getValues();
-      const rowsToDelete = [];
-      
-      // 從後往前找，收集要刪除的列號
-      for (let i = progressData.length - 1; i >= 1; i--) {
-        if (progressData[i][0] === pipelineId) {
-          rowsToDelete.push(i + 1); // Sheets 從 1 開始
-        }
-      }
-      
-      // 刪除所有找到的列
-      rowsToDelete.forEach(row => {
-        progressSheet.deleteRow(row);
-      });
-      
-      deletedCount = rowsToDelete.length;
-      Logger.log('🗑️ 已清空 ' + deletedCount + ' 筆段落資料');
-    }
-    
-    return { 
-      success: true, 
-      message: '路徑已成功更新，段落資料已清空',
-      pipelineId: pipelineId,
-      linestring: newLinestring,
-      deletedSegments: deletedCount
-    };
-    
-  } catch (error) {
-    Logger.log('❌ 更新 LINESTRING 失敗: ' + error.toString());
-    return { 
-      success: false, 
-      error: error.toString() 
-    };
-  }
-}
-
 
 // ============================================
 // 📋 段落管理功能
