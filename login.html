@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管線施工進度管理系統 - 登入</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .login-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 350px;
+            width: 90%;
+        }
+        
+        .logo {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+        
+        #status {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">🔐</div>
+        <h1>Google 登入</h1>
+        
+        <div id="g_id_onload"
+             data-client_id="850504271041-0n2eqka71m9i9t2ss7b8gue27rk7cg26.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse">
+        </div>
+        
+        <div class="g_id_signin" 
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="sign_in_with"
+             data-shape="rectangular"
+             data-logo_alignment="left">
+        </div>
+        
+        <div id="status"></div>
+    </div>
+    
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwJfTW9FHDaasFMnZluPAPPij6PhjYS5nU5qvR5fV2Y2n7tEMrhBFIKH6b0-Cn5xxjy/exec';
+        
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.innerHTML = message;
+            status.className = type;
+        }
+        
+        function handleCredentialResponse(response) {
+            console.log("✅ Google 登入成功!");
+            
+            showStatus('✅ Google 登入成功!<br>正在驗證權限...', 'success');
+            
+            const payload = parseJwt(response.credential);
+            console.log("使用者資訊:", payload);
+            
+            // 驗證使用者權限
+            verifyAndRedirect(payload, response.credential);
+        }
+        
+        function parseJwt(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
+        
+        async function verifyAndRedirect(payload, token) {
+            try {
+                showStatus('🔍 驗證使用者權限中...', 'loading');
+                
+                // 使用 GET 方法避免 CORS preflight
+                const params = new URLSearchParams({
+                    action: 'verifyUser',
+                    email: payload.email,
+                    name: payload.name,
+                    picture: payload.picture,
+                    token: token
+                });
+                
+                const response = await fetch(API_URL + '?' + params.toString());
+                const result = await response.json();
+                
+                console.log('驗證結果:', result);
+                
+                if (result.success && result.authorized) {
+                    showStatus('✅ 驗證成功!<br>正在進入系統...<br><br><button onclick="window.location.href=\'pipeline_system.html\'" style="margin-top:10px;padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:14px;font-weight:bold;">點擊進入系統 →</button>', 'success');
+                    
+                    console.log('✅ 驗證成功!準備儲存使用者資訊...');
+                    
+                    // 儲存使用者資訊到 sessionStorage
+                    const userInfo = {
+                        email: payload.email,
+                        name: payload.name,
+                        picture: payload.picture,
+                        role: result.role,
+                        token: token,
+                        timestamp: Date.now()
+                    };
+                    
+                    try {
+                        sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
+                        console.log('✅ 使用者資訊已儲存到 sessionStorage');
+                        console.log('🚀 準備跳轉到 pipeline_system.html...');
+                        
+                        // 2 秒後自動跳轉 (或點擊按鈕立即跳轉)
+                        setTimeout(() => {
+                            console.log('⏰ 自動跳轉執行...');
+                            window.location.href = 'pipeline_system.html';
+                        }, 2000);
+                        
+                    } catch (e) {
+                        console.error('❌ sessionStorage 儲存失敗:', e);
+                        alert('sessionStorage 儲存失敗: ' + e.message);
+                    }
+                    
+                } else {
+                    showStatus('❌ 您的帳號未被授權<br>' + payload.email + '<br>請聯絡管理員', 'error');
+                }
+            } catch (error) {
+                console.error('驗證失敗:', error);
+                showStatus('❌ 驗證失敗<br>' + error.message, 'error');
+            }
+        }
+        
+        console.log("OAuth 登入頁面已載入");
+    </script>
+</body>
+</html>
