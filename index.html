@@ -2765,11 +2765,10 @@ kbd {
             const isCtrlPressed = e.originalEvent.ctrlKey || e.originalEvent.metaKey; // Mac 用 Cmd 鍵
             const isShiftPressed = e.originalEvent.shiftKey;
             
-            // Shift 範圍選取
-            if (isShiftPressed && lastClickedSmallSegment) {
-                selectRangeSmallSegments(lastClickedSmallSegment, {segment, smallIndex, polyline, originalColor});
-                showBatchPopup();
+            // Shift+Click：一鍵更新整個段落所有小段
+            if (isShiftPressed) {
                 L.DomEvent.stopPropagation(e);
+                showWholeSegmentPopup(e.latlng, segment);
                 return;
             }
             
@@ -2898,6 +2897,154 @@ kbd {
                 `)
                 .openOn(map);
         }
+        
+        // ========== Shift+Click：整個段落一次更新 ==========
+        
+        // 顯示整段操作彈窗
+        function showWholeSegmentPopup(latlng, segment) {
+            const segLength = segment.endDistance - segment.startDistance;
+            const numSmallSegs = Math.ceil(segLength / 10);
+            
+            const statusArray = (segment.smallSegments || '').split(',').map(s => s.trim());
+            let completedCount = 0;
+            for (let i = 0; i < numSmallSegs; i++) {
+                const v = statusArray[i] || '0';
+                if (v !== '0' && v !== '') completedCount++;
+            }
+            const uncompletedCount = numSmallSegs - completedCount;
+            const progressPct = numSmallSegs > 0 ? Math.round(completedCount / numSmallSegs * 100) : 0;
+            
+            L.popup()
+                .setLatLng(latlng)
+                .setContent(`
+                    <div class="popup-title">⚡ 段落 ${segment.segmentNumber} 整段操作</div>
+                    <div class="popup-info">📏 範圍：${segment.startDistance}m - ${segment.endDistance}m</div>
+                    <div class="popup-info">🔢 共 ${numSmallSegs} 個小段（每 10m 一段）</div>
+                    <div class="popup-info">✅ 已完工：${completedCount} 個　⚪ 未完工：${uncompletedCount} 個</div>
+                    <div class="popup-info">📊 進度：${progressPct}%</div>
+                    <div style="margin-top: 12px; display: flex; gap: 8px;">
+                        <button class="popup-button" onclick="wholeSegmentMarkComplete('${segment.segmentNumber}')" style="flex: 1;">
+                            ✓ 全段標記完工
+                        </button>
+                        <button class="popup-button" onclick="wholeSegmentMarkIncomplete('${segment.segmentNumber}')" style="flex: 1; background: #e74c3c;">
+                            ❌ 全段取消完工
+                        </button>
+                    </div>
+                `)
+                .openOn(map);
+        }
+        
+        // 整段標記完工
+        window.wholeSegmentMarkComplete = async function(segmentNumber) {
+            if (!requireLogin()) return;
+            
+            const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
+            if (!segment) { alert('找不到段落 ' + segmentNumber); return; }
+            
+            const segLength = segment.endDistance - segment.startDistance;
+            const numSmallSegs = Math.ceil(segLength / 10);
+            
+            if (!confirm(`確定要將段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段標記為完工嗎？`)) return;
+            
+            const today = new Date();
+            const statusValue = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+            
+            // 建立全部完工的狀態字串
+            const statusArray = Array(numSmallSegs).fill(statusValue);
+            const statusString = statusArray.join(',');
+            
+            // Optimistic UI：先更新視覺
+            const visualUpdates = [];
+            for (let i = 0; i < numSmallSegs; i++) {
+                visualUpdates.push({ segmentNumber, smallIndex: i, isCompleted: true });
+            }
+            batchUpdateSmallSegmentVisuals(visualUpdates);
+            map.closePopup();
+            
+            try {
+                const url = API_URL +
+                    '?action=updateWholeSegment' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&segmentNumber=' + encodeURIComponent(segmentNumber) +
+                    '&statusString=' + encodeURIComponent(statusString);
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || '更新失敗');
+                
+                // 更新本地資料
+                const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
+                const progressData = await progressRes.json();
+                if (progressData.segments) {
+                    const segments = parseBranchIndexFromSegments(progressData.segments);
+                    const idx = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                    if (idx !== -1) allPipelines[idx].segments = segments;
+                    currentPipeline.segments = segments;
+                }
+                showStatsPanel();
+                console.log('✅ 整段完工標記完成：' + segmentNumber);
+            } catch (error) {
+                // 回退
+                const rollback = visualUpdates.map(u => ({ ...u, isCompleted: false }));
+                batchUpdateSmallSegmentVisuals(rollback);
+                alert('❌ 更新失敗：' + error.message);
+            }
+        };
+        
+        // 整段取消完工
+        window.wholeSegmentMarkIncomplete = async function(segmentNumber) {
+            if (!requireLogin()) return;
+            
+            const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
+            if (!segment) { alert('找不到段落 ' + segmentNumber); return; }
+            
+            const segLength = segment.endDistance - segment.startDistance;
+            const numSmallSegs = Math.ceil(segLength / 10);
+            
+            if (!confirm(`確定要將段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段取消完工嗎？`)) return;
+            
+            // 全部歸零
+            const statusString = Array(numSmallSegs).fill('0').join(',');
+            
+            // Optimistic UI
+            const visualUpdates = [];
+            for (let i = 0; i < numSmallSegs; i++) {
+                visualUpdates.push({ segmentNumber, smallIndex: i, isCompleted: false });
+            }
+            batchUpdateSmallSegmentVisuals(visualUpdates);
+            map.closePopup();
+            
+            try {
+                const url = API_URL +
+                    '?action=updateWholeSegment' +
+                    '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                    '&segmentNumber=' + encodeURIComponent(segmentNumber) +
+                    '&statusString=' + encodeURIComponent(statusString);
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || '更新失敗');
+                
+                // 更新本地資料
+                const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
+                const progressData = await progressRes.json();
+                if (progressData.segments) {
+                    const segments = parseBranchIndexFromSegments(progressData.segments);
+                    const idx = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                    if (idx !== -1) allPipelines[idx].segments = segments;
+                    currentPipeline.segments = segments;
+                }
+                showStatsPanel();
+                console.log('✅ 整段取消完工：' + segmentNumber);
+            } catch (error) {
+                // 回退
+                const rollback = visualUpdates.map(u => ({ ...u, isCompleted: true }));
+                batchUpdateSmallSegmentVisuals(rollback);
+                alert('❌ 更新失敗：' + error.message);
+            }
+        };
+        
+        // ========== 原有批次標記完工 (Ctrl多選用) ==========
         
         // 批次標記完工
         window.batchMarkComplete = async function() {
