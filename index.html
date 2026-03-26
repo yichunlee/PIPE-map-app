@@ -2434,7 +2434,7 @@ kbd {
                                         })
                                     }).addTo(map);
                                     
-                                    segmentLabels.push(label);
+                                    segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color, methodLabel, segLength });
                                 }
                             });
                         } else {
@@ -2706,7 +2706,7 @@ kbd {
                             })
                         }).addTo(map);
                         
-                        segmentLabels.push(label); // 加入標籤陣列，方便隱藏
+                        segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color, methodLabel, segLength: segmentLength }); // 加入標籤陣列，方便隱藏
                     }
                 });
                 
@@ -3094,6 +3094,19 @@ kbd {
                 const idx = allPipelines.findIndex(p => p.id === currentPipeline.id);
                 if (idx !== -1) allPipelines[idx].segments = segments;
                 currentPipeline.segments = segments;
+                
+                // 即時更新地圖上所有段落的 label
+                segments.forEach(seg => {
+                    const segLen = seg.endDistance - seg.startDistance;
+                    const numSmall = Math.ceil(segLen / 10);
+                    const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
+                    let completed = 0;
+                    for (let i = 0; i < numSmall; i++) {
+                        const v = statusArr[i] || '0';
+                        if (v !== '0' && v !== '') completed += Math.min(10, segLen - i * 10);
+                    }
+                    updateSegmentLabel(seg.segmentNumber, completed, segLen);
+                });
             }
             showStatsPanel();
         }
@@ -3199,8 +3212,19 @@ kbd {
                     currentPipeline.segments = segments;
                 }
                 
-                // 只更新統計面板
+                // 更新統計面板和地圖 label
                 showStatsPanel();
+                currentPipeline.segments.forEach(seg => {
+                    const segLen = seg.endDistance - seg.startDistance;
+                    const numSmall = Math.ceil(segLen / 10);
+                    const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
+                    let completed = 0;
+                    for (let i = 0; i < numSmall; i++) {
+                        const v = statusArr[i] || '0';
+                        if (v !== '0' && v !== '') completed += Math.min(10, segLen - i * 10);
+                    }
+                    updateSegmentLabel(seg.segmentNumber, completed, segLen);
+                });
                 
                 map.closePopup();
                 // 顯示簡短的成功提示（不擋畫面）
@@ -3307,6 +3331,17 @@ kbd {
                 }
                 
                 showStatsPanel();
+                currentPipeline.segments.forEach(seg => {
+                    const segLen = seg.endDistance - seg.startDistance;
+                    const numSmall = Math.ceil(segLen / 10);
+                    const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
+                    let completed = 0;
+                    for (let i = 0; i < numSmall; i++) {
+                        const v = statusArr[i] || '0';
+                        if (v !== '0' && v !== '') completed += Math.min(10, segLen - i * 10);
+                    }
+                    updateSegmentLabel(seg.segmentNumber, completed, segLen);
+                });
                 map.closePopup();
                 console.log('✅ 批次取消完成！');
             } catch (error) {
@@ -3524,6 +3559,9 @@ kbd {
                 }
                 
                 showStatsPanel();
+                // 即時更新地圖 label：完工 = 全段長度
+                const _segLen = segment.endDistance - segment.startDistance;
+                updateSegmentLabel(segmentNumber, _segLen, _segLen);
                 map.closePopup();
                 console.log('✅ 段落標記完成！');
             } catch (error) {
@@ -3606,6 +3644,8 @@ kbd {
                 }
                 
                 showStatsPanel();
+                // 即時更新地圖 label：未完工 = 0m
+                updateSegmentLabel(segmentNumber, 0, segment.endDistance - segment.startDistance);
                 map.closePopup();
                 console.log('✅ 段落標記完成！');
             } catch (error) {
@@ -3760,7 +3800,20 @@ kbd {
         // ========== 地圖備註功能 ==========
         let mapNotes = [];
         let noteMarkers = [];
-        let segmentLabels = []; // 段落標籤陣列
+        let segmentLabels = []; // 段落標籤陣列 [{marker, segmentNumber, color, methodLabel, segLength}]
+
+        // 更新地圖上特定段落的 label 文字
+        function updateSegmentLabel(segmentNumber, completedLength, segLength) {
+            const item = segmentLabels.find(l => String(l.segmentNumber) === String(segmentNumber));
+            if (!item) return;
+            const newText = `${item.methodLabel} ${Math.round(completedLength)}m/${Math.round(item.segLength || segLength)}m`;
+            item.marker.setIcon(L.divIcon({
+                className: 'segment-label',
+                html: `<div style="background:transparent;color:${item.color};padding:3px 6px;border-radius:3px;font-size:10px;font-weight:700;white-space:nowrap;border:none;pointer-events:none;text-shadow:-1px -1px 0 white,1px -1px 0 white,-1px 1px 0 white,1px 1px 0 white,0 0 3px white,0 0 3px white;">${newText}</div>`,
+                iconSize: null,
+                iconAnchor: [-50, 15]
+            }));
+        }
         let photoPreviewElement = null; // 照片預覽元素
         
         // 顯示照片預覽
@@ -5279,7 +5332,7 @@ kbd {
                 shaftMarkers.forEach(m => map.addLayer(m));
                 permitZones.forEach(z => map.addLayer(z));
                 permitLabels.forEach(l => map.addLayer(l));
-                segmentLabels.forEach(l => map.addLayer(l)); // 顯示段落標籤
+                segmentLabels.forEach(l => map.addLayer(l.marker || l)); // 顯示段落標籤
                 btn.classList.remove('hidden-markers');
                 btn.textContent = '👁️';
                 btn.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍/段落標籤）';
@@ -5289,7 +5342,7 @@ kbd {
                 shaftMarkers.forEach(m => map.removeLayer(m));
                 permitZones.forEach(z => map.removeLayer(z));
                 permitLabels.forEach(l => map.removeLayer(l));
-                segmentLabels.forEach(l => map.removeLayer(l)); // 隱藏段落標籤
+                segmentLabels.forEach(l => map.removeLayer(l.marker || l)); // 隱藏段落標籤
                 btn.classList.add('hidden-markers');
                 btn.textContent = '🙈';
                 btn.title = '顯示所有標記（備註/配電盤/工作井/挖掘範圍/段落標籤）';
@@ -7261,7 +7314,7 @@ window.addEventListener('message', async function(event) {
             smallSegmentPolylines = {};
             
             // 清除段落標籤
-            segmentLabels.forEach(label => map.removeLayer(label));
+            segmentLabels.forEach(label => map.removeLayer(label.marker || label));
             segmentLabels = [];
             // 清除備註標記（只在個別工程地圖顯示）
             noteMarkers.forEach(marker => map.removeLayer(marker));
