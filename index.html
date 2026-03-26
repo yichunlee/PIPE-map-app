@@ -22,6 +22,44 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Google OAuth 已移至獨立登入頁面 -->
     <style>
+        /* ========== Toast 通知系統 ========== */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: white;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+            pointer-events: auto;
+            max-width: 320px;
+            animation: toastIn 0.25s ease;
+            line-height: 1.4;
+        }
+        .toast.success { background: #2e7d32; }
+        .toast.error   { background: #c62828; }
+        .toast.warning { background: #e65100; }
+        .toast.info    { background: #1565c0; }
+        .toast.hiding  { animation: toastOut 0.3s ease forwards; }
+        @keyframes toastIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes toastOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(12px); } }
+        @media (max-width: 768px) {
+            #toast-container { bottom: 70px; right: 12px; left: 12px; }
+            .toast { max-width: 100%; }
+        }
+    </style>
         .measure-button {
             position: absolute;
             top: 260px; /* 放在日曆按鈕下方 */
@@ -1281,6 +1319,7 @@ kbd {
         <div class="loading-text">正在載入資料...</div>
     </div>
     
+    <div id="toast-container"></div>
     <div id="map"></div>
     
     <!-- 工程列表切換按鈕 -->
@@ -1466,6 +1505,28 @@ kbd {
 
     <script>
         const API_URL = 'https://script.google.com/macros/s/AKfycbwJfTW9FHDaasFMnZluPAPPij6PhjYS5nU5qvR5fV2Y2n7tEMrhBFIKH6b0-Cn5xxjy/exec';
+        
+        // ========== Toast 通知函數 ==========
+        // type: 'success' | 'error' | 'warning' | 'info'
+        function showToast(message, type = 'info', duration = null) {
+            const container = document.getElementById('toast-container');
+            if (!container) { console.warn(message); return; }
+            
+            const autoClose = duration || (type === 'error' ? 5000 : type === 'warning' ? 4000 : 3000);
+            
+            const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+            container.appendChild(toast);
+            
+            const dismiss = () => {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            };
+            toast.addEventListener('click', dismiss);
+            setTimeout(dismiss, autoClose);
+        }
         
         // 🔐 Google OAuth2 登入變數
         let currentUser = null; // { email, name, picture, role }
@@ -1662,7 +1723,7 @@ kbd {
                 return false;
             }
             if (getRoleLevel(currentUser.role) < 2) {
-                alert('⛔ 此功能需要「監造單位」以上權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
+                showToast('此功能需要「監造單位」以上權限（目前：' + currentUser.role + '）', 'warning');
                 return false;
             }
             return true;
@@ -1678,7 +1739,7 @@ kbd {
                 return false;
             }
             if (currentUser.role !== 'admin') {
-                alert('⛔ 此功能需要「管理員」權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
+                showToast('此功能需要「管理員」權限（目前：' + currentUser.role + '）', 'warning');
                 return false;
             }
             return true;
@@ -1789,7 +1850,7 @@ kbd {
             } catch (error) {
                 showLoading(false);
                 console.error('載入錯誤:', error);
-                alert('載入失敗：' + error.message + '\n\n請確認：\n1. Google Sheets 是否正確設定\n2. Apps Script 是否已部署\n3. 網路連線是否正常');
+                showToast('載入失敗：' + error.message + '（請確認 Google Sheets 設定）', 'error', 8000);
             }
         }
         
@@ -2899,7 +2960,6 @@ kbd {
         }
         
         // ========== Shift+Click：整個段落一次更新 ==========
-        
         function showWholeSegmentPopup(latlng, segment) {
             const segLength = segment.endDistance - segment.startDistance;
             const numSmallSegs = Math.ceil(segLength / 10);
@@ -2909,92 +2969,71 @@ kbd {
                 const v = statusArray[i] || '0';
                 if (v !== '0' && v !== '') completedCount++;
             }
-            const uncompletedCount = numSmallSegs - completedCount;
             const progressPct = numSmallSegs > 0 ? Math.round(completedCount / numSmallSegs * 100) : 0;
-            L.popup()
-                .setLatLng(latlng)
-                .setContent(`
-                    <div class="popup-title">⚡ 段落 ${segment.segmentNumber} 整段操作</div>
-                    <div class="popup-info">📏 範圍：${segment.startDistance}m - ${segment.endDistance}m</div>
-                    <div class="popup-info">🔢 共 ${numSmallSegs} 個小段（每 10m 一段）</div>
-                    <div class="popup-info">✅ 已完工：${completedCount} 個　⚪ 未完工：${uncompletedCount} 個</div>
-                    <div class="popup-info">📊 進度：${progressPct}%</div>
-                    <div style="margin-top: 12px; display: flex; gap: 8px;">
-                        <button class="popup-button" onclick="wholeSegmentMarkComplete('${segment.segmentNumber}')" style="flex: 1;">
-                            ✓ 全段標記完工
-                        </button>
-                        <button class="popup-button" onclick="wholeSegmentMarkIncomplete('${segment.segmentNumber}')" style="flex: 1; background: #e74c3c;">
-                            ❌ 全段取消完工
-                        </button>
-                    </div>
-                `)
-                .openOn(map);
+            L.popup().setLatLng(latlng).setContent(`
+                <div class="popup-title">⚡ 段落 ${segment.segmentNumber} 整段操作</div>
+                <div class="popup-info">📏 範圍：${segment.startDistance}m - ${segment.endDistance}m</div>
+                <div class="popup-info">🔢 共 ${numSmallSegs} 個小段　✅ 已完工：${completedCount}　⚪ 未完工：${numSmallSegs - completedCount}</div>
+                <div class="popup-info">📊 進度：${progressPct}%</div>
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                    <button class="popup-button" onclick="wholeSegmentMarkComplete('${segment.segmentNumber}')" style="flex:1;">✓ 全段標記完工</button>
+                    <button class="popup-button" onclick="wholeSegmentMarkIncomplete('${segment.segmentNumber}')" style="flex:1;background:#e74c3c;">❌ 全段取消完工</button>
+                </div>`).openOn(map);
         }
-        
         window.wholeSegmentMarkComplete = async function(segmentNumber) {
             if (!requireLogin()) return;
             const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
-            if (!segment) { alert('找不到段落 ' + segmentNumber); return; }
-            const segLength = segment.endDistance - segment.startDistance;
-            const numSmallSegs = Math.ceil(segLength / 10);
+            if (!segment) { showToast('找不到段落 ' + segmentNumber, 'error'); return; }
+            const numSmallSegs = Math.ceil((segment.endDistance - segment.startDistance) / 10);
             if (!confirm(`確定要將段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段標記為完工嗎？`)) return;
             const today = new Date();
-            const statusValue = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-            const statusString = Array(numSmallSegs).fill(statusValue).join(',');
-            const visualUpdates = [];
-            for (let i = 0; i < numSmallSegs; i++) visualUpdates.push({ segmentNumber, smallIndex: i, isCompleted: true });
+            const sv = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+            const visualUpdates = Array.from({length: numSmallSegs}, (_, i) => ({segmentNumber, smallIndex: i, isCompleted: true}));
             batchUpdateSmallSegmentVisuals(visualUpdates);
             map.closePopup();
             try {
-                const url = API_URL + '?action=updateWholeSegment&pipelineId=' + encodeURIComponent(currentPipeline.id) + '&segmentNumber=' + encodeURIComponent(segmentNumber) + '&statusString=' + encodeURIComponent(statusString);
-                const result = await (await fetch(url)).json();
-                if (!result.success) throw new Error(result.error || '更新失敗');
-                const progressData = await (await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id))).json();
-                if (progressData.segments) {
-                    const segments = parseBranchIndexFromSegments(progressData.segments);
-                    const idx = allPipelines.findIndex(p => p.id === currentPipeline.id);
-                    if (idx !== -1) allPipelines[idx].segments = segments;
-                    currentPipeline.segments = segments;
-                }
-                showStatsPanel();
-            } catch (error) {
-                batchUpdateSmallSegmentVisuals(visualUpdates.map(u => ({ ...u, isCompleted: false })));
-                alert('❌ 更新失敗：' + error.message);
+                const r = await (await fetch(API_URL + '?action=updateWholeSegment&pipelineId=' + encodeURIComponent(currentPipeline.id) + '&segmentNumber=' + encodeURIComponent(segmentNumber) + '&statusString=' + encodeURIComponent(Array(numSmallSegs).fill(sv).join(',')))).json();
+                if (!r.success) throw new Error(r.error || '更新失敗');
+                await _refreshProgress();
+                showToast('✅ 段落 ' + segmentNumber + ' 全段標記完工', 'success');
+            } catch (e) {
+                batchUpdateSmallSegmentVisuals(visualUpdates.map(u => ({...u, isCompleted: false})));
+                showToast('❌ 更新失敗：' + e.message, 'error');
             }
         };
-        
         window.wholeSegmentMarkIncomplete = async function(segmentNumber) {
             if (!requireLogin()) return;
             const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
-            if (!segment) { alert('找不到段落 ' + segmentNumber); return; }
-            const segLength = segment.endDistance - segment.startDistance;
-            const numSmallSegs = Math.ceil(segLength / 10);
+            if (!segment) { showToast('找不到段落 ' + segmentNumber, 'error'); return; }
+            const numSmallSegs = Math.ceil((segment.endDistance - segment.startDistance) / 10);
             if (!confirm(`確定要將段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段取消完工嗎？`)) return;
-            const statusString = Array(numSmallSegs).fill('0').join(',');
-            const visualUpdates = [];
-            for (let i = 0; i < numSmallSegs; i++) visualUpdates.push({ segmentNumber, smallIndex: i, isCompleted: false });
+            const visualUpdates = Array.from({length: numSmallSegs}, (_, i) => ({segmentNumber, smallIndex: i, isCompleted: false}));
             batchUpdateSmallSegmentVisuals(visualUpdates);
             map.closePopup();
             try {
-                const url = API_URL + '?action=updateWholeSegment&pipelineId=' + encodeURIComponent(currentPipeline.id) + '&segmentNumber=' + encodeURIComponent(segmentNumber) + '&statusString=' + encodeURIComponent(statusString);
-                const result = await (await fetch(url)).json();
-                if (!result.success) throw new Error(result.error || '更新失敗');
-                const progressData = await (await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id))).json();
-                if (progressData.segments) {
-                    const segments = parseBranchIndexFromSegments(progressData.segments);
-                    const idx = allPipelines.findIndex(p => p.id === currentPipeline.id);
-                    if (idx !== -1) allPipelines[idx].segments = segments;
-                    currentPipeline.segments = segments;
-                }
-                showStatsPanel();
-            } catch (error) {
-                batchUpdateSmallSegmentVisuals(visualUpdates.map(u => ({ ...u, isCompleted: true })));
-                alert('❌ 更新失敗：' + error.message);
+                const r = await (await fetch(API_URL + '?action=updateWholeSegment&pipelineId=' + encodeURIComponent(currentPipeline.id) + '&segmentNumber=' + encodeURIComponent(segmentNumber) + '&statusString=' + encodeURIComponent(Array(numSmallSegs).fill('0').join(',')))).json();
+                if (!r.success) throw new Error(r.error || '更新失敗');
+                await _refreshProgress();
+                showToast('✅ 段落 ' + segmentNumber + ' 已取消完工', 'success');
+            } catch (e) {
+                batchUpdateSmallSegmentVisuals(visualUpdates.map(u => ({...u, isCompleted: true})));
+                showToast('❌ 更新失敗：' + e.message, 'error');
             }
         };
-        
+        // 共用：更新本地 progress 資料
+        async function _refreshProgress() {
+            const d = await (await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id))).json();
+            if (d.segments) {
+                const segments = parseBranchIndexFromSegments(d.segments);
+                const idx = allPipelines.findIndex(p => p.id === currentPipeline.id);
+                if (idx !== -1) allPipelines[idx].segments = segments;
+                currentPipeline.segments = segments;
+            }
+            showStatsPanel();
+        }
+
         // ========== 原有批次標記完工 (Ctrl多選用) ==========
-        
+
         // 批次標記完工
         window.batchMarkComplete = async function() {
             if (!requireLogin()) return;
@@ -3108,7 +3147,7 @@ kbd {
                     isCompleted: false
                 }));
                 batchUpdateSmallSegmentVisuals(rollbackUpdates);
-                alert('❌ 批次更新失敗：' + error.message);
+                showToast('⚠ 批次更新失敗：' + error.message, 'error');
             }
         };
         
@@ -3212,7 +3251,7 @@ kbd {
                     isCompleted: true
                 }));
                 batchUpdateSmallSegmentVisuals(rollbackUpdates);
-                alert('❌ 批次取消失敗：' + error.message);
+                showToast('⚠ 批次取消失敗：' + error.message, 'error');
             }
         };
         
@@ -3349,7 +3388,7 @@ kbd {
             if (!requireLogin()) return;
             const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
-                alert('❌ 找不到段落！');
+                showToast('找不到段落！', 'error');
                 return;
             }
             
@@ -3428,7 +3467,7 @@ kbd {
                     isCompleted: false
                 }));
                 batchUpdateSmallSegmentVisuals(rollbackUpdates);
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
             }
         };
         
@@ -3437,7 +3476,7 @@ kbd {
             if (!requireLogin()) return;
             const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
-                alert('❌ 找不到段落！');
+                showToast('找不到段落！', 'error');
                 return;
             }
             
@@ -3509,7 +3548,7 @@ kbd {
                     isCompleted: true
                 }));
                 batchUpdateSmallSegmentVisuals(rollbackUpdates);
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
             }
         };
         
@@ -3565,12 +3604,12 @@ kbd {
             console.log('=====================================');
             
             if (!currentPipeline) {
-                alert('❌ 錯誤：目前沒有選擇工程！');
+                showToast('錯誤：目前沒有選擇工程！', 'error');
                 return;
             }
             
             if (!currentPipeline.id) {
-                alert('❌ 錯誤：工程 ID 不存在！');
+                showToast('錯誤：工程 ID 不存在！', 'error');
                 console.error('currentPipeline 物件:', currentPipeline);
                 return;
             }
@@ -3581,7 +3620,7 @@ kbd {
             // 檢查段落是否存在
             const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
-                alert('❌ 錯誤：找不到段落 #' + segmentNumber);
+                showToast('⚠ 錯誤：找不到段落 #' + segmentNumber, 'error');
                 console.error('找不到段落', segmentNumber, '可用段落:', currentPipeline.segments.map(s => s.segmentNumber));
                 return;
             }
@@ -3642,10 +3681,10 @@ kbd {
                     // 🆕 重新載入統計面板（更新完工長度）
                     showStatsPanel();
                 } else {
-                    alert('❌ 更新失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 更新失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
                 console.error('更新錯誤:', error);
             }
         };
@@ -3893,7 +3932,7 @@ kbd {
             const photoInput = document.getElementById('notePhoto');
             
             if (!text) {
-                alert('請輸入備註內容！');
+                showToast('請輸入備註內容', 'warning');
                 return;
             }
             
@@ -3917,7 +3956,7 @@ kbd {
                     console.log('照片壓縮完成！大小：' + Math.round(photoBase64.length / 1024) + 'KB');
                 } catch (error) {
                     console.error('照片壓縮失敗:', error);
-                    alert('照片處理失敗，但備註文字將繼續儲存。');
+                    showToast('照片處理失敗，備註文字已繼續儲存', 'warning');
                     photoBase64 = '';
                 }
             }
@@ -3942,12 +3981,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadMapNotes();
-                    alert('✅ 備註已新增！');
+                    showToast('備註已新增！', 'success');
                 } else {
-                    alert('❌ 新增失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 新增失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 新增失敗：' + error.message);
+                showToast('⚠ 新增失敗：' + error.message, 'error');
                 console.error('新增備註錯誤:', error);
             }
         };
@@ -3967,12 +4006,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadMapNotes();
-                    alert('✅ 備註已刪除！');
+                    showToast('備註已刪除！', 'success');
                 } else {
-                    alert('❌ 刪除失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 刪除失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 刪除失敗：' + error.message);
+                showToast('⚠ 刪除失敗：' + error.message, 'error');
                 console.error('刪除備註錯誤:', error);
             }
         };
@@ -3998,7 +4037,7 @@ kbd {
             if (!requireLogin()) return;
             const newText = document.getElementById('note-text-edit-' + noteId).value.trim();
             if (!newText) {
-                alert('備註內容不能為空！');
+                showToast('備註內容不能為空', 'warning');
                 return;
             }
             
@@ -4010,12 +4049,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadMapNotes();
-                    alert('✅ 備註已更新！');
+                    showToast('備註已更新！', 'success');
                 } else {
-                    alert('❌ 更新失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 更新失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
             }
         };
         
@@ -4240,13 +4279,13 @@ kbd {
             const photoInput = document.getElementById('panelPhoto');
             
             if (!text) {
-                alert('請輸入備註內容！');
+                showToast('請輸入備註內容', 'warning');
                 return;
             }
             
             // 確保有 currentPipeline
             if (!currentPipeline || !currentPipeline.id) {
-                alert('❌ 錯誤：無法取得當前工程資訊\n請重新進入工程頁面');
+                showToast('錯誤：無法取得當前工程資訊', 'error');
                 console.error('currentPipeline 未定義:', currentPipeline);
                 return;
             }
@@ -4262,7 +4301,7 @@ kbd {
                     }
                 } catch (error) {
                     console.error('照片壓縮失敗:', error);
-                    alert('照片處理失敗，但備註文字將繼續儲存。');
+                    showToast('照片處理失敗，備註文字已繼續儲存', 'warning');
                     photoBase64 = '';
                 }
             }
@@ -4286,12 +4325,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadPanels();
-                    alert('✅ 配電盤標記已新增！');
+                    showToast('配電盤標記已新增！', 'success');
                 } else {
-                    alert('❌ 新增失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 新增失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 新增失敗：' + error.message);
+                showToast('⚠ 新增失敗：' + error.message, 'error');
                 console.error('新增配電盤標記錯誤:', error);
             }
         };
@@ -4311,12 +4350,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadPanels();
-                    alert('✅ 配電盤標記已刪除！');
+                    showToast('配電盤標記已刪除！', 'success');
                 } else {
-                    alert('❌ 刪除失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 刪除失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 刪除失敗：' + error.message);
+                showToast('⚠ 刪除失敗：' + error.message, 'error');
             }
         };
         
@@ -4340,7 +4379,7 @@ kbd {
             if (!requireLogin()) return;
             const newText = document.getElementById('panel-text-edit-' + panelId).value.trim();
             if (!newText) {
-                alert('備註內容不能為空！');
+                showToast('備註內容不能為空', 'warning');
                 return;
             }
             
@@ -4352,12 +4391,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadPanels();
-                    alert('✅ 配電盤標記已更新！');
+                    showToast('配電盤標記已更新！', 'success');
                 } else {
-                    alert('❌ 更新失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 更新失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
             }
         };
         // ========== 配電盤/儀表箱功能結束 ==========
@@ -4477,12 +4516,12 @@ kbd {
                 if (result.success) {
                     document.getElementById('roadworkCount').textContent = '更新成功，重新載入中...';
                     await loadRoadworkData();
-                    alert('已更新 ' + result.count + ' 筆台中市挖掘許可資料！');
+                    showToast('已更新 ' + result.count + ' 筆台中市挖掘許可資料', 'success');
                 } else {
-                    alert('更新失敗：' + (result.error || '未知錯誤'));
+                    showToast('更新失敗：' + (result.error || '未知錯誤'), 'error');
                 }
             } catch (error) {
-                alert('更新失敗：' + error.message);
+                showToast('更新失敗：' + error.message, 'error');
             } finally {
                 btn.textContent = '🔄 更新資料';
                 btn.disabled = false;
@@ -4654,7 +4693,7 @@ kbd {
         window.saveNewShaft = async function(lat, lng) {
             if (!requireLogin()) return;
             const name = document.getElementById('sf_name').value.trim();
-            if (!name) { alert('請輸入名稱！'); return; }
+            if (!name) { showToast('請輸入名稱', 'warning'); return; }
             const payload = {
                 action: 'addShaft',
                 pipelineId: currentPipeline.id,
@@ -4682,12 +4721,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadShafts();
-                    alert('✅ 工作井已新增！');
+                    showToast('工作井已新增！', 'success');
                 } else {
-                    alert('❌ 新增失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 新增失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 新增失敗：' + error.message);
+                showToast('⚠ 新增失敗：' + error.message, 'error');
             }
         }
         
@@ -4703,7 +4742,7 @@ kbd {
         window.saveEditShaft = async function(shaftId) {
             if (!requireLogin()) return;
             const name = document.getElementById('sf_name').value.trim();
-            if (!name) { alert('請輸入名稱！'); return; }
+            if (!name) { showToast('請輸入名稱', 'warning'); return; }
             const qs = '?action=updateShaft&shaftId=' + encodeURIComponent(shaftId) +
                 '&name=' + encodeURIComponent(name) +
                 '&type=' + encodeURIComponent(document.getElementById('sf_type').value) +
@@ -4718,12 +4757,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadShafts();
-                    alert('✅ 工作井已更新！');
+                    showToast('工作井已更新！', 'success');
                 } else {
-                    alert('❌ 更新失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 更新失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
             }
         };
         
@@ -4736,12 +4775,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadShafts();
-                    alert('✅ 工作井已刪除！');
+                    showToast('工作井已刪除！', 'success');
                 } else {
-                    alert('❌ 刪除失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 刪除失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 刪除失敗：' + error.message);
+                showToast('⚠ 刪除失敗：' + error.message, 'error');
             }
         };
         // ========== 工作井功能結束 ==========
@@ -4838,7 +4877,7 @@ kbd {
             drawMarkers = [];
             
             if (drawPoints.length < 3) {
-                alert('至少需要 3 個頂點才能建立範圍！');
+                showToast('至少需要 3 個頂點才能建立範圍', 'warning');
                 drawPoints = [];
                 return;
             }
@@ -4926,7 +4965,7 @@ kbd {
             
             // 如果狀態是「已取得」，檢查許可期間是否填寫
             if (status === 'approved' && (!permitDateStart || !permitDateEnd)) {
-                alert('⚠️ 路權已取得時，許可期間為必填！');
+                showToast('路權已取得時，許可期間為必填！', 'warning');
                 return;
             }
             
@@ -4948,12 +4987,12 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadPermitZones();
-                    alert('✅ 挖掘許可範圍已儲存！');
+                    showToast('挖掘許可範圍已儲存！', 'success');
                 } else {
-                    alert('❌ 儲存失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 儲存失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 儲存失敗：' + error.message);
+                showToast('⚠ 儲存失敗：' + error.message, 'error');
             }
         }
         
@@ -5124,7 +5163,7 @@ kbd {
             
             // 如果狀態是「已取得」，檢查許可期間是否填寫
             if (status === 'approved' && (!permitDateStart || !permitDateEnd)) {
-                alert('⚠️ 路權已取得時，許可期間為必填！');
+                showToast('路權已取得時，許可期間為必填！', 'warning');
                 return;
             }
             
@@ -5142,8 +5181,8 @@ kbd {
                 const response = await fetch(API_URL + qs);
                 const result = await response.json();
                 if (result.success) { map.closePopup(); await loadPermitZones(); }
-                else alert('❌ 更新失敗：' + (result.error || ''));
-            } catch (error) { alert('❌ 更新失敗：' + error.message); }
+                else showToast('⚠ 更新失敗：' + (result.error || '', 'error'));
+            } catch (error) { showToast('⚠ 更新失敗：' + error.message, 'error'); }
         }
         
         async function deletePermitZone(zoneId) {
@@ -5153,8 +5192,8 @@ kbd {
                 const response = await fetch(API_URL + '?action=deletePermitZone&zoneId=' + encodeURIComponent(zoneId));
                 const result = await response.json();
                 if (result.success) { map.closePopup(); await loadPermitZones(); }
-                else alert('❌ 刪除失敗：' + (result.error || ''));
-            } catch (error) { alert('❌ 刪除失敗：' + error.message); }
+                else showToast('⚠ 刪除失敗：' + (result.error || '', 'error'));
+            } catch (error) { showToast('⚠ 刪除失敗：' + error.message, 'error'); }
         }
         let allMarkersVisible = true;
         
@@ -5245,7 +5284,7 @@ kbd {
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             } catch(e) {
                 console.error('開啟甘特圖失敗', e);
-                alert('開啟甘特圖失敗: ' + e.message);
+                showToast('開啟甘特圖失敗：' + e.message, 'error');
             }
         };
         
@@ -5628,7 +5667,7 @@ async function saveItem() {
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     const notes = document.getElementById('notes').value;
-    if (!label || !startDate || !endDate) { alert('請填寫完整資訊'); return; }
+    if (!label || !startDate || !endDate) { showToast('請填寫完整資訊', 'warning'); return; }
     const action = editingItem ? 'updateGanttItem' : 'addGanttItem';
     const params = new URLSearchParams({ action, pipelineId: pipeline.id, label, startDate, endDate, status: '', notes });
     if (editingItem) params.append('itemId', editingItem.id);
@@ -5636,15 +5675,15 @@ async function saveItem() {
         const res = await fetch(API_URL + '?' + params.toString());
         const result = await res.json();
         if (result.success) { 
-            alert('儲存成功!'); 
+            showToast('儲存成功', 'success'); 
             // 使用 postMessage 通知主頁面
             if (window.opener) {
                 window.opener.postMessage({ type: 'ganttChanged' }, '*');
             }
             window.close(); 
         }
-        else { alert('失敗: ' + (result.error || '未知錯誤')); }
-    } catch(e) { alert('失敗: ' + e.message); }
+        else { showToast('失敗：' + (result.error || '未知錯誤'), 'error'); }
+    } catch(e) { showToast('失敗：' + e.message, 'error'); }
 }
 
 async function deleteItem() {
@@ -5653,15 +5692,15 @@ async function deleteItem() {
         const res = await fetch(API_URL + '?action=deleteGanttItem&itemId=' + editingItem.id);
         const result = await res.json();
         if (result.success) { 
-            alert('刪除成功!'); 
+            showToast('刪除成功', 'success'); 
             // 使用 postMessage 通知主頁面
             if (window.opener) {
                 window.opener.postMessage({ type: 'ganttChanged' }, '*');
             }
             window.close(); 
         }
-        else { alert('失敗: ' + (result.error || '未知錯誤')); }
-    } catch(e) { alert('失敗: ' + e.message); }
+        else { showToast('失敗：' + (result.error || '未知錯誤'), 'error'); }
+    } catch(e) { showToast('失敗：' + e.message, 'error'); }
 }
 
 // 渲染里程碑區域
@@ -6215,8 +6254,8 @@ window.addEventListener('message', async function(event) {
         
         async function saveGanttNew() {
             const data = getGanttFormData();
-            if (!data.label) { alert('請輸入施工項目！'); return; }
-            if (!data.startDate || !data.endDate) { alert('請填入開始和完成日期！'); return; }
+            if (!data.label) { showToast('請輸入施工項目', 'warning'); return; }
+            if (!data.startDate || !data.endDate) { showToast('請填入開始和完成日期', 'warning'); return; }
             const qs = '?action=addGanttItem&pipelineId=' + encodeURIComponent(currentPipeline.id) +
                 '&label=' + encodeURIComponent(data.label) +
                 '&startDate=' + encodeURIComponent(data.startDate) +
@@ -6235,13 +6274,13 @@ window.addEventListener('message', async function(event) {
                         showDateLabels();
                     }
                 }
-                else alert('❌ ' + (result.error || '儲存失敗'));
-            } catch(e) { alert('❌ ' + e.message); }
+                else showToast('⚠ ' + (result.error || '儲存失敗', 'error'));
+            } catch(e) { showToast('⚠ ' + e.message, 'error'); }
         }
         
         async function saveGanttEdit(id) {
             const data = getGanttFormData();
-            if (!data.label) { alert('請輸入施工項目！'); return; }
+            if (!data.label) { showToast('請輸入施工項目', 'warning'); return; }
             const qs = '?action=updateGanttItem&itemId=' + encodeURIComponent(id) +
                 '&label=' + encodeURIComponent(data.label) +
                 '&startDate=' + encodeURIComponent(data.startDate) +
@@ -6260,8 +6299,8 @@ window.addEventListener('message', async function(event) {
                         showDateLabels();
                     }
                 }
-                else alert('❌ ' + (result.error || '更新失敗'));
-            } catch(e) { alert('❌ ' + e.message); }
+                else showToast('⚠ ' + (result.error || '更新失敗', 'error'));
+            } catch(e) { showToast('⚠ ' + e.message, 'error'); }
         }
         
         window.deleteGanttItem = async function(id) {
@@ -6278,8 +6317,8 @@ window.addEventListener('message', async function(event) {
                         showDateLabels(); // 如果標註正在顯示，重新繪製
                     }
                 }
-                else alert('❌ ' + (result.error || '刪除失敗'));
-            } catch(e) { alert('❌ ' + e.message); }
+                else showToast('⚠ ' + (result.error || '刪除失敗', 'error'));
+            } catch(e) { showToast('⚠ ' + e.message, 'error'); }
         };
         // ========== 甘特圖功能結束 ==========
         // ========== 施工里程碑功能 ==========
@@ -6471,8 +6510,8 @@ window.addEventListener('message', async function(event) {
                         window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
                     }
                 }
-                else alert('❌ 儲存失敗：' + (result.error || ''));
-            } catch(e) { alert('❌ ' + e.message); }
+                else showToast('⚠ 儲存失敗：' + (result.error || '', 'error'));
+            } catch(e) { showToast('⚠ ' + e.message, 'error'); }
         }
         
         async function saveMilestoneEdit(id) {
@@ -6495,8 +6534,8 @@ window.addEventListener('message', async function(event) {
                         window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
                     }
                 }
-                else alert('❌ 更新失敗：' + (result.error || ''));
-            } catch(e) { alert('❌ ' + e.message); }
+                else showToast('⚠ 更新失敗：' + (result.error || '', 'error'));
+            } catch(e) { showToast('⚠ ' + e.message, 'error'); }
         }
         
         window.deleteMilestone = async function(id) {
@@ -6511,8 +6550,8 @@ window.addEventListener('message', async function(event) {
                         window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
                     }
                 }
-                else alert('❌ 刪除失敗：' + (result.error || ''));
-            } catch(e) { alert('❌ ' + e.message); }
+                else showToast('⚠ 刪除失敗：' + (result.error || '', 'error'));
+            } catch(e) { showToast('⚠ ' + e.message, 'error'); }
         };
         // ========== 施工里程碑功能結束 ==========
         
@@ -6520,7 +6559,7 @@ window.addEventListener('message', async function(event) {
         window.editSegment = function(segmentNumber) {
             const segment = currentPipeline.segments.find(s => s.segmentNumber === segmentNumber);
             if (!segment) {
-                alert('找不到段落');
+                showToast('找不到段落', 'error');
                 return;
             }
             
@@ -6870,7 +6909,7 @@ window.addEventListener('message', async function(event) {
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ 已清空所有段落');
+                    showToast('已清空所有段落', 'success');
                     
                     // 重新載入工程
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
@@ -6879,10 +6918,10 @@ window.addEventListener('message', async function(event) {
                     
                     showPipelineDetail(currentPipeline.id);
                 } else {
-                    alert('❌ 清空失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 清空失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 清空失敗：' + error.message);
+                showToast('⚠ 清空失敗：' + error.message, 'error');
                 console.error('清空錯誤:', error);
             }
         };
@@ -7469,7 +7508,7 @@ window.addEventListener('message', async function(event) {
             const method = document.getElementById('editSegMethod').value;
             
             if (!method) {
-                alert('請選擇施工方式！');
+                showToast('請選擇施工方式', 'warning');
                 return;
             }
             
@@ -7497,7 +7536,7 @@ window.addEventListener('message', async function(event) {
                 console.log('API 回應:', result);
                 
                 if (result.success) {
-                    alert('✅ 段落已更新！');
+                    showToast('段落已更新！', 'success');
                     map.closePopup();
                     
                     // 重新載入工程
@@ -7507,12 +7546,12 @@ window.addEventListener('message', async function(event) {
                     
                     showPipelineDetail(currentPipeline.id);
                 } else {
-                    alert('❌ 更新失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 更新失敗：' + (result.error || '未知錯誤', 'error'));
                     btn.textContent = originalText;
                     btn.disabled = false;
                 }
             } catch (error) {
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
                 console.error('更新錯誤:', error);
                 btn.textContent = originalText;
                 btn.disabled = false;
@@ -7537,7 +7576,7 @@ window.addEventListener('message', async function(event) {
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ 段落已刪除');
+                    showToast('段落已刪除', 'success');
                     map.closePopup();
                     
                     // 重新載入工程
@@ -7547,10 +7586,10 @@ window.addEventListener('message', async function(event) {
                     
                     showPipelineDetail(currentPipeline.id);
                 } else {
-                    alert('❌ 刪除失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 刪除失敗：' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
-                alert('❌ 刪除失敗：' + error.message);
+                showToast('⚠ 刪除失敗：' + error.message, 'error');
                 console.error('刪除錯誤:', error);
             }
         };
@@ -7621,12 +7660,12 @@ window.addEventListener('message', async function(event) {
             const method = document.getElementById('segMethod').value;
             
             if (start >= end) {
-                alert('結束距離必須大於起始距離！');
+                showToast('結束距離必須大於起始距離', 'warning');
                 return;
             }
             
             if (!method) {
-                alert('請選擇施工方式！');
+                showToast('請選擇施工方式', 'warning');
                 return;
             }
             
@@ -7659,7 +7698,7 @@ window.addEventListener('message', async function(event) {
                 console.log('API 回應:', result);
                 
                 if (result.success) {
-                    alert('✅ 段落儲存成功！\n\n起始：' + start + 'm\n結束：' + end + 'm\n工法：' + method);
+                    showToast('段落儲存成功：' + start + 'm - ' + end + 'm（' + method + '）', 'success');
                     map.closePopup();
                     
                     // 重新載入這個工程的進度
@@ -7673,12 +7712,12 @@ window.addEventListener('message', async function(event) {
                     // 重新顯示工程
                     showPipelineDetail(currentPipeline.id);
                 } else {
-                    alert('❌ 儲存失敗：' + (result.error || '未知錯誤'));
+                    showToast('⚠ 儲存失敗：' + (result.error || '未知錯誤', 'error'));
                     btn.textContent = originalText;
                     btn.disabled = false;
                 }
             } catch (error) {
-                alert('❌ 儲存失敗：' + error.message);
+                showToast('⚠ 儲存失敗：' + error.message, 'error');
                 console.error('儲存錯誤:', error);
                 btn.textContent = originalText;
                 btn.disabled = false;
@@ -8064,7 +8103,7 @@ window.addEventListener('message', async function(event) {
         // 切換編輯模式
         function toggleEditMode() {
             if (!currentPipeline) {
-                alert('❌ 請先選擇一個工程');
+                showToast('請先選擇一個工程', 'error');
                 return;
             }
             
@@ -8445,17 +8484,12 @@ window.addEventListener('message', async function(event) {
                     </div>
                 `;
             } else {
-                // 普通節點選單
                 const thisBranch = branchStructure.branches[branchIndex];
                 const isThisBranch = thisBranch && thisBranch.isBranch;
                 menu.innerHTML = `
-                    <div class="rcm-item" onclick="deleteNodeFromBranch(${branchIndex}, ${nodeIndex})">
-                        <span>🗑️</span> 刪除節點
-                    </div>
-                    <div class="rcm-item" onclick="createBranchFromNode(${branchIndex}, ${nodeIndex})">
-                        <span>🌿</span> 建立分支
-                    </div>
-                    ${isThisBranch ? '<div class="rcm-item" onclick="deleteBranch(' + branchIndex + ')" style="color:#F44336; border-top:1px solid #f0f0f0;"><span>❌</span> 刪除整個分支</div>' : ''}
+                    <div class="rcm-item" onclick="deleteNodeFromBranch(${branchIndex}, ${nodeIndex})"><span>🗑️</span> 刪除節點</div>
+                    <div class="rcm-item" onclick="createBranchFromNode(${branchIndex}, ${nodeIndex})"><span>🌿</span> 建立分支</div>
+                    ${isThisBranch ? '<div class="rcm-item" onclick="deleteBranch(' + branchIndex + ')" style="color:#F44336;border-top:1px solid #f0f0f0;"><span>❌</span> 刪除整個分支</div>' : ''}
                 `;
             }
             
@@ -8479,7 +8513,7 @@ window.addEventListener('message', async function(event) {
             // 檢查分支是否至少有 3 個節點（刪除後至少要剩 2 個）
             const branchNodesCount = editingNodes.filter(n => n.branchIndex === branchIndex).length;
             if (branchNodesCount <= 2) {
-                alert('❌ 每個分支至少需要 2 個節點！');
+                showToast('每個分支至少需要 2 個節點！', 'error');
                 return;
             }
             
@@ -8766,7 +8800,7 @@ window.addEventListener('message', async function(event) {
             
             // 檢查至少有 2 個節點（起始節點 + 至少 1 個新節點）
             if (branchDrawingNodes.length < 2) {
-                alert('❌ 分支至少需要 2 個節點（起始節點 + 至少 1 個新節點）');
+                showToast('分支至少需要 2 個節點（起始節點 + 至少 1 個新節點）', 'error');
                 return;
             }
             
@@ -9332,7 +9366,7 @@ window.addEventListener('message', async function(event) {
                     }
                     successMsg += '\n\n施工進度段落資料已清空，請重新在 Google Sheets 設定。';
                     
-                    alert(successMsg);
+                    showToast(successMsg, 'success');
                     
                     // 更新本地資料
                     currentPipeline.linestring = linestring;
@@ -9348,7 +9382,7 @@ window.addEventListener('message', async function(event) {
                 }
             } catch (error) {
                 console.error('❌ 儲存失敗:', error);
-                alert('❌ 儲存失敗：' + error.message);
+                showToast('⚠ 儲存失敗：' + error.message, 'error');
             }
         }
         
@@ -9455,7 +9489,7 @@ window.addEventListener('message', async function(event) {
             
             // 檢查監造單位以上權限
             if (getRoleLevel(currentUser.role) < 2) {
-                alert('⛔ 此功能需要「監造單位」以上權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
+                showToast('此功能需要「監造單位」以上權限（目前：' + currentUser.role + '）', 'warning');
                 return;
             }
             
@@ -9490,7 +9524,7 @@ window.addEventListener('message', async function(event) {
                 case 'editPipeline':
                     // 編輯工程
                     if (!currentPipeline) {
-                        alert('⚠️ 請先選擇一個工程');
+                        showToast('請先選擇一個工程', 'warning');
                         return;
                     }
                     editPipelineFromTool();
@@ -9503,7 +9537,7 @@ window.addEventListener('message', async function(event) {
         // 從工具抽屜呼叫(使用當前工程)
         async function editPipelineFromTool() {
             if (!currentPipeline) {
-                alert('⚠️ 請先選擇一個工程');
+                showToast('請先選擇一個工程', 'warning');
                 return;
             }
             await editPipeline(currentPipeline);
@@ -9628,7 +9662,7 @@ window.addEventListener('message', async function(event) {
             // 二次確認
             const typedName = prompt(`請輸入工程名稱「${pipelineName}」以確認刪除:`);
             if (typedName !== pipelineName) {
-                alert('❌ 名稱不符，已取消刪除');
+                showToast('名稱不符，已取消刪除', 'error');
                 return;
             }
             
@@ -9639,7 +9673,7 @@ window.addEventListener('message', async function(event) {
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ 工程已刪除');
+                    showToast('工程已刪除', 'success');
                     closeEditPipelineForm();
                     
                     // 重新載入工程資料
@@ -9650,11 +9684,11 @@ window.addEventListener('message', async function(event) {
                         showProjectPipelines(currentProject.name);
                     }
                 } else {
-                    alert('❌ 刪除失敗: ' + (result.error || '未知錯誤'));
+                    showToast('⚠ 刪除失敗: ' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
                 console.error('刪除工程錯誤:', error);
-                alert('❌ 發生錯誤: ' + error.message);
+                showToast('⚠ 發生錯誤: ' + error.message, 'error');
             }
         };
         
@@ -9676,7 +9710,7 @@ window.addEventListener('message', async function(event) {
             const newPipelineName = document.getElementById('editPipelineName').value.trim();
             
             if (!newProjectName || !newPipelineId || !newPipelineName) {
-                alert('❌ 所有欄位都必須填寫');
+                showToast('所有欄位都必須填寫', 'error');
                 return;
             }
             
@@ -9694,7 +9728,7 @@ window.addEventListener('message', async function(event) {
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('✅ 工程資料已更新');
+                    showToast('工程資料已更新', 'success');
                     closeEditPipelineForm();
                     
                     // 重新載入工程資料
@@ -9705,11 +9739,11 @@ window.addEventListener('message', async function(event) {
                         showProjectPipelines(currentProject.name);
                     }
                 } else {
-                    alert('❌ 更新失敗: ' + (result.error || '未知錯誤'));
+                    showToast('⚠ 更新失敗: ' + (result.error || '未知錯誤', 'error'));
                 }
             } catch (error) {
                 console.error('編輯工程錯誤:', error);
-                alert('❌ 發生錯誤: ' + error.message);
+                showToast('⚠ 發生錯誤: ' + error.message, 'error');
             }
         };
         
@@ -9742,7 +9776,7 @@ window.addEventListener('message', async function(event) {
         // 切換視覺化分段模式
         function toggleVisualSegmentation() {
             if (!currentPipeline) {
-                alert('⚠️ 請先選擇一個工程');
+                showToast('請先選擇一個工程', 'warning');
                 return;
             }
             
@@ -10283,7 +10317,7 @@ window.addEventListener('message', async function(event) {
             const overlay = document.getElementById('overlay');
             
             if (!currentPipeline) {
-                alert('⚠️ 請先選擇一個工程');
+                showToast('請先選擇一個工程', 'warning');
                 return;
             }
             
@@ -10336,11 +10370,11 @@ window.addEventListener('message', async function(event) {
                     renderSegmentTable();
                     updateSegmentInfo();
                 } else {
-                    alert('❌ 載入段落失敗：' + result.error);
+                    showToast('⚠ 載入段落失敗：' + result.error, 'error');
                 }
             } catch (error) {
                 console.error('載入段落錯誤:', error);
-                alert('❌ 載入段落失敗：' + error.message);
+                showToast('⚠ 載入段落失敗：' + error.message, 'error');
             }
         }
         
@@ -10566,12 +10600,12 @@ window.addEventListener('message', async function(event) {
             
             // 驗證
             if (isNaN(startDist) || isNaN(endDist)) {
-                alert('❌ 請輸入有效的距離');
+                showToast('請輸入有效的距離', 'error');
                 return;
             }
             
             if (startDist >= endDist) {
-                alert('❌ 結束距離必須大於起始距離');
+                showToast('結束距離必須大於起始距離', 'error');
                 return;
             }
             
@@ -10618,14 +10652,14 @@ window.addEventListener('message', async function(event) {
                 
                 if (result.success) {
                     closeCustomDialog();
-                    alert(`✅ 段落新增成功！\n\n段落 #${nextSegNum}\n長度：${Math.round(endDist - startDist)}m\n小段數量：${result.smallSegments}個`);
+                    showToast(`段落新增成功！\n\n段落 #${nextSegNum}\n長度：${Math.round(endDist - startDist)}m\n小段數量：${result.smallSegments}個`, 'success');
                     loadSegmentData();
                 } else {
-                    alert('❌ 新增失敗：' + result.error);
+                    showToast('⚠ 新增失敗：' + result.error, 'error');
                 }
             } catch (error) {
                 console.error('新增段落錯誤:', error);
-                alert('❌ 新增失敗：' + error.message);
+                showToast('⚠ 新增失敗：' + error.message, 'error');
             }
         }
         
@@ -10633,7 +10667,7 @@ window.addEventListener('message', async function(event) {
         function editSegmentForm(segmentNumber) {
             const segment = currentSegments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
-                alert('❌ 找不到段落');
+                showToast('找不到段落', 'error');
                 return;
             }
             
@@ -10695,12 +10729,12 @@ window.addEventListener('message', async function(event) {
             
             // 驗證
             if (isNaN(startDist) || isNaN(endDist)) {
-                alert('❌ 請輸入有效的距離');
+                showToast('請輸入有效的距離', 'error');
                 return;
             }
             
             if (startDist >= endDist) {
-                alert('❌ 結束距離必須大於起始距離');
+                showToast('結束距離必須大於起始距離', 'error');
                 return;
             }
             
@@ -10738,13 +10772,13 @@ window.addEventListener('message', async function(event) {
                     renderSegmentTable();
                     updateSegmentInfo();
                     
-                    alert('✅ 段落更新成功！');
+                    showToast('段落更新成功！', 'success');
                 } else {
-                    alert('❌ 更新失敗：' + result.error);
+                    showToast('⚠ 更新失敗：' + result.error, 'error');
                 }
             } catch (error) {
                 console.error('更新段落錯誤:', error);
-                alert('❌ 更新失敗：' + error.message);
+                showToast('⚠ 更新失敗：' + error.message, 'error');
             }
         }
         
@@ -10752,7 +10786,7 @@ window.addEventListener('message', async function(event) {
         function deleteSegmentConfirm(segmentNumber) {
             const segment = currentSegments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
-                alert('❌ 找不到段落');
+                showToast('找不到段落', 'error');
                 return;
             }
             
@@ -10794,13 +10828,13 @@ window.addEventListener('message', async function(event) {
                     renderSegmentTable();
                     updateSegmentInfo();
                     
-                    alert('✅ 段落刪除成功！');
+                    showToast('段落刪除成功！', 'success');
                 } else {
-                    alert('❌ 刪除失敗：' + result.error);
+                    showToast('⚠ 刪除失敗：' + result.error, 'error');
                 }
             } catch (error) {
                 console.error('刪除段落錯誤:', error);
-                alert('❌ 刪除失敗：' + error.message);
+                showToast('⚠ 刪除失敗：' + error.message, 'error');
             }
         }
         
@@ -11029,7 +11063,7 @@ window.addEventListener('message', async function(event) {
         async function createSegmentsFromDividers() {
             if (!requireSupervisor()) return;
             if (segmentDividers.length === 0) {
-                alert('⚠️ 沒有分段線，無法建立段落');
+                showToast('沒有分段線，無法建立段落', 'warning');
                 return;
             }
             
@@ -11235,9 +11269,9 @@ window.addEventListener('message', async function(event) {
             closeCustomDialog();
             
             if (errorCount === 0) {
-                alert(`✅ 成功建立 ${successCount} 個段落！`);
+                showToast(`成功建立 ${successCount} 個段落！`, 'success');
             } else {
-                alert(`⚠️ 建立完成\n\n成功：${successCount} 個\n失敗：${errorCount} 個`);
+                showToast(`建立完成\n\n成功：${successCount} 個\n失敗：${errorCount} 個`, 'warning');
             }
             
             // 移除所有分段線標記
@@ -11460,7 +11494,7 @@ async function exportMonthlyReportToExcel() {
         const result = await response.json();
         
         if (!result.success || !result.pipelines || result.pipelines.length === 0) {
-            alert('❌ 無資料可匯出');
+            showToast('無資料可匯出', 'error');
             return;
         }
         
@@ -11526,11 +11560,11 @@ async function exportMonthlyReportToExcel() {
         link.click();
         document.body.removeChild(link);
         
-        alert('✅ 匯出成功！');
+        showToast('匯出成功！', 'success');
         
     } catch (error) {
         console.error('匯出失敗:', error);
-        alert('❌ 匯出失敗：' + error.message);
+        showToast('⚠ 匯出失敗：' + error.message, 'error');
     }
 }
 
@@ -11539,14 +11573,14 @@ async function exportMonthlyReportToExcel() {
 
 function toggleBranchEditMode() {
     if (!currentPipeline) {
-        alert('⚠️ 請先選擇一個工程');
+        showToast('請先選擇一個工程', 'warning');
         return;
     }
     
     // 檢查是否已經是 MULTILINESTRING
     const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
     if (isMULTI) {
-        alert('⚠️ 此工程已經是 MULTILINESTRING 格式\n\n如需編輯分支,請使用「編輯路徑」功能');
+        showToast('此工程已經是 MULTILINESTRING 格式', 'warning');
         return;
     }
     
@@ -11695,7 +11729,7 @@ function addJunctionPoint(latlng) {
     // 檢查是否太接近已有的Y接點
     for (let junction of branchEditJunctions) {
         if (Math.abs(junction.distance - distance) < 10) {
-            alert('⚠️ 此位置太接近已有的Y接點(距離<10m)');
+            showToast('此位置太接近已有的Y接點(距離<10m)', 'warning');
             return;
         }
     }
@@ -11787,7 +11821,7 @@ function addBranchNode(latlng) {
 
 function finishCurrentBranch() {
     if (!branchEditCurrentDrawing || branchEditCurrentDrawing.coords.length < 2) {
-        alert('⚠️ 支線至少需要2個點');
+        showToast('支線至少需要2個點', 'warning');
         return;
     }
     
@@ -11888,7 +11922,7 @@ function previewBranchResult() {
 async function saveBranchEdits() {
             if (!requireSupervisor()) return;
     if (branchEditJunctions.length === 0) {
-        alert('⚠️ 尚未建立任何Y接點');
+        showToast('尚未建立任何Y接點', 'warning');
         return;
     }
     
@@ -11913,7 +11947,7 @@ async function saveBranchEdits() {
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ 儲存成功！\n\n系統將重新載入工程資料');
+            showToast('儲存成功！', 'success');
             
             // 更新本地資料
             currentPipeline.linestring = multilinestring;
@@ -11922,11 +11956,11 @@ async function saveBranchEdits() {
             cancelBranchEdit();
             loadPipelineData(currentPipeline.id);
         } else {
-            alert('❌ 儲存失敗：' + (result.error || '未知錯誤'));
+            showToast('⚠ 儲存失敗：' + (result.error || '未知錯誤', 'error'));
         }
     } catch (error) {
         console.error('儲存錯誤:', error);
-        alert('❌ 儲存失敗：' + error.message);
+        showToast('⚠ 儲存失敗：' + error.message, 'error');
     }
 }
 
@@ -12274,7 +12308,7 @@ async function submitAddPipeline() {
         // 新增計畫模式
         projectName = projectNameInput.value.trim();
         if (!projectName) {
-            alert('⚠️ 請輸入新計畫名稱');
+            showToast('請輸入新計畫名稱', 'warning');
             projectNameInput.focus();
             return;
         }
@@ -12282,14 +12316,14 @@ async function submitAddPipeline() {
         // 選擇既有計畫
         projectName = projectSelect.value;
     } else {
-        alert('⚠️ 請選擇計畫');
+        showToast('請選擇計畫', 'warning');
         return;
     }
     
     // 驗證工程編號(必填)
     const pipelineId = pipelineIdInput.value.trim();
     if (!pipelineId) {
-        alert('⚠️ 請輸入工程編號');
+        showToast('請輸入工程編號', 'warning');
         pipelineIdInput.focus();
         return;
     }
@@ -12297,7 +12331,7 @@ async function submitAddPipeline() {
     // 驗證工程名稱
     const pipelineName = nameInput.value.trim();
     if (!pipelineName) {
-        alert('⚠️ 請輸入工程名稱');
+        showToast('請輸入工程名稱', 'warning');
         nameInput.focus();
         return;
     }
@@ -12342,7 +12376,7 @@ async function submitAddPipeline() {
         
         if (result.success) {
             closeAddPipelineForm();
-            alert('✅ 新增成功!\n\n系統將重新載入工程列表');
+            showToast('新增成功!', 'success');
             
             // 重新載入所有資料
             await loadData();
@@ -12360,11 +12394,11 @@ async function submitAddPipeline() {
                 }, 2000);
             }
         } else {
-            alert('❌ 新增失敗:\n' + (result.error || '未知錯誤'));
+            showToast('⚠ 新增失敗:\n' + (result.error || '未知錯誤', 'error'));
         }
     } catch (error) {
         console.error('新增工程失敗:', error);
-        alert('❌ 新增失敗:\n' + error.message);
+        showToast('⚠ 新增失敗:\n' + error.message, 'error');
     }
 }
 
@@ -12480,30 +12514,17 @@ function closeAddPipelineForm() {
                     document.getElementById('loadingScreen').style.display = 'none';
                 } else {
                     // 未授權
-                    alert('❌ 您的帳號未被授權使用此系統\n\n請聯絡管理員新增您的帳號：' + payload.email);
+                    showToast('⚠ 您的帳號未被授權使用此系統\n\n請聯絡管理員新增您的帳號：' + payload.email, 'error');
                     handleSignOut();
                 }
             } catch (error) {
                 console.error('驗證失敗:', error);
-                alert('❌ 登入驗證失敗，請稍後再試');
+                showToast('登入驗證失敗，請稍後再試', 'error');
                 handleSignOut();
             }
         }
         
         // 顯示使用者資訊
-        function showUserInfo() {
-            const userInfoDiv = document.getElementById('userInfo');
-            const userAvatar = document.getElementById('userAvatar');
-            const userName = document.getElementById('userName');
-            const userRole = document.getElementById('userRole');
-            
-            userAvatar.src = currentUser.picture;
-            userName.textContent = currentUser.name;
-            userRole.textContent = getRoleLabel(currentUser.role);
-            
-            userInfoDiv.style.display = 'flex';
-        }
-        
         // 登出處理
         function handleSignOut() {
             // 清除使用者資訊
@@ -12530,7 +12551,7 @@ function closeAddPipelineForm() {
             
             // 檢查管理員權限
             if (currentUser.role !== 'admin') {
-                alert('⛔ 此功能需要「管理員」權限\n\n目前您的角色: ' + currentUser.role + '\n請聯絡 admin 升級您的權限');
+                showToast('此功能需要「管理員」權限（目前：' + currentUser.role + '）', 'warning');
                 return false;
             }
             
