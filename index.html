@@ -59,7 +59,64 @@
             #toast-container { bottom: 70px; right: 12px; left: 12px; }
             .toast { max-width: 100%; }
         }
-        .measure-button {
+
+        /* ========== 自訂確認 Modal ========== */
+        .confirm-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 99990;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.15s ease;
+        }
+        .confirm-box {
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            padding: 28px 28px 22px;
+            max-width: 380px;
+            width: 90%;
+            animation: scaleIn 0.15s ease;
+        }
+        .confirm-icon { font-size: 32px; margin-bottom: 10px; text-align: center; }
+        .confirm-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .confirm-msg {
+            font-size: 13px;
+            color: #555;
+            text-align: center;
+            margin-bottom: 22px;
+            line-height: 1.6;
+            white-space: pre-line;
+        }
+        .confirm-btns {
+            display: flex;
+            gap: 10px;
+        }
+        .confirm-btn {
+            flex: 1;
+            padding: 11px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .confirm-btn:hover { opacity: 0.85; }
+        .confirm-btn-cancel { background: #f0f0f0; color: #555; }
+        .confirm-btn-ok     { background: #1976d2; color: white; }
+        .confirm-btn-danger { background: #c62828; color: white; }
+        @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+        @keyframes scaleIn { from { opacity:0; transform:scale(0.92); } to { opacity:1; transform:scale(1); } }
+                .measure-button {
             position: absolute;
             top: 260px; /* 放在日曆按鈕下方 */
             left: 10px;
@@ -1520,6 +1577,31 @@ kbd {
             setTimeout(dismiss, autoClose);
         }
 
+        // ========== 自訂確認 Modal ==========
+        // 用法：const ok = await showConfirm({ title, message, okText, cancelText, danger })
+        function showConfirm({ title = '確認', message = '', okText = '確定', cancelText = '取消', danger = false, icon = null } = {}) {
+            return new Promise(resolve => {
+                const backdrop = document.createElement('div');
+                backdrop.className = 'confirm-backdrop';
+                const autoIcon = icon || (danger ? '🗑️' : 'ℹ️');
+                backdrop.innerHTML = `
+                    <div class="confirm-box">
+                        <div class="confirm-icon">${autoIcon}</div>
+                        <div class="confirm-title">${title}</div>
+                        ${message ? `<div class="confirm-msg">${message}</div>` : ''}
+                        <div class="confirm-btns">
+                            <button class="confirm-btn confirm-btn-cancel" id="_confirmCancel">${cancelText}</button>
+                            <button class="confirm-btn ${danger ? 'confirm-btn-danger' : 'confirm-btn-ok'}" id="_confirmOk">${okText}</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(backdrop);
+                const close = (result) => { backdrop.remove(); resolve(result); };
+                backdrop.querySelector('#_confirmOk').onclick = () => close(true);
+                backdrop.querySelector('#_confirmCancel').onclick = () => close(false);
+                backdrop.addEventListener('click', e => { if (e.target === backdrop) close(false); });
+            });
+        }
+
 
         
         // 🔐 Google OAuth2 登入變數
@@ -1700,7 +1782,7 @@ kbd {
         // 回傳 true = 已登入可繼續；false = 未登入已提示
         function requireLogin() {
             if (currentUser) return true;
-            const shouldLogin = confirm('🔐 此操作需要登入 Google 帳號\n\n點擊「確定」前往登入頁面');
+            const shouldLogin = await showConfirm({ title: '需要登入', message: '此操作需要登入 Google 帳號', okText: '前往登入', icon: '🔐' });
             if (shouldLogin) {
                 window.location.href = 'login.html';
             }
@@ -1710,7 +1792,7 @@ kbd {
         // 檢查監造權限 - 用於 supervisor 等級操作（段落、分支、甘特圖、里程碑）
         function requireSupervisor() {
             if (!currentUser) {
-                const shouldLogin = confirm('🔐 此操作需要登入 Google 帳號\n\n點擊「確定」前往登入頁面');
+                const shouldLogin = await showConfirm({ title: '需要登入', message: '此操作需要登入 Google 帳號', okText: '前往登入', icon: '🔐' });
                 if (shouldLogin) {
                     window.location.href = 'login.html';
                 }
@@ -1726,7 +1808,7 @@ kbd {
         // 檢查管理員權限 - 用於 admin 等級操作（工程 CRUD）
         function requireAdmin() {
             if (!currentUser) {
-                const shouldLogin = confirm('🔐 此操作需要登入 Google 帳號\n\n點擊「確定」前往登入頁面');
+                const shouldLogin = await showConfirm({ title: '需要登入', message: '此操作需要登入 Google 帳號', okText: '前往登入', icon: '🔐' });
                 if (shouldLogin) {
                     window.location.href = 'login.html';
                 }
@@ -1808,7 +1890,7 @@ kbd {
                 allProjects = projectsData.projects;
                 console.log('載入了', allProjects.length, '個計畫');
                 
-                // 載入所有工程（只要清單和路徑，不載入進度）
+                // 載入所有工程
                 console.log('開始載入工程清單...');
                 const pipelinePromises = allProjects.map(project => 
                     fetch(API_URL + '?action=getPipelines&projectName=' + encodeURIComponent(project.name))
@@ -1819,11 +1901,13 @@ kbd {
                 allPipelines = [];
                 pipelinesResults.forEach(data => {
                     if (data.pipelines) {
-                        // 每條管線初始化空段落，點進去才載入
-                        data.pipelines.forEach(p => { p.segments = []; p._progressLoaded = false; });
                         allPipelines = allPipelines.concat(data.pipelines);
                     }
                 });
+                console.log('載入了', allPipelines.length, '個工程');
+                
+                // 🚀 懶載入：不在初始化時載入進度，點進工程才載入
+                allPipelines.forEach(p => { p.segments = []; p._progressLoaded = false; });
                 console.log('載入了', allPipelines.length, '個工程（進度將於點擊時載入）');
                 
                 showLoading(false);
@@ -1840,10 +1924,12 @@ kbd {
         async function loadPipelines() {
             console.log('🔄 重新載入工程資料...');
             
+            // 重新載入計畫清單
             const projectsRes = await fetch(API_URL + '?action=getProjects');
             const projectsData = await projectsRes.json();
             allProjects = projectsData.projects;
             
+            // 重新載入所有工程
             const pipelinePromises = allProjects.map(project => 
                 fetch(API_URL + '?action=getPipelines&projectName=' + encodeURIComponent(project.name))
                     .then(res => res.json())
@@ -1853,11 +1939,12 @@ kbd {
             allPipelines = [];
             pipelinesResults.forEach(data => {
                 if (data.pipelines) {
-                    data.pipelines.forEach(p => { p.segments = []; p._progressLoaded = false; });
                     allPipelines = allPipelines.concat(data.pipelines);
                 }
             });
             
+            // 🚀 懶載入：重置進度，點進去才重新抓
+            allPipelines.forEach(p => { p.segments = []; p._progressLoaded = false; });
             console.log('✅ 工程清單已重新載入');
         }
         
@@ -2165,7 +2252,7 @@ kbd {
                     const progressData = await progressRes.json();
                     currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
                     currentPipeline._progressLoaded = true;
-                    console.log('✅ 懶載入進度完成：', currentPipeline.name, currentPipeline.segments.length, '個段落');
+                    console.log('✅ 懶載入進度：', currentPipeline.name, currentPipeline.segments.length, '個段落');
                 } catch (e) {
                     console.error('載入進度失敗:', e);
                     showToast('載入施工進度失敗，請重試', 'error');
@@ -2971,7 +3058,7 @@ kbd {
             const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
             if (!segment) { showToast('找不到段落 ' + segmentNumber, 'error'); return; }
             const numSmallSegs = Math.ceil((segment.endDistance - segment.startDistance) / 10);
-            if (!confirm(`確定要將段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段標記為完工嗎？`)) return;
+            if (!await showConfirm({ title: '整段標記完工', message: `確定要將段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段標記為完工嗎？`, okText: '全段完工', icon: '✅' })) return;
             const today = new Date();
             const sv = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
             const visualUpdates = Array.from({length: numSmallSegs}, (_, i) => ({segmentNumber, smallIndex: i, isCompleted: true}));
@@ -2992,7 +3079,7 @@ kbd {
             const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
             if (!segment) { showToast('找不到段落 ' + segmentNumber, 'error'); return; }
             const numSmallSegs = Math.ceil((segment.endDistance - segment.startDistance) / 10);
-            if (!confirm(`確定要將段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段取消完工嗎？`)) return;
+            if (!await showConfirm({ title: '整段取消完工', message: `確定要取消段落 ${segmentNumber} 的全部 ${numSmallSegs} 個小段的完工狀態嗎？`, okText: '取消完工', danger: true })) return;
             const visualUpdates = Array.from({length: numSmallSegs}, (_, i) => ({segmentNumber, smallIndex: i, isCompleted: false}));
             batchUpdateSmallSegmentVisuals(visualUpdates);
             map.closePopup();
@@ -3024,7 +3111,7 @@ kbd {
             if (!requireLogin()) return;
             if (selectedSmallSegments.length === 0) return;
             
-            const confirmed = confirm(`確定要標記 ${selectedSmallSegments.length} 個小段為完工嗎？`);
+            const confirmed = await showConfirm({ title: '批次標記完工', message: `確定要將 ${selectedSmallSegments.length} 個小段標記為完工嗎？`, okText: '標記完工', icon: '✅' });
             if (!confirmed) return;
             
             // 🚀 Optimistic UI：先立即更新視覺,讓使用者看到即時回饋
@@ -3141,7 +3228,7 @@ kbd {
             if (!requireLogin()) return;
             if (selectedSmallSegments.length === 0) return;
             
-            const confirmed = confirm(`確定要取消 ${selectedSmallSegments.length} 個小段的完工狀態嗎？`);
+            const confirmed = await showConfirm({ title: '批次取消完工', message: `確定要取消 ${selectedSmallSegments.length} 個小段的完工狀態嗎？`, okText: '取消完工', danger: true });
             if (!confirmed) return;
             
             // 🚀 Optimistic UI：先立即更新視覺
@@ -3380,7 +3467,7 @@ kbd {
             const segLength = segment.endDistance - segment.startDistance;
             const numSmallSegments = Math.ceil(segLength / 10);
             
-            const confirmed = confirm(`確定要標記段落 ${segmentNumber} 的全部 ${numSmallSegments} 個小段為完工嗎？`);
+            const confirmed = await showConfirm({ title: '整段標記完工', message: `確定要將段落 ${segmentNumber} 的全部 ${numSmallSegments} 個小段標記為完工嗎？`, okText: '全段完工', icon: '✅' });
             if (!confirmed) return;
             
             // 🚀 Optimistic UI：先立即更新所有小段的視覺
@@ -3468,7 +3555,7 @@ kbd {
             const segLength = segment.endDistance - segment.startDistance;
             const numSmallSegments = Math.ceil(segLength / 10);
             
-            const confirmed = confirm(`確定要取消段落 ${segmentNumber} 的全部 ${numSmallSegments} 個小段的完工狀態嗎？`);
+            const confirmed = await showConfirm({ title: '整段取消完工', message: `確定要取消段落 ${segmentNumber} 的全部 ${numSmallSegments} 個小段的完工狀態嗎？`, okText: '取消完工', danger: true });
             if (!confirmed) return;
             
             // 🚀 Optimistic UI：先立即更新所有小段的視覺
@@ -3979,7 +4066,7 @@ kbd {
         // 刪除地圖備註
         window.deleteMapNote = async function(noteId) {
             if (!requireLogin()) return;
-            if (!confirm('確定要刪除這個備註嗎？')) {
+            if (!await showConfirm({ title: '刪除備註', message: '確定要刪除這個備註嗎？', okText: '刪除', danger: true })) {
                 return;
             }
             
@@ -4323,7 +4410,7 @@ kbd {
         // 刪除配電盤標記
         window.deletePanel = async function(panelId) {
             if (!requireLogin()) return;
-            if (!confirm('確定要刪除這個配電盤標記嗎？')) {
+            if (!await showConfirm({ title: '刪除配電盤標記', message: '確定要刪除嗎？', okText: '刪除', danger: true })) {
                 return;
             }
             
@@ -4753,7 +4840,7 @@ kbd {
         
         window.deleteShaft = async function(shaftId) {
             if (!requireLogin()) return;
-            if (!confirm('確定要刪除這個工作井嗎？')) return;
+            if (!await showConfirm({ title: '刪除工作井', message: '確定要刪除這個工作井嗎？', okText: '刪除', danger: true })) return;
             try {
                 const response = await fetch(API_URL + '?action=deleteShaft&shaftId=' + encodeURIComponent(shaftId));
                 const result = await response.json();
@@ -5172,7 +5259,7 @@ kbd {
         
         async function deletePermitZone(zoneId) {
             if (!requireLogin()) return;
-            if (!confirm('確定要刪除這個範圍嗎？')) return;
+            if (!await showConfirm({ title: '刪除範圍', message: '確定要刪除這個路權範圍嗎？', okText: '刪除', danger: true })) return;
             try {
                 const response = await fetch(API_URL + '?action=deletePermitZone&zoneId=' + encodeURIComponent(zoneId));
                 const result = await response.json();
@@ -5672,7 +5759,7 @@ async function saveItem() {
 }
 
 async function deleteItem() {
-    if (!editingItem || !confirm('確定刪除?')) return;
+    if (!editingItem || !await showConfirm({ title: '刪除項目', message: '確定要刪除這個項目嗎？', okText: '刪除', danger: true })) return;
     try {
         const res = await fetch(API_URL + '?action=deleteGanttItem&itemId=' + editingItem.id);
         const result = await res.json();
@@ -6289,7 +6376,7 @@ window.addEventListener('message', async function(event) {
         }
         
         window.deleteGanttItem = async function(id) {
-            if (!confirm('確定刪除？')) return;
+            if (!await showConfirm({ title: '刪除', message: '確定要刪除嗎？', okText: '刪除', danger: true })) return;
             try {
                 const res = await fetch(API_URL + '?action=deleteGanttItem&itemId=' + encodeURIComponent(id));
                 const result = await res.json();
@@ -6524,7 +6611,7 @@ window.addEventListener('message', async function(event) {
         }
         
         window.deleteMilestone = async function(id) {
-            if (!confirm('確定刪除這個週次？')) return;
+            if (!await showConfirm({ title: '刪除週次', message: '確定要刪除這個週次嗎？', okText: '刪除', danger: true })) return;
             try {
                 const res = await fetch(API_URL + '?action=deleteMilestone&milestoneId=' + encodeURIComponent(id));
                 const result = await res.json();
@@ -6879,7 +6966,7 @@ window.addEventListener('message', async function(event) {
         
         // 清空工程所有段落
         window.clearAllSegments = async function() {
-            if (!confirm('⚠️ 確定要刪除這個工程的所有段落嗎？\n\n這個動作無法復原！')) {
+            if (!await showConfirm({ title: '清空所有段落', message: '確定要刪除這個工程的所有段落嗎？\n此操作無法復原！', okText: '確認清空', danger: true })) {
                 return;
             }
             
@@ -7545,7 +7632,7 @@ window.addEventListener('message', async function(event) {
         
         // 刪除這個段落
         window.deleteThisSegment = async function(segmentNumber) {
-            if (!confirm('⚠️ 確定要刪除這個段落嗎？')) {
+            if (!await showConfirm({ title: '刪除段落', message: '確定要刪除這個段落嗎？', okText: '刪除', danger: true })) {
                 return;
             }
             
@@ -8533,7 +8620,7 @@ window.addEventListener('message', async function(event) {
          * 刪除整個分支（階段 3 功能，目前僅顯示提示）
          */
         function deleteBranch(branchIndex) {
-            if (!confirm('確定要刪除整個分支嗎？')) return;
+            if (!await showConfirm({ title: '刪除整個分支', message: '確定要刪除整個分支嗎？此操作無法復原。', okText: '刪除', danger: true })) return;
             
             // 移除該分支的所有節點標記
             const branchNodes = editingNodes.filter(n => n.branchIndex === branchIndex);
@@ -8785,7 +8872,7 @@ window.addEventListener('message', async function(event) {
             
             // 檢查至少有 2 個節點（起始節點 + 至少 1 個新節點）
             if (branchDrawingNodes.length < 2) {
-                showToast('分支至少需要 2 個節點（起始節點 + 至少 1 個新節點）', 'error');
+                showToast('分支至少需要 2 個節點', 'warning');
                 return;
             }
             
@@ -9223,7 +9310,7 @@ window.addEventListener('message', async function(event) {
 
 確定要繼續嗎？`;
             
-            if (!confirm(confirmMessage)) {
+            if (!await showConfirm({ title: '確認操作', message: confirmMessage, okText: '確定' })) {
                 return;
             }
             
@@ -9374,7 +9461,7 @@ window.addEventListener('message', async function(event) {
         // 取消編輯模式
         function cancelEditMode(silent = false) {
             // silent = true 時不顯示確認對話框（例如：返回按鈕、儲存後）
-            if (!silent && isEditingPath && !confirm('❌ 確定要取消編輯嗎？\n\n所有變更都將遺失。')) {
+            if (!silent && isEditingPath && !await showConfirm({ title: '取消編輯', message: '確定要取消編輯嗎？\n所有變更都將遺失。', okText: '放棄變更', danger: true })) {
                 return;
             }
             
@@ -9640,7 +9727,7 @@ window.addEventListener('message', async function(event) {
 
 確定要刪除嗎？`;
 
-            if (!confirm(confirmMsg)) {
+            if (!await showConfirm({ title: '確認新增工程', message: confirmMsg, okText: '確認新增', icon: '➕' })) {
                 return;
             }
             
@@ -9699,7 +9786,7 @@ window.addEventListener('message', async function(event) {
                 return;
             }
             
-            if (!confirm(`確定要儲存變更嗎？\n\n計畫：${newProjectName}\n編號：${newPipelineId}\n名稱：${newPipelineName}`)) {
+            if (!await showConfirm({ title: '儲存工程變更', message: `計畫：${newProjectName}\n編號：${newPipelineId}\n名稱：${newPipelineName}`, okText: '儲存', icon: '💾' })) {
                 return;
             }
             
@@ -9799,7 +9886,7 @@ window.addEventListener('message', async function(event) {
         // 取消視覺化分段
         function cancelVisualSegmentation() {
             if (segmentDividers.length > 0) {
-                if (!confirm('確定要取消嗎？所有分段線將被清除')) {
+                if (!await showConfirm({ title: '取消分段', message: '確定要取消嗎？所有分段線將被清除。', okText: '確認取消', danger: true })) {
                     return;
                 }
             }
@@ -9854,12 +9941,13 @@ window.addEventListener('message', async function(event) {
             
             if (currentSegments.length > 0) {
                 // 已有段落，詢問使用者意圖
-                const choice = confirm(
-                    `目前已有 ${currentSegments.length} 個段落\n\n` +
-                    `【確定】= 微調現有段落位置（只能拖拉調整）\n` +
-                    `【取消】= 清空重新分段（可新增分段線）\n\n` +
-                    `請選擇：`
-                );
+                const choice = await showConfirm({
+                    title: '選擇分段模式',
+                    message: `目前已有 ${currentSegments.length} 個段落\n\n【確定】微調現有段落位置（拖拉調整）\n【取消】清空重新分段（新增分段線）`,
+                    okText: '微調模式',
+                    cancelText: '重新分段',
+                    icon: '📐'
+                });
                 
                 if (choice) {
                     // 微調模式
@@ -9988,11 +10076,13 @@ window.addEventListener('message', async function(event) {
             let adjustmentMode = false;
             
             if (branchSegments.length > 0) {
-                const choice = confirm(
-                    `分支已有 ${branchSegments.length} 個段落\n\n` +
-                    `【確定】= 微調現有段落位置（只能拖拉調整）\n` +
-                    `【取消】= 清空重新分段（可新增分段線）`
-                );
+                const choice = await showConfirm({
+                    title: '選擇分段模式',
+                    message: `分支已有 ${branchSegments.length} 個段落\n\n【確定】微調現有段落位置（拖拉調整）\n【取消】清空重新分段（新增分段線）`,
+                    okText: '微調模式',
+                    cancelText: '重新分段',
+                    icon: '📐'
+                });
                 
                 if (choice) {
                     adjustmentMode = true;
@@ -10051,7 +10141,7 @@ window.addEventListener('message', async function(event) {
             
             if (hasDividers) {
                 // 有分段線：詢問是否儲存
-                if (confirm('是否要根據分段線建立段落？')) {
+                if (await showConfirm({ title: '建立段落', message: '是否要根據分段線建立段落？', okText: '建立', cancelText: '不建立', icon: '📐' })) {
                     createSegmentsFromDividers();
                     return; // createSegmentsFromDividers 會處理清理工作
                 }
@@ -10064,13 +10154,13 @@ window.addEventListener('message', async function(event) {
                     const branch = branchDataForSegmentation.branches[currentBranchForSegmentation];
                     const branchLabel = branch.isBranch ? `分支 ${currentBranchForSegmentation}` : '主幹';
                     
-                    if (confirm(`沒有分段線。\n\n是否要將整條${branchLabel}建立為一個段落？`)) {
+                    if (await showConfirm({ title: '建立整段', message: `沒有分段線，是否要將整條${branchLabel}建立為一個段落？`, okText: '建立', cancelText: '取消', icon: '📐' })) {
                         createWholeBranchSegment();
                         return;
                     }
                 } else {
                     // 單一 LINESTRING：詢問是否建立整條為一個段落
-                    if (confirm('沒有分段線。\n\n是否要將整條管線建立為一個段落？')) {
+                    if (await showConfirm({ title: '建立整段', message: '沒有分段線，是否要將整條管線建立為一個段落？', okText: '建立', cancelText: '取消', icon: '📐' })) {
                         createWholeLineSegment();
                         return;
                     }
@@ -10277,7 +10367,7 @@ window.addEventListener('message', async function(event) {
             marker.on('contextmenu', function(e) {
                 L.DomEvent.preventDefault(e);
                 
-                if (confirm('確定要刪除這條分段線嗎？')) {
+                if (await showConfirm({ title: '刪除分段線', message: '確定要刪除這條分段線嗎？', okText: '刪除', danger: true })) {
                     map.removeLayer(marker);
                     const index = segmentDividers.findIndex(d => d.marker === marker);
                     if (index !== -1) {
@@ -10595,7 +10685,7 @@ window.addEventListener('message', async function(event) {
             }
             
             if (endDist > currentPipeline.length) {
-                if (!confirm(`⚠️ 結束距離 ${endDist}m 超過管線總長度 ${currentPipeline.length}m\n\n是否繼續？`)) {
+                if (!await showConfirm({ title: '距離超出範圍', message: `結束距離 ${endDist}m 超過管線總長度 ${currentPipeline.length}m，是否繼續？`, okText: '繼續', icon: '⚠️' })) {
                     return;
                 }
             }
@@ -10608,7 +10698,7 @@ window.addEventListener('message', async function(event) {
             });
             
             if (overlapping) {
-                if (!confirm('⚠️ 此段落與現有段落有重疊\n\n是否繼續？')) {
+                if (!await showConfirm({ title: '段落重疊警告', message: '此段落與現有段落有重疊，是否繼續？', okText: '繼續', icon: '⚠️' })) {
                     return;
                 }
             }
@@ -10779,7 +10869,7 @@ window.addEventListener('message', async function(event) {
             const end = Math.round(parseFloat(segment.endDistance));
             const length = end - start;
             
-            if (confirm(`確定要刪除段落 #${segmentNumber} 嗎？\n\n起始：${start}m\n結束：${end}m\n長度：${length}m\n\n⚠️ 此操作無法復原！`)) {
+            if (await showConfirm({ title: `刪除段落 #${segmentNumber}`, message: `起始：${start}m　結束：${end}m　長度：${length}m\n此操作無法復原！`, okText: '刪除', danger: true })) {
                 deleteSegment(segmentNumber);
             }
         }
@@ -11161,7 +11251,7 @@ window.addEventListener('message', async function(event) {
                 console.log(`🔍 找到 ${segmentsToDelete.length} 個需要刪除的段落:`, segmentsToDelete.map(s => s.segmentNumber));
                 
                 if (segmentsToDelete.length > 0) {
-                    if (!confirm(`⚠️ 目前已有 ${segmentsToDelete.length} 個段落\n\n批次建立會刪除這些段落並重新建立\n\n確定要繼續嗎？`)) {
+                    if (!await showConfirm({ title: '批次重建段落', message: `目前已有 ${segmentsToDelete.length} 個段落，批次建立會刪除後重新建立，確定要繼續嗎？`, okText: '確認重建', danger: true })) {
                         return;
                     }
                     
@@ -11849,7 +11939,7 @@ function cancelCurrentBranch() {
 }
 
 function clearAllBranchEdits() {
-    if (!confirm('確定要清除所有編輯嗎？')) return;
+    if (!await showConfirm({ title: '清除編輯', message: '確定要清除所有編輯嗎？', okText: '清除', danger: true })) return;
     
     // 清除Y接點
     branchEditJunctions.forEach(j => map.removeLayer(j.marker));
@@ -11911,7 +12001,7 @@ async function saveBranchEdits() {
         return;
     }
     
-    if (!confirm(`確定要儲存嗎？\n\nY接點: ${branchEditJunctions.length} 個\n新支線: ${branchEditNewBranches.length} 條\n\n儲存後將更新 Google Sheets`)) {
+    if (!await showConfirm({ title: '儲存分支路徑', message: `Y接點：${branchEditJunctions.length} 個\n新支線：${branchEditNewBranches.length} 條\n\n儲存後將更新 Google Sheets`, okText: '儲存', icon: '💾' })) {
         return;
     }
     
@@ -12337,7 +12427,7 @@ async function submitAddPipeline() {
     // 確認訊息
     const confirmMsg = `確定要新增以下工程嗎?\n\n工程編號: ${pipelineId}\n計畫: ${projectName}\n工程: ${pipelineName}\n\n將自動生成短路徑供後續編輯`;
     
-    if (!confirm(confirmMsg)) {
+    if (!await showConfirm({ title: '確認新增工程', message: confirmMsg, okText: '確認新增', icon: '➕' })) {
         return;
     }
     
@@ -12527,7 +12617,7 @@ function closeAddPipelineForm() {
         function checkAdminPermission() {
             // 檢查是否登入
             if (!currentUser) {
-                const shouldLogin = confirm('🔐 此功能需要登入\n\n點擊「確定」前往登入頁面');
+                const shouldLogin = await showConfirm({ title: '需要登入', message: '此功能需要登入 Google 帳號', okText: '前往登入', icon: '🔐' });
                 if (shouldLogin) {
                     window.location.href = 'login.html';
                 }
