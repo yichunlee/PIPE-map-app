@@ -3452,6 +3452,7 @@ kbd {
         // 標記整個段落為完工
         window.markWholeSegmentComplete = async function(segmentNumber) {
             if (!requireLogin()) return;
+            map.closePopup();
             const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
                 showToast('找不到段落！', 'error');
@@ -3540,6 +3541,7 @@ kbd {
         // 標記整個段落為未完工
         window.markWholeSegmentIncomplete = async function(segmentNumber) {
             if (!requireLogin()) return;
+            map.closePopup();
             const segment = currentPipeline.segments.find(s => s.segmentNumber == segmentNumber);
             if (!segment) {
                 showToast('找不到段落！', 'error');
