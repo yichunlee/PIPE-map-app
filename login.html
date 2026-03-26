@@ -154,8 +154,8 @@
                     };
                     
                     try {
-                        sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
-                        console.log('✅ 使用者資訊已儲存到 sessionStorage');
+                        localStorage.setItem('userInfo', JSON.stringify(userInfo));
+                        console.log('✅ 使用者資訊已儲存到 localStorage');
                         console.log('🚀 準備跳轉到 index.html...');
                         
                         // 2 秒後自動跳轉 (或點擊按鈕立即跳轉)
