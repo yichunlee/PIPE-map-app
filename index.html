@@ -1688,8 +1688,8 @@ kbd {
         window.addEventListener('load', function() {
             console.log('🚀 系統初始化...');
             
-            // 嘗試從 sessionStorage 取得使用者資訊
-            const userInfoStr = sessionStorage.getItem('userInfo');
+            // 嘗試從 localStorage 取得使用者資訊
+            const userInfoStr = localStorage.getItem('userInfo');
             
             if (!userInfoStr) {
                 // 未登入 → 訪客模式（可瀏覽，修改時再要求登入）
@@ -1703,7 +1703,7 @@ kbd {
                     // 檢查登入是否過期 (24小時)
                     if (Date.now() - userInfo.timestamp > 24 * 60 * 60 * 1000) {
                         console.log('⏰ 登入已過期，切換為訪客模式');
-                        sessionStorage.removeItem('userInfo');
+                        localStorage.removeItem('userInfo');
                         currentUser = null;
                         userToken = null;
                     } else {
@@ -1721,7 +1721,7 @@ kbd {
                     }
                 } catch (error) {
                     console.error('❌ 解析使用者資訊失敗:', error);
-                    sessionStorage.removeItem('userInfo');
+                    localStorage.removeItem('userInfo');
                     currentUser = null;
                     userToken = null;
                 }
@@ -12559,8 +12559,8 @@ function closeAddPipelineForm() {
             currentUser = null;
             userToken = null;
             
-            // 清除 sessionStorage
-            sessionStorage.removeItem('userInfo');
+            // 清除 localStorage
+            localStorage.removeItem('userInfo');
             
             // 重新導向到登入頁面
             window.location.href = 'login.html';
