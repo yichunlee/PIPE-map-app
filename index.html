@@ -2481,7 +2481,7 @@ kbd {
                                             allPolylines.push(nm);
                                         }
                                     }
-                                }
+                                } // end if (midCoords.length > 0)
                         } else {
                             // 沒有段落資料：繪製整條分支
                             const isMain = !branch.isBranch;
@@ -2955,9 +2955,9 @@ kbd {
         
         // 處理小段點擊（支持 Ctrl 多選、Shift 範圍選取）
         function handleSmallSegmentClick(e, segment, smallIndex, smallStart, smallEnd, isCompleted, polyline, originalColor) {
-            // 🔧 視覺化分段模式下,禁用小段點擊
+            // 🔧 視覺化分段模式下，轉交給分段線新增功能
             if (visualSegmentationMode) {
-                L.DomEvent.stopPropagation(e);
+                onMapClickAddDivider(e);
                 return;
             }
             
