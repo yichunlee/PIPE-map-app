@@ -1710,6 +1710,23 @@ kbd {
         }
         
         // 🔍 解析段落資料中的 branchIndex (從備註欄位提取)
+        // 從 notes 欄位解析節點區間（格式：node:節點1-2|branchIndex:0）
+        function parseNodeFromNotes(notes) {
+            if (!notes) return '';
+            const match = String(notes).match(/node:([^|]+)/);
+            return match ? match[1].trim() : '';
+        }
+        
+        // 組合 notes 字串（保留 branchIndex，加入/更新 node）
+        function buildNotes(nodeStr, branchIndex) {
+            const parts = [];
+            if (nodeStr && nodeStr.trim()) parts.push('node:' + nodeStr.trim());
+            if (branchIndex !== undefined && branchIndex !== null && String(branchIndex) !== '') {
+                parts.push('branchIndex:' + branchIndex);
+            }
+            return parts.join('|');
+        }
+        
         function parseBranchIndexFromSegments(segments) {
             if (!segments || !Array.isArray(segments)) return segments;
             
@@ -1720,6 +1737,8 @@ kbd {
                         seg.branchIndex = parseInt(match[1], 10);
                     }
                 }
+                // 同時解析節點區間
+                seg.nodeRange = parseNodeFromNotes(seg.notes);
             });
             
             return segments;
@@ -2412,7 +2431,8 @@ kbd {
                                     const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
                                     const color = getColorForMethodKey(methodKey);
                                     const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
-                                    const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
+                                    const nodePrefix = segment.nodeRange ? segment.nodeRange + ' | ' : '';
+                                    const labelText = `${nodePrefix}${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
                                     
                                     const label = L.marker(midLatLng, {
                                         icon: L.divIcon({
@@ -2662,7 +2682,8 @@ kbd {
                         }
                         
                         const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
-                        const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segmentLength)}m`;
+                        const nodePrefix = segment.nodeRange ? segment.nodeRange + ' | ' : '';
+                        const labelText = `${nodePrefix}${methodLabel} ${Math.round(completedLength)}m/${Math.round(segmentLength)}m`;
                         
                         // 將顏色轉為半透明
                         const hexToRgba = (hex, alpha) => {
@@ -10984,6 +11005,10 @@ window.addEventListener('message', async function(event) {
                         </select>
                     </div>
                     
+                    <div style="margin-bottom:15px;">
+                        <input type="text" id="segNodeRange" placeholder="節點區間（如：節點1-2）" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
                     <div style="display:flex;gap:10px;">
                         <button onclick="confirmAddSegment()" style="flex:1;padding:10px;background:#667eea;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">儲存</button>
                         <button onclick="closeCustomDialog()" style="flex:1;padding:10px;background:#f5f5f5;color:#666;border:none;border-radius:4px;cursor:pointer;font-size:14px;">取消</button>
@@ -11002,7 +11027,8 @@ window.addEventListener('message', async function(event) {
             const diameter = document.getElementById('segDiameter').value.trim();
             const pipeType = document.getElementById('segPipeType').value;
             const method = document.getElementById('segMethod').value;
-            const notes = document.getElementById('segNotes').value.trim();
+            const nodeRange = (document.getElementById('segNodeRange') ? document.getElementById('segNodeRange').value.trim() : '');
+            const notes = buildNotes(nodeRange, null);
             
             // 驗證
             if (isNaN(startDist) || isNaN(endDist)) {
@@ -11114,6 +11140,10 @@ window.addEventListener('message', async function(event) {
                         </select>
                     </div>
                     
+                    <div style="margin-bottom:15px;">
+                        <input type="text" id="editNodeRange" value="${segment.nodeRange || ''}" placeholder="節點區間（如：節點1-2）" style="width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:4px;font-size:14px;">
+                    </div>
+                    
                     <div style="display:flex;gap:10px;">
                         <button onclick="confirmEditSegment('${segmentNumber}')" style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">儲存</button>
                         <button onclick="closeCustomDialog()" style="flex:1;padding:10px;background:#f5f5f5;color:#666;border:none;border-radius:4px;cursor:pointer;font-size:14px;">取消</button>
@@ -11132,6 +11162,11 @@ window.addEventListener('message', async function(event) {
             const diameter = document.getElementById('editDiameter').value.trim();
             const pipeType = document.getElementById('editPipeType').value;
             const method = document.getElementById('editMethod').value;
+            const nodeRange = document.getElementById('editNodeRange') ? document.getElementById('editNodeRange').value.trim() : '';
+            // 取得原本的 branchIndex（保留不動）
+            const seg = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
+            const branchIdx = seg ? seg.branchIndex : undefined;
+            const notes = buildNotes(nodeRange, branchIdx);
             
             // 驗證
             if (isNaN(startDist) || isNaN(endDist)) {
@@ -11154,7 +11189,7 @@ window.addEventListener('message', async function(event) {
                     '&diameter=' + encodeURIComponent(diameter) +
                     '&pipeType=' + encodeURIComponent(pipeType) +
                     '&method=' + encodeURIComponent(method) +
-                    '&notes=';
+                    '&notes=' + encodeURIComponent(notes);
                 
                 const response = await fetch(url);
                 const result = await response.json();
