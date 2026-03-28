@@ -2143,8 +2143,11 @@ kbd {
                 map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50] });
             }
             
-            // 顯示計畫統計面板
+            // 顯示計畫統計面板（先顯示，背景再載入進度更新）
             showProjectStatsPanel(projectPipelines);
+            
+            // 背景靜默載入所有工程進度，載入完自動更新統計欄
+            _loadProjectProgressBackground(projectPipelines);
         }
         
         function showPipelineList(pipelines) {
@@ -6932,6 +6935,36 @@ window.addEventListener('message', async function(event) {
             }
         }
         
+        // 背景靜默載入整個計畫所有工程的進度，完成後更新統計欄
+        async function _loadProjectProgressBackground(pipelines) {
+            const needLoad = pipelines.filter(p => !p._progressLoaded);
+            if (needLoad.length === 0) {
+                showProjectStatsPanel(pipelines);
+                return;
+            }
+            
+            console.log(`🔄 背景載入 ${needLoad.length} 個工程進度...`);
+            
+            // 逐一載入，每載完一個就更新統計欄（讓使用者看到進度逐漸累積）
+            for (const pipeline of needLoad) {
+                try {
+                    const res = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(pipeline.id));
+                    const data = await res.json();
+                    pipeline.segments = parseBranchIndexFromSegments(data.segments || []);
+                    pipeline._progressLoaded = true;
+                    // 同步更新 allPipelines
+                    const idx = allPipelines.findIndex(p => p.id === pipeline.id);
+                    if (idx !== -1) allPipelines[idx].segments = pipeline.segments;
+                } catch (e) {
+                    console.warn('載入進度失敗:', pipeline.name, e);
+                }
+                // 每載完一個就即時更新統計欄
+                showProjectStatsPanel(pipelines);
+            }
+            
+            console.log('✅ 所有工程進度載入完成');
+        }
+
         // 顯示計畫統計面板（整個計畫的多個工程）
         function showProjectStatsPanel(pipelines) {
             const existingPanel = document.querySelector('.stats-panel');
