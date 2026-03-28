@@ -2460,8 +2460,28 @@ kbd {
                                     }).addTo(map);
                                     
                                     segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color, methodLabel, segLength });
+                                    
+                                    // 節點標記：在段落起點放節點標記
+                                    if (segment.nodeRange && segment.nodeRange.trim()) {
+                                        const nodePos = getPositionAtDistance(pipelineCoords, Number(segment.startDistance));
+                                        if (nodePos) {
+                                            const nm = L.marker(nodePos, {
+                                                icon: L.divIcon({
+                                                    className: '',
+                                                    html: `<div style="position:relative;width:12px;height:12px;">
+                                                        <div style="width:12px;height:12px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                                                        <div style="position:absolute;left:14px;top:-3px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:1px 4px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">${segment.nodeRange}</div>
+                                                    </div>`,
+                                                    iconSize: [12, 12],
+                                                    iconAnchor: [6, 6]
+                                                }),
+                                                zIndexOffset: 600,
+                                                interactive: false
+                                            }).addTo(map);
+                                            allPolylines.push(nm);
+                                        }
+                                    }
                                 }
-                            });
                         } else {
                             // 沒有段落資料：繪製整條分支
                             const isMain = !branch.isBranch;
@@ -2720,35 +2740,41 @@ kbd {
                         segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color, methodLabel, segLength: segmentLength }); // 加入標籤陣列，方便隱藏
                     }
                     
-                    // 節點標記：在段落起點放節點圓圈
-                    if (segment.nodeRange) {
-                        const nodeCoords = getSegmentCoords(coords, startDist, startDist + 1);
-                        if (nodeCoords.length > 0) {
-                            const nodeLatLng = nodeCoords[0];
+                    // 節點標記：在段落起點放節點標記
+                    if (segment.nodeRange && segment.nodeRange.trim()) {
+                        // 用 getPositionAtDistance 直接取起點座標，比 getSegmentCoords 更可靠
+                        const nodeLatLng = getPositionAtDistance(coords, startDist);
+                        if (nodeLatLng) {
                             const nodeMarker = L.marker(nodeLatLng, {
                                 icon: L.divIcon({
                                     className: '',
-                                    html: `<div style="
-                                        background: white;
-                                        border: 2px solid ${color};
-                                        border-radius: 50%;
-                                        width: 10px; height: 10px;
-                                        position: relative;
-                                    ">
+                                    html: `<div style="position:relative;width:12px;height:12px;">
                                         <div style="
-                                            position: absolute;
-                                            left: 12px; top: -4px;
-                                            white-space: nowrap;
-                                            font-size: 10px;
-                                            font-weight: bold;
-                                            color: ${color};
-                                            text-shadow: -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white;
+                                            width:12px;height:12px;
+                                            background:white;
+                                            border:2px solid ${color};
+                                            border-radius:50%;
+                                            box-shadow:0 1px 3px rgba(0,0,0,0.3);
+                                        "></div>
+                                        <div style="
+                                            position:absolute;
+                                            left:14px;top:-3px;
+                                            white-space:nowrap;
+                                            font-size:11px;
+                                            font-weight:bold;
+                                            color:${color};
+                                            background:white;
+                                            padding:1px 4px;
+                                            border-radius:3px;
+                                            text-shadow:none;
+                                            box-shadow:0 1px 3px rgba(0,0,0,0.15);
                                         ">${segment.nodeRange}</div>
                                     </div>`,
-                                    iconSize: [10, 10],
-                                    iconAnchor: [5, 5]
+                                    iconSize: [12, 12],
+                                    iconAnchor: [6, 6]
                                 }),
-                                zIndexOffset: 500
+                                zIndexOffset: 600,
+                                interactive: false
                             }).addTo(map);
                             allPolylines.push(nodeMarker);
                         }
