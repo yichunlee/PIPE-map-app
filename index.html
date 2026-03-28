@@ -5907,7 +5907,20 @@ function hideEditForm() {
     editingItem = null;
 }
 
-// 里程碑管理面板
+// 里程碑管理面板（表格式）
+function getMilestoneMethodKeys() {
+    const keys = new Set();
+    milestones.forEach(ms => {
+        if (ms.methodData) Object.keys(ms.methodData).forEach(k => { if (ms.methodData[k]) keys.add(k); });
+    });
+    // 也加入 segments 的 methodKey
+    segments.forEach(seg => {
+        const k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
+        if (k) keys.add(k);
+    });
+    return [...keys].sort();
+}
+
 async function showMilestoneManager() {
     document.getElementById('panelTitle').textContent = '📅 里程碑管理';
     renderMilestoneManagerList();
@@ -5915,54 +5928,88 @@ async function showMilestoneManager() {
 }
 
 function renderMilestoneManagerList() {
-    let html = '<button class="btn-primary" onclick="showAddMilestoneForm()" style="margin-bottom:10px;">＋ 新增里程碑</button>';
+    const methodKeys = getMilestoneMethodKeys();
+    const today = new Date();
+    
+    let html = '<div style="overflow-x:auto;font-size:11px;">';
+    html += '<table style="width:100%;border-collapse:collapse;min-width:300px;">';
+    // 表頭
+    html += '<thead><tr style="background:#3f51b5;color:white;">';
+    html += '<th style="padding:6px 8px;white-space:nowrap;text-align:left;">目標日期</th>';
+    methodKeys.forEach(k => {
+        html += '<th style="padding:6px 4px;white-space:nowrap;text-align:center;">' + k + '(m)</th>';
+    });
+    html += '<th style="padding:6px 4px;text-align:center;">操作</th>';
+    html += '</tr></thead><tbody>';
+    
     if (!milestones || milestones.length === 0) {
-        html += '<div style="color:#999;font-size:12px;text-align:center;padding:20px;">尚無里程碑</div>';
+        html += '<tr><td colspan="' + (methodKeys.length + 2) + '" style="text-align:center;padding:20px;color:#999;">尚無里程碑</td></tr>';
     } else {
         milestones.forEach((ms, idx) => {
-            html += '<div style="border:1px solid #e0e0e0;border-radius:6px;padding:8px;margin-bottom:6px;background:#f9f9f9;">';
-            html += '<div style="font-size:12px;font-weight:bold;color:#3f51b5;">' + ms.endDate + '</div>';
-            html += '<div style="font-size:11px;color:#333;margin:2px 0;">' + (ms.name || '(無名稱)') + '</div>';
-            html += '<div style="display:flex;gap:6px;margin-top:6px;">';
-            html += '<button class="btn-primary" onclick="showEditMilestoneForm(' + idx + ')" style="flex:1;font-size:11px;padding:4px;">✏️ 編輯</button>';
-            html += '<button class="btn-danger" onclick="deleteMilestoneItem(' + idx + ')" style="flex:1;font-size:11px;padding:4px;">🗑️ 刪除</button>';
-            html += '</div></div>';
+            const isThisWeek = new Date(ms.endDate) >= today && (idx === 0 || new Date(milestones[idx-1].endDate) < today);
+            const rowBg = isThisWeek ? 'background:#fff9e6;font-weight:bold;' : (idx % 2 === 0 ? 'background:#fafafa;' : '');
+            html += '<tr style="' + rowBg + 'border-bottom:1px solid #eee;">';
+            html += '<td style="padding:5px 8px;white-space:nowrap;color:#3f51b5;font-weight:bold;">' + (isThisWeek ? '🔸 ' : '') + ms.endDate + '</td>';
+            methodKeys.forEach(k => {
+                const val = (ms.methodData && ms.methodData[k]) ? Math.round(Number(ms.methodData[k])) + 'm' : '0m';
+                html += '<td style="padding:5px 4px;text-align:center;">' + val + '</td>';
+            });
+            html += '<td style="padding:5px 4px;text-align:center;white-space:nowrap;">';
+            html += '<span style="cursor:pointer;color:#1976d2;margin-right:6px;" onclick="showEditMilestoneForm(' + idx + ')">✏️</span>';
+            html += '<span style="cursor:pointer;color:#e53935;" onclick="deleteMilestoneItem(' + idx + ')">🗑️</span>';
+            html += '</td></tr>';
         });
     }
+    html += '</tbody></table></div>';
+    html += '<button class="btn-primary" onclick="showAddMilestoneForm()" style="margin-top:10px;width:100%;">＋ 新增里程碑</button>';
     document.getElementById('panelBody').innerHTML = html;
 }
 
 function showAddMilestoneForm() {
+    const methodKeys = getMilestoneMethodKeys();
     document.getElementById('panelTitle').textContent = '＋ 新增里程碑';
-    let html = '<button onclick="showMilestoneManager()" style="background:none;border:none;color:#3f51b5;cursor:pointer;font-size:12px;margin-bottom:8px;">← 返回列表</button>';
-    html += '<label>里程碑名稱</label><input id="msName" placeholder="例：第一階段完工">';
+    let html = '<button onclick="showMilestoneManager()" style="background:none;border:none;color:#3f51b5;cursor:pointer;font-size:12px;margin-bottom:10px;">← 返回列表</button>';
     html += '<label>目標日期</label><input id="msDate" type="date">';
-    html += '<label>說明</label><input id="msDesc" placeholder="（選填）">';
+    methodKeys.forEach(k => {
+        html += '<label>' + k + ' 目標(m)</label><input id="ms_' + k.replace(/ /g,'_') + '" type="number" placeholder="0">';
+    });
     html += '<button class="btn-primary" onclick="saveMilestoneItem(null)">💾 新增</button>';
     document.getElementById('panelBody').innerHTML = html;
 }
 
 function showEditMilestoneForm(idx) {
     const ms = milestones[idx];
+    const methodKeys = getMilestoneMethodKeys();
     document.getElementById('panelTitle').textContent = '✏️ 編輯里程碑';
-    let html = '<button onclick="showMilestoneManager()" style="background:none;border:none;color:#3f51b5;cursor:pointer;font-size:12px;margin-bottom:8px;">← 返回列表</button>';
-    html += '<label>里程碑名稱</label><input id="msName" value="' + (ms.name || '') + '">';
+    let html = '<button onclick="showMilestoneManager()" style="background:none;border:none;color:#3f51b5;cursor:pointer;font-size:12px;margin-bottom:10px;">← 返回列表</button>';
     html += '<label>目標日期</label><input id="msDate" type="date" value="' + (ms.endDate || '') + '">';
-    html += '<label>說明</label><input id="msDesc" value="' + (ms.description || ms.notes || '') + '">';
+    methodKeys.forEach(k => {
+        const val = (ms.methodData && ms.methodData[k]) ? ms.methodData[k] : '';
+        html += '<label>' + k + ' 目標(m)</label><input id="ms_' + k.replace(/ /g,'_') + '" type="number" placeholder="0" value="' + val + '">';
+    });
     html += '<button class="btn-primary" onclick="saveMilestoneItem(' + idx + ')">💾 儲存</button>';
     document.getElementById('panelBody').innerHTML = html;
 }
 
 async function saveMilestoneItem(idx) {
-    const name = document.getElementById('msName').value.trim();
     const date = document.getElementById('msDate').value;
-    const desc = document.getElementById('msDesc').value.trim();
-    if (!name || !date) { showToast('請填寫名稱和日期', 'warning'); return; }
+    if (!date) { showToast('請填寫目標日期', 'warning'); return; }
+    const methodKeys = getMilestoneMethodKeys();
+    const methodData = {};
+    methodKeys.forEach(k => {
+        const el = document.getElementById('ms_' + k.replace(/ /g,'_'));
+        if (el && el.value) methodData[k] = Number(el.value);
+    });
     
     const isEdit = idx !== null;
-    const action = isEdit ? 'updateMilestone' : 'addMilestone';
-    const params = new URLSearchParams({ action, pipelineId: pipeline.id, name, endDate: date, description: desc });
-    if (isEdit && milestones[idx].id) params.append('milestoneId', milestones[idx].id);
+    const ms = isEdit ? milestones[idx] : null;
+    const params = new URLSearchParams({
+        action: isEdit ? 'updateMilestone' : 'addMilestone',
+        pipelineId: pipeline.id,
+        endDate: date,
+        methodData: JSON.stringify(methodData)
+    });
+    if (isEdit && ms && ms.id) params.append('milestoneId', ms.id);
     
     try {
         const res = await fetch(API_URL + '?' + params.toString());
@@ -5978,7 +6025,7 @@ async function saveMilestoneItem(idx) {
 
 async function deleteMilestoneItem(idx) {
     const ms = milestones[idx];
-    if (!await showConfirm({ title: '刪除里程碑', message: ms.name + ' (' + ms.endDate + ')', okText: '刪除', danger: true })) return;
+    if (!await showConfirm({ title: '刪除里程碑', message: ms.endDate, okText: '刪除', danger: true })) return;
     try {
         const res = await fetch(API_URL + '?action=deleteMilestone&milestoneId=' + ms.id);
         const result = await res.json();
@@ -6021,16 +6068,16 @@ function renderMilestones() {
     function getActualLength() {
         const actual = {};
         segments.forEach(seg => {
-            const method = seg.method || '';
-            if (!method) return;
-            if (!actual[method]) actual[method] = 0;
+            const methodKey = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
+            if (!methodKey) return;
+            if (!actual[methodKey]) actual[methodKey] = 0;
             const start = Number(seg.startDistance);
             const end = Number(seg.endDistance);
             const numSmall = Math.ceil((end - start) / 10);
             const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
             for (let i = 0; i < numSmall; i++) {
                 if (statusArr[i] && statusArr[i] !== '0' && statusArr[i].trim() !== '') {
-                    actual[method] += Math.min(start + (i+1)*10, end) - (start + i*10);
+                    actual[methodKey] += Math.min(start + (i+1)*10, end) - (start + i*10);
                 }
             }
         });
@@ -6125,51 +6172,38 @@ function renderMilestones() {
         let tooltipHtml = '<div style="min-width:300px;max-width:500px;">';
         tooltipHtml += '<div style="font-weight:bold;margin-bottom:10px;color:#3f51b5;border-bottom:2px solid #ddd;padding-bottom:6px;font-size:12px;">' + dateStr + '</div>';
         
-        const hasData = methods.some(method => {
-            // 嘗試直接用 method，如果找不到就嘗試找包含 method 的 key
-            let target = 0;
-            if (milestone.methodData) {
-                if (milestone.methodData[method]) {
-                    target = Math.round(Number(milestone.methodData[method]));
-                } else {
-                    // 尋找包含此施工方式的 key（例如 "2200 DIP 埋設"）
-                    const foundKey = Object.keys(milestone.methodData).find(k => k.includes(method));
-                    if (foundKey) {
-                        target = Math.round(Number(milestone.methodData[foundKey]));
-                    }
-                }
-            }
-            const planned = Math.round(plannedLength[method] || 0);
-            const actual = Math.round(actualLength[method] || 0);
-            return target > 0 || planned > 0 || actual > 0;
+        // 收集所有有資料的 methodKey（從 methodData + actualLength 聯集）
+        const allMethodKeys = new Set([
+            ...Object.keys(milestone.methodData || {}),
+            ...Object.keys(actualLength)
+        ]);
+        
+        let hasData = false;
+        allMethodKeys.forEach(key => {
+            const target = Math.round(Number((milestone.methodData || {})[key] || 0));
+            const actual = Math.round(actualLength[key] || 0);
+            if (target > 0 || actual > 0) hasData = true;
         });
         
         if (hasData) {
-            methods.forEach(method => {
-                // 嘗試直接用 method，如果找不到就嘗試找包含 method 的 key
-                let target = 0;
-                if (milestone.methodData) {
-                    if (milestone.methodData[method]) {
-                        target = Math.round(Number(milestone.methodData[method]));
-                    } else {
-                        // 尋找包含此施工方式的 key（例如 "2200 DIP 埋設"）
-                        const foundKey = Object.keys(milestone.methodData).find(k => k.includes(method));
-                        if (foundKey) {
-                            target = Math.round(Number(milestone.methodData[foundKey]));
-                        }
-                    }
-                }
-                const planned = Math.round(plannedLength[method] || 0);
-                const actual = Math.round(actualLength[method] || 0);
-                
-                if (target > 0 || planned > 0 || actual > 0) {
-                    const color = methodColors[method] || '#666';
-                    tooltipHtml += '<div style="margin-bottom:6px;font-size:10px;">';
-                    tooltipHtml += '<span style="font-weight:bold;color:' + color + ';">' + method + '</span>: ';
-                    tooltipHtml += '<span style="color:#3f51b5;">目標 ' + target + 'm</span> / ';
-                    tooltipHtml += '<span style="color:#4CAF50;">完工 ' + actual + 'm</span>';
-                    tooltipHtml += '</div>';
-                }
+            // 排序：先依工法類型（埋設/推進/水管橋...）再依管徑
+            const sortedKeys = [...allMethodKeys].filter(key => {
+                const target = Math.round(Number((milestone.methodData || {})[key] || 0));
+                const actual = Math.round(actualLength[key] || 0);
+                return target > 0 || actual > 0;
+            }).sort();
+            
+            sortedKeys.forEach(key => {
+                const target = Math.round(Number((milestone.methodData || {})[key] || 0));
+                const actual = Math.round(actualLength[key] || 0);
+                // 顏色：從 key 中判斷施工方式
+                const baseMethod = methods.find(m => key.includes(m)) || '';
+                const color = methodColors[baseMethod] || '#666';
+                tooltipHtml += '<div style="margin-bottom:6px;font-size:10px;">';
+                tooltipHtml += '<span style="font-weight:bold;color:' + color + ';">' + key + '</span>: ';
+                tooltipHtml += '<span style="color:#3f51b5;">目標 ' + target + 'm</span> / ';
+                tooltipHtml += '<span style="color:#4CAF50;">完工 ' + actual + 'm</span>';
+                tooltipHtml += '</div>';
             });
         } else {
             tooltipHtml += '<div style="color:#999;font-size:10px;text-align:center;padding:10px;">尚無資料</div>';
