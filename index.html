@@ -5978,7 +5978,7 @@ async function saveMilestoneItem(idx) {
 
 async function deleteMilestoneItem(idx) {
     const ms = milestones[idx];
-    if (!await showConfirm({ title: '刪除里程碑', message: ms.name + '\n' + ms.endDate, okText: '刪除', danger: true })) return;
+    if (!await showConfirm({ title: '刪除里程碑', message: ms.name + ' (' + ms.endDate + ')', okText: '刪除', danger: true })) return;
     try {
         const res = await fetch(API_URL + '?action=deleteMilestone&milestoneId=' + ms.id);
         const result = await res.json();
