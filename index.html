@@ -5376,7 +5376,7 @@ kbd {
             for (let i = from; i <= to; i++) {
                 const smallLen = Math.min(10, segLen - i * 10);
                 total += smallLen;
-                if (arr[i] === '1') done += smallLen;
+                if (arr[i] && arr[i] !== '0' && arr[i].trim() !== '') done += smallLen;
             }
             return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
         }
@@ -5626,7 +5626,7 @@ function getItemProgress(item) {
     for (let i = from; i <= to; i++) {
         const smallLen = Math.min(10, segLen - i * 10);
         total += smallLen;
-        if (arr[i] === '1') done += smallLen;
+        if (arr[i] && arr[i] !== '0' && arr[i].trim() !== '') done += smallLen;
     }
     return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
 }
@@ -5857,12 +5857,11 @@ async function saveItem() {
         const res = await fetch(API_URL + '?' + params.toString());
         const result = await res.json();
         if (result.success) { 
-            showToast('儲存成功', 'success'); 
-            // 使用 postMessage 通知主頁面
-            if (window.opener) {
-                window.opener.postMessage({ type: 'ganttChanged' }, '*');
-            }
-            window.close(); 
+            showToast('儲存成功', 'success');
+            if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
+            // 重新載入資料，不關視窗
+            await reloadGanttData();
+            hideEditForm();
         }
         else { showToast('失敗：' + (result.error || '未知錯誤'), 'error'); }
     } catch(e) { showToast('失敗：' + e.message, 'error'); }
@@ -5874,15 +5873,35 @@ async function deleteItem() {
         const res = await fetch(API_URL + '?action=deleteGanttItem&itemId=' + editingItem.id);
         const result = await res.json();
         if (result.success) { 
-            showToast('刪除成功', 'success'); 
-            // 使用 postMessage 通知主頁面
-            if (window.opener) {
-                window.opener.postMessage({ type: 'ganttChanged' }, '*');
-            }
-            window.close(); 
+            showToast('刪除成功', 'success');
+            if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
+            await reloadGanttData();
+            hideEditForm();
         }
         else { showToast('失敗：' + (result.error || '未知錯誤'), 'error'); }
     } catch(e) { showToast('失敗：' + e.message, 'error'); }
+}
+
+// 重新載入甘特圖資料（不關視窗）
+async function reloadGanttData() {
+    try {
+        const [r1, r2] = await Promise.all([
+            fetch(API_URL + '?action=getGanttItems&pipelineId=' + pipeline.id).then(r => r.json()),
+            fetch(API_URL + '?action=getMilestones&pipelineId=' + pipeline.id).then(r => r.json())
+        ]);
+        items.length = 0;
+        (r1.items || []).sort((a,b) => new Date(a.startDate)-new Date(b.startDate)).forEach(i => items.push(i));
+        milestones = (r2.milestones || []).sort((a,b) => new Date(a.endDate)-new Date(b.endDate));
+        renderChart();
+        renderMilestones();
+    } catch(e) { showToast('重新載入失敗：' + e.message, 'error'); }
+}
+
+// 關閉/隱藏編輯表單
+function hideEditForm() {
+    const sidebar = document.querySelector('.gantt-sidebar');
+    if (sidebar) sidebar.innerHTML = '<div style="padding:16px;color:#999;font-size:13px;">點擊甘特圖列來編輯</div>';
+    editingItem = null;
 }
 
 // 渲染里程碑區域
@@ -6186,15 +6205,39 @@ window.addEventListener('message', async function(event) {
             const totalDays = (maxDate - minDate) / 86400000;
             
             // X軸月份刻度 - 增加左側寬度以容納更長的項目名稱
-            let headerHtml = '<div class="gantt-header-row"><div style="width:240px;flex-shrink:0;"></div><div style="flex:1;position:relative;height:16px;">';
-            const cur = new Date(minDate);
-            while (cur <= maxDate) {
-                const pct = ((cur - minDate) / (maxDate - minDate)) * 100;
-                const label = (cur.getMonth() + 1) + '/' + cur.getDate();
-                headerHtml += `<span style="position:absolute;left:${pct}%;transform:translateX(-50%);white-space:nowrap;">${label}</span>`;
-                cur.setDate(cur.getDate() + 14);
+            // 動態計算 tick 間隔：總天數 < 90 用週、< 365 用月、否則用季
+            const totalDays = (maxDate - minDate) / 86400000;
+            const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            let headerHtml = '<div class="gantt-header-row"><div style="width:240px;flex-shrink:0;"></div><div style="flex:1;position:relative;height:28px;">';
+            
+            // 先畫年份標示（跨年時顯示）
+            let yearHtml = '';
+            const startYear = minDate.getFullYear();
+            const endYear = maxDate.getFullYear();
+            if (startYear !== endYear) {
+                for (let y = startYear; y <= endYear; y++) {
+                    const yDate = new Date(Math.max(new Date(y, 0, 1), minDate));
+                    const pct = ((yDate - minDate) / (maxDate - minDate)) * 100;
+                    yearHtml += `<span style="position:absolute;left:${pct}%;font-size:11px;font-weight:700;color:#1976d2;white-space:nowrap;">${y}</span>`;
+                }
             }
-            headerHtml += '</div></div>';
+            headerHtml += `<div style="position:relative;height:14px;">${yearHtml}</div>`;
+            headerHtml += '<div style="position:relative;height:14px;">';
+            
+            // 月份 tick
+            const cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+            // 間隔：< 6個月 = 每月, < 18個月 = 每2月, 否則每季
+            const totalMonths = (maxDate.getFullYear()-minDate.getFullYear())*12 + (maxDate.getMonth()-minDate.getMonth());
+            const step = totalMonths < 7 ? 1 : totalMonths < 19 ? 2 : 3;
+            while (cur <= maxDate) {
+                if (cur >= minDate) {
+                    const pct = ((cur - minDate) / (maxDate - minDate)) * 100;
+                    const label = MONTHS[cur.getMonth()];
+                    headerHtml += `<span style="position:absolute;left:${pct}%;transform:translateX(-50%);font-size:11px;white-space:nowrap;color:#555;">${label}</span>`;
+                }
+                cur.setMonth(cur.getMonth() + step);
+            }
+            headerHtml += '</div></div></div>';
             
             // 今日線位置
             const todayPct = Math.max(0, Math.min(100, ((today - minDate) / (maxDate - minDate)) * 100));
