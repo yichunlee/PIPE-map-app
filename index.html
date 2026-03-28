@@ -4021,12 +4021,9 @@ kbd {
                 const noteIcon = isNode
                     ? L.divIcon({
                         className: 'note-marker-custom',
-                        html: `<div style="background:#3f51b5;color:white;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,0.3);border:2px solid white;cursor:pointer;position:relative;">
-                            <span style="position:absolute;left:28px;top:50%;transform:translateY(-50%);white-space:nowrap;background:#3f51b5;color:white;padding:1px 5px;border-radius:8px;font-size:10px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.3);">${nodeName}</span>
-                            📍
-                        </div>`,
-                        iconSize: [26, 26],
-                        iconAnchor: [13, 13],
+                        html: `<div style="background:#3f51b5;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;white-space:nowrap;cursor:pointer;box-shadow:0 2px 5px rgba(0,0,0,0.3);border:2px solid white;line-height:20px;">${nodeName}</div>`,
+                        iconSize: null,
+                        iconAnchor: [0, 10],
                         popupAnchor: [0, -14]
                     })
                     : L.divIcon({
