@@ -5362,7 +5362,7 @@ kbd {
         // 從 label 解析段落+小段範圍，計算完工進度
         function getItemProgress(item) {
             const label = item.label || '';
-            const segMatch = label.match(/段落(\d+)/);
+            const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
             const rangeMatch = label.match(/#(\d+)～#(\d+)/);
             if (!segMatch) return null;
             const seg = (currentPipeline.segments || []).find(s => String(s.segmentNumber) === segMatch[1]);
@@ -5612,7 +5612,7 @@ milestones = milestones.map(m => {
 
 function getItemProgress(item) {
     const label = item.label || '';
-    const segMatch = label.match(/段落(\\d+)/);
+    const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
     const rangeMatch = label.match(/#(\\d+)～#(\\d+)/);
     if (!segMatch) return null;
     const seg = segments.find(s => String(s.segmentNumber) === segMatch[1]);
@@ -5745,18 +5745,18 @@ function renderChart() {
         
         // 已完成部分（實心）
         if (doneWidth > 0) {
-            html += '<div class="gantt-bar" style="left:' + left + '%;width:' + doneWidth + '%;background:' + baseColor + ';opacity:1;" title="已完成:' + Math.round(rate*100) + '%"></div>';
+            html += '<div class="gantt-bar" style="left:' + left + '%;width:' + doneWidth + '%;background:' + baseColor + ';opacity:1;" title="' + hoverTitle + '"></div>';
         }
         
         // 未完成部分（半透明）
         if (undoneWidth > 0) {
-            html += '<div class="gantt-bar" style="left:' + (left + doneWidth) + '%;width:' + undoneWidth + '%;background:' + baseColor + ';opacity:0.3;" title="未完成:' + Math.round((1-rate)*100) + '%"></div>';
+            html += '<div class="gantt-bar" style="left:' + (left + doneWidth) + '%;width:' + undoneWidth + '%;background:' + baseColor + ';opacity:0.3;" title="' + hoverTitle + '"></div>';
         }
         
-        // 天數標籤（放在中間）
-        html += '<div style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:bold;pointer-events:none;z-index:5;">' + days + '天</div>';
-        
-        if (progLabel) html += '<div class="gantt-progress" style="left:' + (left + barWidth) + '%;padding-right:5px;">' + progLabel + '</div>';
+        // Bar 標籤：有進度就顯示 m/m，否則顯示天數
+        const barLabel = progLabel || (days + '天');
+        const hoverTitle = item.startDate + ' ～ ' + item.endDate + '（' + days + '天）' + (progLabel ? ' | ' + progLabel : '');
+        html += '<div style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:bold;pointer-events:none;z-index:5;text-shadow:0 1px 2px rgba(0,0,0,0.4);" title="' + hoverTitle + '">' + barLabel + '</div>';
         html += '<div class="gantt-today" style="left:' + todayPct + '%;"></div>';
         html += '</div></div></div>';
     });
@@ -5967,7 +5967,7 @@ function renderMilestones() {
             if (milestoneDate < itemStart) return;
             
             const label = item.label || '';
-            const segMatch = label.match(/段落(\\d+)/);
+            const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
             const rangeMatch = label.match(/#(\\d+)～?~?#(\\d+)/);
             
             if (segMatch && rangeMatch) {
