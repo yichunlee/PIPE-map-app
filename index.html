@@ -5740,8 +5740,10 @@ function renderChart() {
         
         // Bar 分為兩部分：已完成（實心）+ 未完成（半透明）
         const barWidth = Math.max(width, 0.5);
-        const doneWidth = barWidth * rate;  // 已完成的寬度比例
-        const undoneWidth = barWidth - doneWidth;  // 未完成的寬度比例
+        const doneWidth = barWidth * rate;
+        const undoneWidth = barWidth - doneWidth;
+        const barLabel = progLabel || (days + '天');
+        const hoverTitle = item.startDate + ' ～ ' + item.endDate + '（' + days + '天）' + (progLabel ? ' | ' + progLabel : '');
         
         // 已完成部分（實心）
         if (doneWidth > 0) {
@@ -5753,9 +5755,7 @@ function renderChart() {
             html += '<div class="gantt-bar" style="left:' + (left + doneWidth) + '%;width:' + undoneWidth + '%;background:' + baseColor + ';opacity:0.3;" title="' + hoverTitle + '"></div>';
         }
         
-        // Bar 標籤：有進度就顯示 m/m，否則顯示天數
-        const barLabel = progLabel || (days + '天');
-        const hoverTitle = item.startDate + ' ～ ' + item.endDate + '（' + days + '天）' + (progLabel ? ' | ' + progLabel : '');
+        // Bar 標籤
         html += '<div style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:bold;pointer-events:none;z-index:5;text-shadow:0 1px 2px rgba(0,0,0,0.4);" title="' + hoverTitle + '">' + barLabel + '</div>';
         html += '<div class="gantt-today" style="left:' + todayPct + '%;"></div>';
         html += '</div></div></div>';
