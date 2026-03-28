@@ -6206,7 +6206,6 @@ window.addEventListener('message', async function(event) {
             
             // X軸月份刻度 - 增加左側寬度以容納更長的項目名稱
             // 動態計算 tick 間隔：總天數 < 90 用週、< 365 用月、否則用季
-            const totalDays = (maxDate - minDate) / 86400000;
             const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             let headerHtml = '<div class="gantt-header-row"><div style="width:240px;flex-shrink:0;"></div><div style="flex:1;position:relative;height:28px;">';
             
