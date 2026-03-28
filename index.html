@@ -2431,8 +2431,7 @@ kbd {
                                     const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
                                     const color = getColorForMethodKey(methodKey);
                                     const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
-                                    const nodePrefix = segment.nodeRange ? segment.nodeRange + ' | ' : '';
-                                    const labelText = `${nodePrefix}${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
+                                    const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
                                     
                                     const label = L.marker(midLatLng, {
                                         icon: L.divIcon({
@@ -2682,8 +2681,7 @@ kbd {
                         }
                         
                         const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
-                        const nodePrefix = segment.nodeRange ? segment.nodeRange + ' | ' : '';
-                        const labelText = `${nodePrefix}${methodLabel} ${Math.round(completedLength)}m/${Math.round(segmentLength)}m`;
+                        const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segmentLength)}m`;
                         
                         // 將顏色轉為半透明
                         const hexToRgba = (hex, alpha) => {
@@ -2720,6 +2718,40 @@ kbd {
                         }).addTo(map);
                         
                         segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color, methodLabel, segLength: segmentLength }); // 加入標籤陣列，方便隱藏
+                    }
+                    
+                    // 節點標記：在段落起點放節點圓圈
+                    if (segment.nodeRange) {
+                        const nodeCoords = getSegmentCoords(coords, startDist, startDist + 1);
+                        if (nodeCoords.length > 0) {
+                            const nodeLatLng = nodeCoords[0];
+                            const nodeMarker = L.marker(nodeLatLng, {
+                                icon: L.divIcon({
+                                    className: '',
+                                    html: `<div style="
+                                        background: white;
+                                        border: 2px solid ${color};
+                                        border-radius: 50%;
+                                        width: 10px; height: 10px;
+                                        position: relative;
+                                    ">
+                                        <div style="
+                                            position: absolute;
+                                            left: 12px; top: -4px;
+                                            white-space: nowrap;
+                                            font-size: 10px;
+                                            font-weight: bold;
+                                            color: ${color};
+                                            text-shadow: -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white;
+                                        ">${segment.nodeRange}</div>
+                                    </div>`,
+                                    iconSize: [10, 10],
+                                    iconAnchor: [5, 5]
+                                }),
+                                zIndexOffset: 500
+                            }).addTo(map);
+                            allPolylines.push(nodeMarker);
+                        }
                     }
                 });
                 
@@ -11667,11 +11699,13 @@ window.addEventListener('message', async function(event) {
                     end: s.endDistance
                 })));
                 
-                // 🆕 如果是 MULTILINESTRING，只刪除該分支的段落
+                // MULTILINESTRING：只刪該分支；LINESTRING：刪全部
+                // 用寬鬆比對（== 而非 ===）避免型別不同造成比對失敗
                 const segmentsToDelete = isMULTI 
                     ? currentSegments.filter(s => {
-                        console.log(`   檢查段落 ${s.segmentNumber}: branchIndex=${s.branchIndex}, 目標=${branchIndex}`);
-                        return s.branchIndex === branchIndex;
+                        const sIdx = s.branchIndex !== undefined ? s.branchIndex : 
+                            (s.notes && s.notes.match(/branchIndex:(\d+)/) ? parseInt(s.notes.match(/branchIndex:(\d+)/)[1]) : -1);
+                        return sIdx == branchIndex;
                     })
                     : currentSegments;
                 
