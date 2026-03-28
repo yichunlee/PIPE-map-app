@@ -5456,8 +5456,10 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; displ
 .gantt-today { position: absolute; width: 2px; height: 100%; background: #e53935; z-index: 10; }
 .milestone-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; }
 .milestone-tooltip { font-size: 11px; }
-.edit-panel { position: fixed; top: 50px; right: 10px; width: 280px; background: white; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px; display: none; z-index: 100; max-height: calc(100vh - 70px); overflow-y: auto; }
+.edit-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, 95vw); background: white; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); padding: 16px; display: none; z-index: 200; max-height: 85vh; overflow-y: auto; }
 .edit-panel.show { display: block; }
+.edit-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 199; display: none; }
+.edit-backdrop.show { display: block; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #00695C; }
 .panel-title { font-size: 12px; font-weight: bold; color: #00695C; }
 .close-btn { cursor: pointer; font-size: 18px; color: #666; line-height: 1; }
@@ -5537,6 +5539,7 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
     <div class="container" id="chart"></div>
     <div class="container milestone-section" id="milestones"></div>
 </div>
+<div class="edit-backdrop" id="editBackdrop" onclick="closePanel()"></div>
 <div class="edit-panel" id="editPanel">
 <div class="panel-header">
 <span class="panel-title" id="panelTitle">編輯項目</span>
@@ -5787,6 +5790,7 @@ function editItem(idx) {
     document.getElementById('panelTitle').textContent = '✏️ 編輯項目';
     document.getElementById('panelBody').innerHTML = html;
     document.getElementById('editPanel').classList.add('show');
+    document.getElementById('editBackdrop').classList.add('show');
     if (segMatch) {
         setTimeout(() => {
             handleSegChange();
@@ -5815,9 +5819,10 @@ function showAddForm() {
     document.getElementById('panelTitle').textContent = '＋ 新增項目';
     document.getElementById('panelBody').innerHTML = html;
     document.getElementById('editPanel').classList.add('show');
+    document.getElementById('editBackdrop').classList.add('show');
 }
 
-function closePanel() { document.getElementById('editPanel').classList.remove('show'); }
+function closePanel() { document.getElementById('editPanel').classList.remove('show'); document.getElementById('editBackdrop').classList.remove('show'); }
 
 function handleSegChange() {
     const sel = document.getElementById('segSelect');
@@ -5909,11 +5914,8 @@ function hideEditForm() {
 
 // 里程碑管理面板（表格式）
 function getMilestoneMethodKeys() {
+    // 只從 segments 產生完整 methodKey（管徑+管材+工法），避免舊資料的簡稱混入
     const keys = new Set();
-    milestones.forEach(ms => {
-        if (ms.methodData) Object.keys(ms.methodData).forEach(k => { if (ms.methodData[k]) keys.add(k); });
-    });
-    // 也加入 segments 的 methodKey
     segments.forEach(seg => {
         const k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
         if (k) keys.add(k);
@@ -5925,6 +5927,7 @@ async function showMilestoneManager() {
     document.getElementById('panelTitle').textContent = '📅 里程碑管理';
     renderMilestoneManagerList();
     document.getElementById('editPanel').classList.add('show');
+    document.getElementById('editBackdrop').classList.add('show');
 }
 
 function renderMilestoneManagerList() {
@@ -6206,8 +6209,8 @@ function renderMilestones() {
                 const color = methodColors[baseMethod] || '#666';
                 tooltipHtml += '<div style="margin-bottom:6px;font-size:10px;">';
                 tooltipHtml += '<span style="font-weight:bold;color:' + color + ';">' + key + '</span>: ';
-                tooltipHtml += '<span style="color:#3f51b5;">目標 ' + target + 'm</span> / ';
-                tooltipHtml += '<span style="color:#4CAF50;">完工 ' + actual + 'm</span>';
+                tooltipHtml += '<span style="color:#4CAF50;">完工 ' + actual + 'm</span> / ';
+                tooltipHtml += '<span style="color:#3f51b5;">目標 ' + target + 'm</span>';
                 tooltipHtml += '</div>';
             });
         } else {
@@ -6215,13 +6218,17 @@ function renderMilestones() {
         }
         tooltipHtml += '</div>';
         
-        // 里程碑標記（圖示 + 垂直線）
-        html += '<div class="milestone-marker-icon" style="position:absolute;left:' + milestonePct + '%;top:0;transform:translateX(-50%);cursor:pointer;" data-tooltip-id="ms' + idx + '">';
-        // 垂直線（從頂部延伸）
-        html += '<div style="width:2px;height:60px;background:#3f51b5;opacity:0.4;position:absolute;left:50%;transform:translateX(-50%);top:-20px;"></div>';
-        // 圖示
-        html += '<div style="font-size:20px;position:relative;z-index:2;">📅</div>';
-        html += '<div style="font-size:8px;color:#3f51b5;font-weight:bold;text-align:center;margin-top:2px;">' + (milestoneDate.getMonth() + 1) + '/' + milestoneDate.getDate() + '</div>';
+        // 里程碑標記（菱形旗幟樣式）
+        const isPast = milestoneDate < today;
+        const markerColor = isPast ? '#9e9e9e' : '#3f51b5';
+        const flagColor = isPast ? '#e0e0e0' : '#e8eaf6';
+        html += '<div class="milestone-marker-icon" style="position:absolute;left:' + milestonePct + '%;top:0;transform:translateX(-50%);cursor:pointer;display:flex;flex-direction:column;align-items:center;" data-tooltip-id="ms' + idx + '">';
+        // 垂直線
+        html += '<div style="width:1px;height:16px;background:' + markerColor + ';opacity:0.6;"></div>';
+        // 菱形標記
+        html += '<div style="width:10px;height:10px;background:' + markerColor + ';transform:rotate(45deg);border-radius:2px;margin:2px 0;"></div>';
+        // 日期標籤
+        html += '<div style="background:' + markerColor + ';color:white;font-size:9px;font-weight:bold;padding:2px 5px;border-radius:3px;white-space:nowrap;margin-top:2px;">' + (milestoneDate.getMonth() + 1) + '/' + milestoneDate.getDate() + '</div>';
         html += '</div>';
         
         // tooltip（預設隱藏）
