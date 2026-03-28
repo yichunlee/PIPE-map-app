@@ -6054,7 +6054,7 @@ function renderMilestones() {
         return;
     }
     
-    // 使用與甘特圖相同的時間範圍（不包含里程碑日期）
+    const today = new Date();
     const dates = items.flatMap(item => [new Date(item.startDate), new Date(item.endDate)]);
     let minDate = new Date(Math.min(...dates));
     let maxDate = new Date(Math.max(...dates));
