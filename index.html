@@ -3742,9 +3742,18 @@ kbd {
                     const month = String(today.getMonth() + 1).padStart(2, '0');
                     const day = String(today.getDate()).padStart(2, '0');
                     statusValue = `${year}-${month}-${day}`;
-                    console.log('📅 使用日期:', statusValue);
                 } else {
                     statusValue = '0';
+                }
+                
+                // 🚀 Optimistic UI：先立即更新視覺，背景再存檔
+                updateSmallSegmentVisual(segmentNumber, smallIndex, newStatus);
+                // 同步更新 segment.smallSegments 字串，確保後續點擊判斷正確
+                if (segment) {
+                    const arr = (segment.smallSegments || '').split(',').map(s => s.trim());
+                    while (arr.length <= smallIndex) arr.push('0');
+                    arr[smallIndex] = statusValue;
+                    segment.smallSegments = arr.join(',');
                 }
                 
                 const url = API_URL + 
@@ -3754,44 +3763,53 @@ kbd {
                     '&smallIndex=' + smallIndex +
                     '&status=' + encodeURIComponent(statusValue);
                 
-                console.log('呼叫 API:', url);
-                
                 const response = await fetch(url);
                 const result = await response.json();
-                
-                console.log('API 回應:', result);
                 
                 if (result.success) {
                     map.closePopup();
                     
-                    // 🔧 重新載入段落資料,更新 allPipelines
+                    // 🚀 Optimistic UI 已在前面做了，不需要重繪地圖
+                    // 只更新本地資料和統計面板
                     const progressRes = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(currentPipeline.id));
                     const progressData = await progressRes.json();
                     
                     if (progressData.segments) {
                         const segments = parseBranchIndexFromSegments(progressData.segments);
-                        
-                        // 更新 allPipelines 中的段落資料
                         const pipelineIndex = allPipelines.findIndex(p => p.id === currentPipeline.id);
-                        if (pipelineIndex !== -1) {
-                            allPipelines[pipelineIndex].segments = segments;
-                            console.log('✅ 已更新 allPipelines 中的段落資料');
-                        }
-                        
-                        // 更新 currentPipeline 的段落資料
+                        if (pipelineIndex !== -1) allPipelines[pipelineIndex].segments = segments;
                         currentPipeline.segments = segments;
-                        console.log('✅ 已更新 currentPipeline 的段落資料');
+                        
+                        // 更新地圖 label（不重繪整個地圖）
+                        const seg = segments.find(s => String(s.segmentNumber) === String(segmentNumber));
+                        if (seg) {
+                            const segLen = seg.endDistance - seg.startDistance;
+                            const numSmall = Math.ceil(segLen / 10);
+                            const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
+                            let completed = 0;
+                            for (let i = 0; i < numSmall; i++) {
+                                const v = statusArr[i] || '0';
+                                if (v !== '0' && v !== '') completed += Math.min(10, segLen - i * 10);
+                            }
+                            updateSegmentLabel(segmentNumber, completed, segLen);
+                        }
                     }
                     
-                    // 重新渲染地圖（keepView=true 保持視角和標記可見性）
-                    showPipelineDetail(currentPipeline.id, true);
-                    
-                    // 🆕 重新載入統計面板（更新完工長度）
                     showStatsPanel();
                 } else {
+                    // 失敗：回退視覺狀態
+                    updateSmallSegmentVisual(segmentNumber, smallIndex, !newStatus);
+                    if (segment) {
+                        const arr = (segment.smallSegments || '').split(',').map(s => s.trim());
+                        while (arr.length <= smallIndex) arr.push('0');
+                        arr[smallIndex] = newStatus ? '0' : '1';
+                        segment.smallSegments = arr.join(',');
+                    }
                     showToast('更新失敗：' + (result.error || '未知錯誤'), 'error');
                 }
             } catch (error) {
+                // 失敗：回退視覺狀態
+                updateSmallSegmentVisual(segmentNumber, smallIndex, !newStatus);
                 showToast('更新失敗：' + error.message, 'error');
                 console.error('更新錯誤:', error);
             }
