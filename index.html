@@ -4023,15 +4023,16 @@ kbd {
                         className: 'note-marker-custom',
                         html: `<div style="
                             background:#3f51b5;color:white;
-                            padding:3px 8px;border-radius:12px;
+                            padding:2px 7px;border-radius:10px;
                             font-size:11px;font-weight:bold;
                             white-space:nowrap;cursor:pointer;
-                            box-shadow:0 2px 6px rgba(0,0,0,0.3);
+                            box-shadow:0 2px 4px rgba(0,0,0,0.3);
                             border:2px solid white;
+                            line-height:18px;
                         ">${nodeName}</div>`,
-                        iconSize: null,
-                        iconAnchor: [0, 12],
-                        popupAnchor: [0, -16]
+                        iconSize: [60, 22],
+                        iconAnchor: [30, 11],
+                        popupAnchor: [0, -14]
                     })
                     : L.divIcon({
                         className: 'note-marker-custom',
@@ -4052,33 +4053,35 @@ kbd {
                     });
                 }
                 
-                const noteDisplayText = isNode 
-                    ? (note.text.replace('__node__', '').trim()) 
+                const noteBodyText = isNode
+                    ? note.text.replace('__node__', '').replace(nodeName, '').replace(/^\n/, '').trim()
                     : (note.text || '');
                 marker.bindPopup(`
                     <div style="min-width: 240px; max-width: 300px;" id="note-popup-${note.id}">
                         <div style="font-weight: bold; margin-bottom: 8px; color: ${isNode ? '#3f51b5' : '#FF0000'};">${isNode ? '📍 ' + nodeName : '⭐ 備註'}</div>
                         ${note.photo ? `<img src="${note.photo}" onclick="window.open('${note.photo}', '_blank')" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd; cursor: pointer;" title="點擊放大查看">` : ''}
-                        <div id="note-text-view-${note.id}" style="margin-bottom: 8px; white-space: pre-wrap;">${noteDisplayText}</div>
-                        <textarea id="note-text-edit-${note.id}" style="display:none; width: 100%; height: 80px; padding: 6px; border: 1px solid #FFC107; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 13px; box-sizing: border-box;">${note.text || ''}</textarea>
-                        <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px;">
-                            ${note.creator || '未知'} · ${note.timestamp || ''}
+                        
+                        <!-- 檢視模式 -->
+                        <div id="note-view-${note.id}">
+                            ${isNode ? `<div style="font-size:12px;color:#555;margin-bottom:6px;"><b>節點名稱：</b>${nodeName}</div>` : ''}
+                            ${noteBodyText ? `<div style="margin-bottom: 8px; white-space: pre-wrap; font-size:13px;">${noteBodyText}</div>` : ''}
+                            <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px;">${note.creator || '未知'} · ${note.timestamp || ''}</div>
+                            <div style="display: flex; gap: 5px; margin-top: 8px;">
+                                <button onclick="startEditNote('${note.id}', ${isNode})" style="flex: 1; padding: 6px 8px; background: ${isNode ? '#3f51b5' : '#FFC107'}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">✏️ 編輯</button>
+                                <button onclick="deleteMapNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️ 刪除</button>
+                            </div>
                         </div>
-                        <div id="note-btns-view-${note.id}" style="display: flex; gap: 5px; margin-top: 8px;">
-                            <button onclick="startEditNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #FFC107; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                ✏️ 編輯
-                            </button>
-                            <button onclick="deleteMapNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                🗑️ 刪除
-                            </button>
-                        </div>
-                        <div id="note-btns-edit-${note.id}" style="display:none; gap: 5px; margin-top: 8px;">
-                            <button onclick="saveEditNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                💾 儲存
-                            </button>
-                            <button onclick="cancelEditNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #e0e0e0; color: #666; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                取消
-                            </button>
+                        
+                        <!-- 編輯模式 -->
+                        <div id="note-edit-${note.id}" style="display:none;">
+                            ${isNode ? `<div style="font-size:12px;color:#555;margin-bottom:4px;"><b>節點名稱</b></div>
+                            <input id="note-nodename-${note.id}" value="${nodeName}" style="width:100%;padding:6px;border:2px solid #3f51b5;border-radius:4px;margin-bottom:8px;box-sizing:border-box;font-weight:bold;font-size:13px;">` : ''}
+                            <div style="font-size:12px;color:#555;margin-bottom:4px;"><b>${isNode ? '備註（選填）' : '備註內容'}</b></div>
+                            <textarea id="note-text-edit-${note.id}" style="width: 100%; height: 70px; padding: 6px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 13px; box-sizing: border-box;">${noteBodyText}</textarea>
+                            <div style="display: flex; gap: 5px; margin-top: 8px;">
+                                <button onclick="saveEditNote('${note.id}', ${isNode})" style="flex: 1; padding: 6px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">💾 儲存</button>
+                                <button onclick="cancelEditNote('${note.id}')" style="flex: 1; padding: 6px 8px; background: #e0e0e0; color: #666; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">取消</button>
+                            </div>
                         </div>
                     </div>
                 `);
@@ -4305,29 +4308,32 @@ kbd {
             }
         };
         // 切換備註為編輯模式
-        window.startEditNote = function(noteId) {
-            document.getElementById('note-text-view-' + noteId).style.display = 'none';
-            document.getElementById('note-text-edit-' + noteId).style.display = 'block';
-            document.getElementById('note-btns-view-' + noteId).style.display = 'none';
-            document.getElementById('note-btns-edit-' + noteId).style.display = 'flex';
-            document.getElementById('note-text-edit-' + noteId).focus();
+        window.startEditNote = function(noteId, isNode) {
+            document.getElementById('note-view-' + noteId).style.display = 'none';
+            document.getElementById('note-edit-' + noteId).style.display = 'block';
+            const editEl = document.getElementById('note-text-edit-' + noteId);
+            if (editEl) editEl.focus();
         };
         
         // 取消編輯
         window.cancelEditNote = function(noteId) {
-            document.getElementById('note-text-view-' + noteId).style.display = 'block';
-            document.getElementById('note-text-edit-' + noteId).style.display = 'none';
-            document.getElementById('note-btns-view-' + noteId).style.display = 'flex';
-            document.getElementById('note-btns-edit-' + noteId).style.display = 'none';
+            document.getElementById('note-view-' + noteId).style.display = 'block';
+            document.getElementById('note-edit-' + noteId).style.display = 'none';
         };
         
         // 儲存編輯後的備註
-        window.saveEditNote = async function(noteId) {
+        window.saveEditNote = async function(noteId, isNode) {
             if (!requireLogin()) return;
-            const newText = document.getElementById('note-text-edit-' + noteId).value.trim();
-            if (!newText) {
-                showToast('備註內容不能為空', 'warning');
-                return;
+            const bodyText = (document.getElementById('note-text-edit-' + noteId) ? document.getElementById('note-text-edit-' + noteId).value.trim() : '');
+            let newText;
+            if (isNode) {
+                const nodeNameEl = document.getElementById('note-nodename-' + noteId);
+                const newNodeName = nodeNameEl ? nodeNameEl.value.trim() : '';
+                if (!newNodeName) { showToast('節點名稱不能為空', 'warning'); return; }
+                newText = '__node__' + newNodeName + (bodyText ? '\n' + bodyText : '');
+            } else {
+                if (!bodyText) { showToast('備註內容不能為空', 'warning'); return; }
+                newText = bodyText;
             }
             
             try {
@@ -4338,7 +4344,7 @@ kbd {
                 if (result.success) {
                     map.closePopup();
                     await loadMapNotes();
-                    showToast('備註已更新！', 'success');
+                    showToast(isNode ? '節點已更新！' : '備註已更新！', 'success');
                 } else {
                     showToast('更新失敗：' + (result.error || '未知錯誤'), 'error');
                 }
