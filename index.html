@@ -4265,7 +4265,7 @@ kbd {
                 
                 const response = await fetch(API_URL + queryString, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ photo: photoBase64 }),
                     redirect: 'follow'
                 });
@@ -4612,7 +4612,7 @@ kbd {
                 
                 const response = await fetch(API_URL + queryString, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ photo: photoBase64 }),
                     redirect: 'follow'
                 });
