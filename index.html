@@ -5555,6 +5555,48 @@ let milestones = ${milestonesJson};
 const API_URL = '${apiUrl}';
 let editingItem = null;
 
+// ===== Toast & Confirm（甘特圖視窗內建版）=====
+function showToast(message, type = 'info', duration = null) {
+    let container = document.getElementById('_toast_container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = '_toast_container';
+        container.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+        document.body.appendChild(container);
+    }
+    const colors = { success:'#2e7d32', error:'#c62828', warning:'#e65100', info:'#1565c0' };
+    const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+    const autoClose = duration || (type === 'error' ? 5000 : type === 'warning' ? 4000 : 3000);
+    const toast = document.createElement('div');
+    toast.style.cssText = \`display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;color:white;background:\${colors[type]||colors.info};box-shadow:0 4px 16px rgba(0,0,0,0.25);pointer-events:auto;max-width:320px;\`;
+    toast.innerHTML = \`<span>\${icons[type]||''}</span><span>\${message}</span>\`;
+    container.appendChild(toast);
+    const dismiss = () => { toast.style.opacity='0'; toast.style.transform='translateY(8px)'; toast.style.transition='all 0.3s'; setTimeout(()=>toast.remove(),300); };
+    toast.addEventListener('click', dismiss);
+    setTimeout(dismiss, autoClose);
+}
+function showConfirm({ title='確認', message='', okText='確定', cancelText='取消', danger=false, icon=null } = {}) {
+    return new Promise(resolve => {
+        const backdrop = document.createElement('div');
+        backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:99990;display:flex;align-items:center;justify-content:center;';
+        const autoIcon = icon || (danger ? '🗑️' : 'ℹ️');
+        backdrop.innerHTML = \`<div style="background:white;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:28px;max-width:360px;width:90%;">
+            <div style="font-size:28px;text-align:center;margin-bottom:10px;">\${autoIcon}</div>
+            <p style="font-size:16px;font-weight:700;text-align:center;margin:0 0 8px;">\${title}</p>
+            \${message ? \`<p style="font-size:13px;color:#555;text-align:center;margin:0 0 22px;line-height:1.6;white-space:pre-line;">\${message}</p>\` : ''}
+            <div style="display:flex;gap:10px;">
+                <button id="_c_cancel" style="flex:1;padding:11px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#f5f5f5;">\${cancelText}</button>
+                <button id="_c_ok" style="flex:1;padding:11px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;color:white;background:\${danger?'#c62828':'#1976d2'};">\${okText}</button>
+            </div></div>\`;
+        document.body.appendChild(backdrop);
+        const close = r => { backdrop.remove(); resolve(r); };
+        backdrop.querySelector('#_c_ok').onclick = () => close(true);
+        backdrop.querySelector('#_c_cancel').onclick = () => close(false);
+        backdrop.addEventListener('click', e => { if (e.target === backdrop) close(false); });
+    });
+}
+// ============================================
+
 // 確保 methodData 是物件而不是字串
 milestones = milestones.map(m => {
     if (typeof m.methodData === 'string') {
