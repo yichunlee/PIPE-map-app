@@ -6003,11 +6003,16 @@ async function saveMilestoneItem(idx) {
     
     const isEdit = idx !== null;
     const ms = isEdit ? milestones[idx] : null;
+    // Apps Script 需要 week, startDate, endDate, methodData
+    const weekNum = isEdit ? (ms.week || '') : ('W' + (milestones.length + 1));
     const params = new URLSearchParams({
         action: isEdit ? 'updateMilestone' : 'addMilestone',
         pipelineId: pipeline.id,
+        week: weekNum,
+        startDate: date,
         endDate: date,
-        methodData: JSON.stringify(methodData)
+        methodData: JSON.stringify(methodData),
+        notes: ''
     });
     if (isEdit && ms && ms.id) params.append('milestoneId', ms.id);
     
