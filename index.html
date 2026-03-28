@@ -5688,15 +5688,19 @@ function renderChart() {
         html += '<div style="position:absolute;left:' + seg.startPct + '%;width:' + seg.widthPct + '%;height:12px;background:' + bgColor + ';border-right:1px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:' + textColor + ';">' + seg.year + '</div>';
     });
     
-    // 第二步：繪製日期刻度（在年份下方）
+    // 第二步：繪製月份刻度（動態密度）
     html += '<div style="position:absolute;top:12px;left:0;right:0;height:16px;">';
-    const cur = new Date(minDate);
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const totalDaysRange = (maxDate - minDate) / 86400000;
+    const totalMonths = (maxDate.getFullYear()-minDate.getFullYear())*12 + (maxDate.getMonth()-minDate.getMonth());
+    const step = totalMonths < 7 ? 1 : totalMonths < 19 ? 2 : 3;
+    const cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
     while (cur <= maxDate) {
-        const pct = ((cur - minDate) / (maxDate - minDate)) * 100;
-        const month = cur.getMonth() + 1;
-        const day = cur.getDate();
-        html += '<div style="position:absolute;left:' + pct + '%;transform:translateX(-50%);font-size:8px;color:#666;">' + month + '/' + day + '</div>';
-        cur.setDate(cur.getDate() + 21);
+        if (cur >= minDate) {
+            const pct = ((cur - minDate) / (maxDate - minDate)) * 100;
+            html += '<div style="position:absolute;left:' + pct + '%;transform:translateX(-50%);font-size:9px;color:#555;white-space:nowrap;">' + MONTHS[cur.getMonth()] + '</div>';
+        }
+        cur.setMonth(cur.getMonth() + step);
     }
     html += '</div>';
     
