@@ -10302,7 +10302,7 @@ window.addEventListener('message', async function(event) {
                 });
                 
                 if (choice) {
-                    // 微調模式
+                    // 微調模式：載入現有分段線，也允許新增
                     adjustmentMode = true;
                     const sortedSegments = [...currentSegments].sort((a, b) => a.startDistance - b.startDistance);
                     
@@ -10313,6 +10313,8 @@ window.addEventListener('message', async function(event) {
                         }
                     });
                     
+                    // 微調模式也啟用點擊新增
+                    map.on('click', onMapClickAddDivider);
                     updateVisualSegmentationPanel();
                 } else {
                     // 重新分段模式：不載入現有分段線
@@ -10715,18 +10717,71 @@ window.addEventListener('message', async function(event) {
                 }
             });
             
-            // 右鍵刪除
+            // 右鍵選單：刪除或設為節點
             marker.on('contextmenu', async function(e) {
                 L.DomEvent.preventDefault(e);
+                L.DomEvent.stopPropagation(e);
                 
-                if (await showConfirm({ title: '刪除分段線', message: '確定要刪除這條分段線嗎？', okText: '刪除', danger: true })) {
-                    map.removeLayer(marker);
-                    const index = segmentDividers.findIndex(d => d.marker === marker);
-                    if (index !== -1) {
-                        segmentDividers.splice(index, 1);
+                const divider = segmentDividers.find(d => d.marker === marker);
+                const currentNode = divider ? (divider.nodeLabel || '') : '';
+                
+                // 建立右鍵選單
+                const menuDiv = document.createElement('div');
+                menuDiv.style.cssText = 'position:fixed;z-index:9999;background:white;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.2);padding:8px;min-width:160px;font-size:13px;';
+                menuDiv.style.left = (e.originalEvent.clientX) + 'px';
+                menuDiv.style.top = (e.originalEvent.clientY) + 'px';
+                
+                menuDiv.innerHTML = `
+                    <div style="padding:6px 12px;color:#666;font-size:11px;border-bottom:1px solid #eee;margin-bottom:4px;">
+                        分段線 ${Math.round(divider ? divider.distance : 0)}m
+                    </div>
+                    <div id="_dm_node" style="padding:8px 12px;cursor:pointer;border-radius:4px;display:flex;align-items:center;gap:8px;" 
+                         onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''">
+                        📍 ${currentNode ? '修改節點：' + currentNode : '設為節點'}
+                    </div>
+                    <div id="_dm_del" style="padding:8px 12px;cursor:pointer;border-radius:4px;color:#e53935;display:flex;align-items:center;gap:8px;"
+                         onmouseover="this.style.background='#fff5f5'" onmouseout="this.style.background=''">
+                        🗑️ 刪除分段線
+                    </div>
+                `;
+                document.body.appendChild(menuDiv);
+                
+                const removeMenu = () => { if (menuDiv.parentNode) menuDiv.remove(); };
+                document.addEventListener('click', removeMenu, { once: true });
+                
+                menuDiv.querySelector('#_dm_node').addEventListener('click', async () => {
+                    removeMenu();
+                    const nodeName = prompt('輸入節點名稱（如：節點1）：', currentNode);
+                    if (nodeName !== null) {
+                        const dividerObj = segmentDividers.find(d => d.marker === marker);
+                        if (dividerObj) {
+                            dividerObj.nodeLabel = nodeName.trim();
+                            // 更新圖示
+                            const hasNode = nodeName.trim() !== '';
+                            marker.setIcon(L.divIcon({
+                                className: 'segment-divider-marker',
+                                html: `<div style="position:relative;text-align:center;">
+                                    <div style="font-size:18px;">${hasNode ? '📍' : '✂️'}</div>
+                                    <div class="segment-divider-label">${Math.round(dividerObj.distance)}m</div>
+                                    ${hasNode ? `<div style="font-size:9px;color:#3f51b5;font-weight:bold;white-space:nowrap;">${nodeName.trim()}</div>` : ''}
+                                </div>`,
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 20]
+                            }));
+                            updateVisualSegmentationPanel();
+                        }
                     }
-                    updateVisualSegmentationPanel();
-                }
+                });
+                
+                menuDiv.querySelector('#_dm_del').addEventListener('click', async () => {
+                    removeMenu();
+                    if (await showConfirm({ title: '刪除分段線', message: '確定要刪除這條分段線嗎？', okText: '刪除', danger: true })) {
+                        map.removeLayer(marker);
+                        const index = segmentDividers.findIndex(d => d.marker === marker);
+                        if (index !== -1) segmentDividers.splice(index, 1);
+                        updateVisualSegmentationPanel();
+                    }
+                });
             });
             
             // 儲存分段線
@@ -11392,16 +11447,10 @@ window.addEventListener('message', async function(event) {
         function showVisualSegmentationPanel(adjustmentMode = false) {
             const tbody = document.getElementById('segmentTableBody');
             
-            const instructions = adjustmentMode ? `
+            const instructions = `
+                <div>✂️ <strong>點擊地圖</strong>新增分段線</div>
                 <div>🖱️ <strong>拖拉分段線</strong>調整位置</div>
-                <div>🗑️ <strong>右鍵分段線</strong>刪除</div>
-                <div style="margin-top:10px;padding:8px;background:#fff3cd;border-radius:4px;color:#856404;font-size:12px;">
-                    ⚠️ 微調模式：無法新增分段線
-                </div>
-            ` : `
-                <div>✂️ <strong>點擊管線</strong>新增分段線</div>
-                <div>🖱️ <strong>拖拉分段線</strong>調整位置</div>
-                <div>🗑️ <strong>右鍵分段線</strong>刪除</div>
+                <div>🗑️ <strong>右鍵分段線</strong>可刪除或設為節點</div>
             `;
             
             tbody.innerHTML = `
@@ -11475,9 +11524,14 @@ window.addEventListener('message', async function(event) {
             });
             
             // 顯示預覽
-            const preview = segments.map(seg => 
-                `段落${seg.num}：${Math.round(seg.start)}-${Math.round(seg.end)}m (${Math.round(seg.length)}m)`
-            ).join('<br>');
+            const preview = segments.map(seg => {
+                const divBefore = sortedDividers[seg.num - 2]; // 前面那條分段線
+                const divAfter = sortedDividers[seg.num - 1];  // 後面那條分段線
+                const startNode = divBefore ? (divBefore.nodeLabel || '') : '';
+                const endNode = divAfter ? (divAfter.nodeLabel || '') : '';
+                const nodeStr = (startNode || endNode) ? ` [${startNode || '起'} → ${endNode || '終'}]` : '';
+                return `段落${seg.num}：${Math.round(seg.start)}-${Math.round(seg.end)}m (${Math.round(seg.length)}m)${nodeStr}`;
+            }).join('<br>');
             
             segmentPreviewEl.innerHTML = preview;
         }
@@ -11520,18 +11574,25 @@ window.addEventListener('message', async function(event) {
             const segments = [];
             let prevDistance = 0;
             
-            sortedDividers.forEach(divider => {
+            sortedDividers.forEach((divider, idx) => {
+                // 每段的節點：前一條分段線 nodeLabel 到這條分段線 nodeLabel
+                const prevDivider = idx > 0 ? sortedDividers[idx-1] : null;
                 segments.push({
                     start: prevDistance,
-                    end: divider.distance
+                    end: divider.distance,
+                    startNode: prevDivider ? (prevDivider.nodeLabel || '') : '',
+                    endNode: divider.nodeLabel || ''
                 });
                 prevDistance = divider.distance;
             });
             
             // 🆕 最後一段：使用分支長度
+            const lastDivider = sortedDividers[sortedDividers.length - 1];
             segments.push({
                 start: prevDistance,
-                end: branchLength
+                end: branchLength,
+                startNode: lastDivider ? (lastDivider.nodeLabel || '') : '',
+                endNode: ''
             });
             
             // 顯示段落設定表單
@@ -11671,8 +11732,11 @@ window.addEventListener('message', async function(event) {
                     ? `B${branchIndex}-${i + 1}`  // 例如：B0-1, B1-1, B2-1
                     : (i + 1);
                 
-                // 🆕 備註中記錄分支索引（用於後端識別）
-                const notes = isMULTI ? `branchIndex:${branchIndex}` : '';
+                // 組合節點區間和分支索引到 notes
+                const nodeRange = (seg.startNode || seg.endNode) 
+                    ? ((seg.startNode || '') + (seg.startNode && seg.endNode ? '-' : '') + (seg.endNode || ''))
+                    : '';
+                const notes = buildNotes(nodeRange, isMULTI ? branchIndex : null);
                 
                 console.log(`🔧 建立段落 ${i + 1}/${segments.length}:`);
                 console.log(`   isMULTI: ${isMULTI}`);
