@@ -2468,16 +2468,35 @@ kbd {
                                             const nm = L.marker(nodePos, {
                                                 icon: L.divIcon({
                                                     className: '',
-                                                    html: `<div style="position:relative;width:12px;height:12px;">
+                                                    html: `<div style="position:relative;width:12px;height:12px;cursor:pointer;" title="點擊修改節點名稱">
                                                         <div style="width:12px;height:12px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
                                                         <div style="position:absolute;left:14px;top:-3px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:1px 4px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">${segment.nodeRange}</div>
                                                     </div>`,
                                                     iconSize: [12, 12],
                                                     iconAnchor: [6, 6]
                                                 }),
-                                                zIndexOffset: 600,
-                                                interactive: false
+                                                zIndexOffset: 600
                                             }).addTo(map);
+                                            nm.on('click', async function() {
+                                                const newName = prompt('修改節點名稱：', segment.nodeRange || '');
+                                                if (newName === null) return;
+                                                segment.nodeRange = newName.trim();
+                                                const notes = buildNotes(newName.trim(), segment.branchIndex);
+                                                segment.notes = notes;
+                                                try {
+                                                    await fetch(API_URL + '?action=updateSegment' +
+                                                        '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                                                        '&segmentNumber=' + encodeURIComponent(segment.segmentNumber) +
+                                                        '&startDistance=' + segment.startDistance +
+                                                        '&endDistance=' + segment.endDistance +
+                                                        '&diameter=' + encodeURIComponent(segment.diameter || '') +
+                                                        '&pipeType=' + encodeURIComponent(segment.pipeType || '') +
+                                                        '&method=' + encodeURIComponent(segment.method || '') +
+                                                        '&notes=' + encodeURIComponent(notes));
+                                                    showToast('節點名稱已更新', 'success');
+                                                    showPipelineDetail(currentPipeline.id, true);
+                                                } catch(e) { showToast('更新失敗', 'error'); }
+                                            });
                                             allPolylines.push(nm);
                                         }
                                     }
@@ -2749,34 +2768,37 @@ kbd {
                             const nodeMarker = L.marker(nodeLatLng, {
                                 icon: L.divIcon({
                                     className: '',
-                                    html: `<div style="position:relative;width:12px;height:12px;">
-                                        <div style="
-                                            width:12px;height:12px;
-                                            background:white;
-                                            border:2px solid ${color};
-                                            border-radius:50%;
-                                            box-shadow:0 1px 3px rgba(0,0,0,0.3);
-                                        "></div>
-                                        <div style="
-                                            position:absolute;
-                                            left:14px;top:-3px;
-                                            white-space:nowrap;
-                                            font-size:11px;
-                                            font-weight:bold;
-                                            color:${color};
-                                            background:white;
-                                            padding:1px 4px;
-                                            border-radius:3px;
-                                            text-shadow:none;
-                                            box-shadow:0 1px 3px rgba(0,0,0,0.15);
-                                        ">${segment.nodeRange}</div>
+                                    html: `<div style="position:relative;width:12px;height:12px;cursor:pointer;" title="點擊修改節點名稱">
+                                        <div style="width:12px;height:12px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                                        <div style="position:absolute;left:14px;top:-3px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:1px 4px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">${segment.nodeRange}</div>
                                     </div>`,
                                     iconSize: [12, 12],
                                     iconAnchor: [6, 6]
                                 }),
-                                zIndexOffset: 600,
-                                interactive: false
+                                zIndexOffset: 600
                             }).addTo(map);
+                            // 點擊節點圓圈可編輯名稱
+                            nodeMarker.on('click', async function() {
+                                const newName = prompt('修改節點名稱：', segment.nodeRange || '');
+                                if (newName === null) return;
+                                segment.nodeRange = newName.trim();
+                                // 更新 notes 並存回伺服器
+                                const notes = buildNotes(newName.trim(), segment.branchIndex);
+                                segment.notes = notes;
+                                try {
+                                    await fetch(API_URL + '?action=updateSegment' +
+                                        '&pipelineId=' + encodeURIComponent(currentPipeline.id) +
+                                        '&segmentNumber=' + encodeURIComponent(segment.segmentNumber) +
+                                        '&startDistance=' + segment.startDistance +
+                                        '&endDistance=' + segment.endDistance +
+                                        '&diameter=' + encodeURIComponent(segment.diameter || '') +
+                                        '&pipeType=' + encodeURIComponent(segment.pipeType || '') +
+                                        '&method=' + encodeURIComponent(segment.method || '') +
+                                        '&notes=' + encodeURIComponent(notes));
+                                    showToast('節點名稱已更新', 'success');
+                                    showPipelineDetail(currentPipeline.id, true);
+                                } catch(e) { showToast('更新失敗', 'error'); }
+                            });
                             allPolylines.push(nodeMarker);
                         }
                     }
