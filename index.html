@@ -7171,27 +7171,26 @@ window.addEventListener('message', async function(event) {
         async function _loadProjectProgressBackground(pipelines) {
             const needLoad = pipelines.filter(p => !p._progressLoaded);
             if (needLoad.length === 0) {
-                showProjectStatsPanel(pipelines);
+                // 只在計畫大地圖時才更新統計欄（避免覆蓋工程子視圖）
+                if (!currentPipeline) showProjectStatsPanel(pipelines);
                 return;
             }
             
             console.log(`🔄 背景載入 ${needLoad.length} 個工程進度...`);
             
-            // 逐一載入，每載完一個就更新統計欄（讓使用者看到進度逐漸累積）
             for (const pipeline of needLoad) {
                 try {
                     const res = await fetch(API_URL + '?action=getProgress&pipelineId=' + encodeURIComponent(pipeline.id));
                     const data = await res.json();
                     pipeline.segments = parseBranchIndexFromSegments(data.segments || []);
                     pipeline._progressLoaded = true;
-                    // 同步更新 allPipelines
                     const idx = allPipelines.findIndex(p => p.id === pipeline.id);
                     if (idx !== -1) allPipelines[idx].segments = pipeline.segments;
                 } catch (e) {
                     console.warn('載入進度失敗:', pipeline.name, e);
                 }
-                // 每載完一個就即時更新統計欄
-                showProjectStatsPanel(pipelines);
+                // 只在計畫大地圖時才更新統計欄
+                if (!currentPipeline) showProjectStatsPanel(pipelines);
             }
             
             console.log('✅ 所有工程進度載入完成');
