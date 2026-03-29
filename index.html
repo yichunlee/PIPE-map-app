@@ -5959,8 +5959,8 @@ button { cursor: pointer; padding: 6px 10px; border: none; border-radius: 4px; f
 input, select { width: 100%; padding: 5px 6px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 6px; font-size: 11px; }
 label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-weight: bold; }
 .info-box { background: #e8f5e9; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; font-size: 10px; }
-.add-btn { position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; border-radius: 50%; background: #00695C; color: white; font-size: 22px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; z-index: 99; }
-.add-btn:hover { background: #004D40; transform: scale(1.1); }
+.add-btn { position: fixed; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 8px; background: #00695C; color: white; font-size: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; z-index: 99; }
+.add-btn:hover { background: #004D40; }
 
 /* 統計報表面板 */
 .stats-report-panel {
@@ -6022,7 +6022,7 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </style>
 </head>
 <body>
-<div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button></div></div>
+<div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showAddForm()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">＋ 新增</button><button onclick="showMilestoneManager()" style="background:rgba(63,81,181,0.7);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📅 里程碑</button><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button></div></div>
 <div class="chart-area">
     <div class="container" id="chart"></div>
     <div class="container milestone-section" id="milestones"></div>
@@ -6035,8 +6035,8 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </div>
 <div id="panelBody"></div>
 </div>
-<button class="add-btn" onclick="showAddForm()" title="新增甘特圖項目" style="bottom:80px;">＋</button>
-<button class="add-btn" onclick="showMilestoneManager()" title="里程碑管理" style="bottom:20px;background:#3f51b5;font-size:18px;">📅</button>
+<button class="add-btn" onclick="showAddForm()" title="新增甘特圖項目" style="display:none;">＋</button>
+<button class="add-btn" onclick="showMilestoneManager()" title="里程碑管理" style="display:none;background:#3f51b5;font-size:16px;">📅</button>
 <script>
 const items = ${itemsJson};
 const segments = ${segmentsJson};
@@ -7058,7 +7058,7 @@ function renderMilestones() {
         });
         
         if (maxCum2 > 0) {
-            var W2 = 680, H2 = 120, PL2 = 60, PR2 = 16, PT2 = 12, PB2 = 24;
+            var W2 = 600, H2 = 120, PL2 = 0, PR2 = 0, PT2 = 12, PB2 = 24;
             var cW2 = W2 - PL2 - PR2, cH2 = H2 - PT2 - PB2;
             var yMax2 = maxCum2 * 1.1;
             var totalRange2 = maxDate.getTime() - minDate.getTime();
@@ -7119,15 +7119,24 @@ function renderMilestones() {
             var linePts2 = pts2.map(function(p){ return p.x+','+p.y; }).join(' ');
             var areaPath2 = 'M ' + pts2[0].x + ',' + (PT2+cH2) + ' ' + pts2.map(function(p){ return 'L '+p.x+','+p.y; }).join(' ') + ' L ' + pts2[pts2.length-1].x + ',' + (PT2+cH2) + ' Z';
             
+            // Y軸刻度嵌入 SVG（overflow:visible，延伸到左側 div）
+            // 用負座標畫在 SVG 左側，讓 SVG 本身佔 flex:1 的完整寬度
+            var yLbl2 = '';
+            for (var ti2b = 0; ti2b <= 3; ti2b++) {
+                var v2b = yMax2 * ti2b / 3;
+                var ty2b = PT2 + cH2 - (v2b / yMax2) * cH2;
+                yLbl2 += '<text x="-4" y="' + (ty2b+4) + '" font-size="9" fill="#aaa" text-anchor="end">' + fmtYen(v2b) + '</text>';
+            }
+            
             html += '<div style="display:flex;margin-top:8px;">';
-            html += '<div style="width:180px;font-size:10px;color:#7b1fa2;padding:8px 8px 0 8px;font-weight:bold;">💰 預算進度</div>';
-            html += '<div style="flex:1;padding-right:80px;">';
-            html += '<svg viewBox="0 0 ' + W2 + ' ' + H2 + '" width="100%" style="display:block;">' +
+            html += '<div style="width:180px;flex-shrink:0;font-size:10px;color:#7b1fa2;font-weight:bold;padding:8px 8px 0 8px;display:flex;align-items:flex-start;">💰 預算進度</div>';
+            html += '<div style="flex:1;padding-right:80px;overflow:visible;">';
+            html += '<svg viewBox="0 0 ' + W2 + ' ' + H2 + '" width="100%" style="display:block;overflow:visible;">' +
                 '<defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.15"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.01"/></linearGradient></defs>' +
                 yGrid2 +
                 '<path d="' + areaPath2 + '" fill="url(#bg2)"/>' +
                 '<polyline points="' + linePts2 + '" fill="none" stroke="#7b1fa2" stroke-width="1.5"/>' +
-                msLabels2 + todayLineEl2 + actualDot2 + yLbl2 +
+                yLbl2 + msLabels2 + todayLineEl2 + actualDot2 +
                 '<line x1="' + PL2 + '" y1="' + PT2 + '" x2="' + PL2 + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
                 '<line x1="' + PL2 + '" y1="' + (PT2+cH2) + '" x2="' + (W2-PR2) + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
                 '</svg>';
