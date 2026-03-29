@@ -1537,10 +1537,6 @@ kbd {
                 <span>📊</span>
                 <span>甘特圖</span>
             </div>
-            <div class="tool-item milestone" onclick="selectTool('milestone')">
-                <span>📅</span>
-                <span>施工里程碑</span>
-            </div>
             <div class="tool-item" onclick="selectTool('editPipeline')" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px;">
                 <span>✏️</span>
                 <span>編輯工程</span>
@@ -10206,7 +10202,7 @@ window.addEventListener('message', async function(event) {
 
 確定要刪除嗎？`;
 
-            if (!await showConfirm({ title: '確認新增工程', message: confirmMsg, okText: '確認新增', icon: '➕' })) {
+            if (!await showConfirm({ title: '確認刪除工程', message: confirmMsg, okText: '確認刪除', danger: true, icon: '🗑️' })) {
                 return;
             }
             
