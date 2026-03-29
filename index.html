@@ -5871,19 +5871,22 @@ kbd {
             setTimeout(() => URL.revokeObjectURL(loadingUrl), 1000);
             
             try {
-                // 平行抓取兩個 API（同時發請求，不循序等待）
-                const [result, milestoneResult] = await Promise.all([
+                // 平行抓取三個 API
+                const projName = currentProject ? (currentProject.name || '') : '';
+                const [result, milestoneResult, upResult] = await Promise.all([
                     fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id)).then(r => r.json()),
-                    fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(currentPipeline.id)).then(r => r.json())
+                    fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(currentPipeline.id)).then(r => r.json()),
+                    fetch(API_URL + '?action=getUnitPrices&projectName=' + encodeURIComponent(projName)).then(r => r.json())
                 ]);
                 
                 const items = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
                 const milestones = (milestoneResult.milestones || []).sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+                const unitPrices = upResult.prices || [];
                 
-                console.log('載入項目數:', items.length, '里程碑數:', milestones.length);
+                console.log('載入項目數:', items.length, '里程碑數:', milestones.length, '單價筆數:', unitPrices.length);
                 
                 // 資料備妥，產生完整 HTML 並替換視窗內容
-                const html = createGanttWindowHTML(items, currentPipeline, milestones);
+                const html = createGanttWindowHTML(items, currentPipeline, milestones, unitPrices);
                 const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 
@@ -5902,12 +5905,13 @@ kbd {
             }
         };
         
-        function createGanttWindowHTML(items, pipeline, milestones) {
+        function createGanttWindowHTML(items, pipeline, milestones, unitPrices) {
             const itemsJson = JSON.stringify(items).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const segmentsJson = JSON.stringify(pipeline.segments || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const pipelineJson = JSON.stringify(pipeline).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const milestonesJson = JSON.stringify(milestones || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const nameEscaped = (pipeline.name || '').replace(/'/g, "\\'");
+            const unitPricesJson = JSON.stringify(unitPrices || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
             const apiUrl = API_URL;
             
             return `<!DOCTYPE html>
@@ -6011,7 +6015,7 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </style>
 </head>
 <body>
-<div class="header"><h1>📊 施工甘特圖 - ${nameEscaped}</h1></div>
+<div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button></div></div>
 <div class="chart-area">
     <div class="container" id="chart"></div>
     <div class="container milestone-section" id="milestones"></div>
@@ -6031,6 +6035,7 @@ const items = ${itemsJson};
 const segments = ${segmentsJson};
 const pipeline = ${pipelineJson};
 let milestones = ${milestonesJson};
+let unitPrices = ${unitPricesJson};
 const API_URL = '${apiUrl}';
 let editingItem = null;
 
@@ -6247,29 +6252,39 @@ function editItem(idx) {
     const item = items[idx];
     editingItem = item;
     const prog = getItemProgress(item);
-    const segMatch = item.label.match(/段落(\\d+)/);
-    const rangeMatch = item.label.match(/#(\\d+)～#(\\d+)/);
+    const segMatch = item.label.match(/段落([\w\-]+)/);
+    const rangeMatch = item.label.match(/#(\d+)～#(\d+)/);
     let html = '';
-    if (prog) html += '<div class="info-box">📊 ' + prog.done + 'm/' + prog.total + 'm (' + Math.round(prog.rate*100) + '%)</div>';
+    if (prog) {
+        const up = item.unitPrice || 0;
+        const totalYen = up ? prog.total * up : 0;
+        const doneYen = up ? prog.done * up : 0;
+        html += '<div class="info-box">📊 ' + prog.done + 'm/' + prog.total + 'm (' + Math.round(prog.rate*100) + '%)';
+        if (up) html += '<br>💰 完成：' + (doneYen/10000).toFixed(1) + '萬 / 總：' + (totalYen/10000).toFixed(1) + '萬元';
+        html += '</div>';
+    }
     html += '<label>段落</label><select id="segSelect" onchange="handleSegChange()"><option value="">手動輸入</option>';
-    segments.forEach(seg => {
-        const numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
-        const label = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber;
-        const sel = segMatch && segMatch[1] === String(seg.segmentNumber) ? ' selected' : '';
-        html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '"' + sel + '>' + label + '</option>';
+    segments.forEach(function(seg) {
+        var numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
+        var lbl = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber;
+        var sel = segMatch && segMatch[1] === String(seg.segmentNumber) ? ' selected' : '';
+        html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" data-diameter="' + (seg.diameter||'') + '" data-pipetype="' + (seg.pipeType||'') + '" data-method="' + (seg.method||'') + '"' + sel + '>' + lbl + '</option>';
     });
-    html += '</select><div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
+    html += '</select>';
+    html += '<div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
     html += '<label>項目名稱</label><input id="itemLabel" value="' + (item.label || '') + '">';
     html += '<label>開始日期</label><input id="startDate" type="date" value="' + (item.startDate || '') + '">';
     html += '<label>完成日期</label><input id="endDate" type="date" value="' + (item.endDate || '') + '">';
     html += '<label>備註</label><input id="notes" value="' + (item.notes || '') + '">';
+    html += '<label style="display:flex;justify-content:space-between;">施工單價（元/m）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
+    html += '<input id="unitPriceInput" type="number" placeholder="輸入或自動帶入" value="' + (item.unitPrice || '') + '" style="margin-bottom:8px;">';
     html += '<button class="btn-primary" onclick="saveItem()">💾 儲存</button><button class="btn-danger" onclick="deleteItem()">🗑️ 刪除</button>';
     document.getElementById('panelTitle').textContent = '✏️ 編輯項目';
     document.getElementById('panelBody').innerHTML = html;
     document.getElementById('editPanel').classList.add('show');
     document.getElementById('editBackdrop').classList.add('show');
     if (segMatch) {
-        setTimeout(() => {
+        setTimeout(function() {
             handleSegChange();
             if (rangeMatch) {
                 document.getElementById('smallFrom').value = rangeMatch[1];
@@ -6282,16 +6297,19 @@ function editItem(idx) {
 function showAddForm() {
     editingItem = null;
     let html = '<label>段落</label><select id="segSelect" onchange="handleSegChange()"><option value="">手動輸入</option>';
-    segments.forEach(seg => {
-        const numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
-        const label = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber;
-        html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '">' + label + '</option>';
+    segments.forEach(function(seg) {
+        var numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
+        var lbl = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber;
+        html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" data-diameter="' + (seg.diameter||'') + '" data-pipetype="' + (seg.pipeType||'') + '" data-method="' + (seg.method||'') + '">' + lbl + '</option>';
     });
-    html += '</select><div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
+    html += '</select>';
+    html += '<div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
     html += '<label>項目名稱</label><input id="itemLabel">';
     html += '<label>開始日期</label><input id="startDate" type="date">';
     html += '<label>完成日期</label><input id="endDate" type="date">';
     html += '<label>備註</label><input id="notes">';
+    html += '<label style="display:flex;justify-content:space-between;">施工單價（元/m）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
+    html += '<input id="unitPriceInput" type="number" placeholder="選段落自動帶入" style="margin-bottom:8px;">';
     html += '<button class="btn-primary" onclick="saveItem()">💾 新增</button>';
     document.getElementById('panelTitle').textContent = '＋ 新增項目';
     document.getElementById('panelBody').innerHTML = html;
@@ -6321,12 +6339,22 @@ function updateLabel() {
     const sel = document.getElementById('segSelect');
     const opt = sel ? sel.options[sel.selectedIndex] : null;
     if (!opt || !opt.value) return;
-    const seg = segments.find(s => String(s.segmentNumber) === opt.value);
+    const seg = segments.find(function(s) { return String(s.segmentNumber) === opt.value; });
     if (!seg) return;
     const from = document.getElementById('smallFrom').value;
     const to = document.getElementById('smallTo').value;
     const prefix = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
     document.getElementById('itemLabel').value = prefix + ' - 段落' + seg.segmentNumber + ' #' + from + '～#' + to;
+    // 自動帶入施工單價
+    const priceEl = document.getElementById('unitPriceInput');
+    const hintEl = document.getElementById('upHint');
+    if (priceEl && !priceEl.value && prefix) {
+        const match = unitPrices.find(function(p) { return p.methodKey === prefix; });
+        if (match) {
+            priceEl.value = match.unitPrice;
+            if (hintEl) hintEl.textContent = '（自動帶入）';
+        }
+    }
 }
 
 async function saveItem() {
@@ -6334,9 +6362,11 @@ async function saveItem() {
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     const notes = document.getElementById('notes').value;
+    const unitPriceEl = document.getElementById('unitPriceInput');
+    const unitPrice = unitPriceEl ? (unitPriceEl.value || '') : '';
     if (!label || !startDate || !endDate) { showToast('請填寫完整資訊', 'warning'); return; }
     const action = editingItem ? 'updateGanttItem' : 'addGanttItem';
-    const params = new URLSearchParams({ action, pipelineId: pipeline.id, label, startDate, endDate, status: '', notes });
+    const params = new URLSearchParams({ action, pipelineId: pipeline.id, label, startDate, endDate, status: '', notes, unitPrice });
     if (editingItem) params.append('itemId', editingItem.id);
     try {
         const res = await fetch(API_URL + '?' + params.toString());
@@ -6344,7 +6374,6 @@ async function saveItem() {
         if (result.success) { 
             showToast('儲存成功', 'success');
             if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
-            // 重新載入資料，不關視窗
             await reloadGanttData();
             hideEditForm();
         }
@@ -6370,13 +6399,15 @@ async function deleteItem() {
 // 重新載入甘特圖資料（不關視窗）
 async function reloadGanttData() {
     try {
-        const [r1, r2] = await Promise.all([
+        const [r1, r2, r3] = await Promise.all([
             fetch(API_URL + '?action=getGanttItems&pipelineId=' + pipeline.id).then(r => r.json()),
-            fetch(API_URL + '?action=getMilestones&pipelineId=' + pipeline.id).then(r => r.json())
+            fetch(API_URL + '?action=getMilestones&pipelineId=' + pipeline.id).then(r => r.json()),
+            fetch(API_URL + '?action=getUnitPrices&projectName=').then(r => r.json())
         ]);
         items.length = 0;
         (r1.items || []).sort((a,b) => new Date(a.startDate)-new Date(b.startDate)).forEach(i => items.push(i));
         milestones = (r2.milestones || []).sort((a,b) => new Date(a.endDate)-new Date(b.endDate));
+        unitPrices = r3.prices || [];
         renderChart();
         renderMilestones();
     } catch(e) { showToast('重新載入失敗：' + e.message, 'error'); }
@@ -6387,6 +6418,280 @@ function hideEditForm() {
     const sidebar = document.querySelector('.gantt-sidebar');
     if (sidebar) sidebar.innerHTML = '<div style="padding:16px;color:#999;font-size:13px;">點擊甘特圖列來編輯</div>';
     editingItem = null;
+}
+
+// ===== S 曲線 =====
+function computeMonthlyCumulative() {
+    var monthMap = {};
+    items.forEach(function(item) {
+        var prog = getItemProgress(item);
+        var totalLen = prog ? prog.total : 0;
+        var up = item.unitPrice || 0;
+        if (!totalLen || !up) return;
+        var totalYen = totalLen * up;
+        var start = new Date(item.startDate);
+        var end = new Date(item.endDate);
+        var totalDays = Math.max(1, Math.round((end - start) / 86400000));
+        var cur = new Date(start.getFullYear(), start.getMonth(), 1);
+        while (cur <= end) {
+            var mStart = new Date(Math.max(cur.getTime(), start.getTime()));
+            var nextMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+            var mEnd = new Date(Math.min(nextMonth.getTime() - 1, end.getTime()));
+            var mDays = Math.max(0, Math.round((mEnd - mStart) / 86400000) + 1);
+            var mYen = totalYen * (mDays / totalDays);
+            var key = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0');
+            monthMap[key] = (monthMap[key] || 0) + mYen;
+            cur = nextMonth;
+        }
+    });
+    var sorted = Object.keys(monthMap).sort();
+    var cumulative = 0;
+    return sorted.map(function(m) {
+        cumulative += monthMap[m];
+        return { month: m, monthly: monthMap[m], cumulative: cumulative };
+    });
+}
+
+function fmtYen(v) {
+    if (v >= 1e8) return (v/1e8).toFixed(2) + '億';
+    if (v >= 1e4) return (v/1e4).toFixed(1) + '萬';
+    return Math.round(v).toLocaleString();
+}
+
+function showSCurveWindow() {
+    // 移除舊面板
+    var old = document.getElementById('_sCurvePanel');
+    if (old) old.remove();
+
+    var rows = computeMonthlyCumulative();
+    var todayStr = new Date().toISOString().slice(0, 7);
+
+    var panel = document.createElement('div');
+    panel.id = '_sCurvePanel';
+    panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9900;display:flex;align-items:center;justify-content:center;';
+    
+    var maxCum = rows.length ? rows[rows.length-1].cumulative : 0;
+    var todayCum = 0;
+    rows.filter(function(r) { return r.month <= todayStr; }).forEach(function(r) { todayCum = r.cumulative; });
+    var actualDone = 0;
+    items.forEach(function(item) {
+        var prog = getItemProgress(item);
+        if (prog && item.unitPrice) actualDone += prog.done * item.unitPrice;
+    });
+
+    var statsHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">' +
+        '<div style="flex:1;min-width:120px;padding:10px;background:#f3e5f5;border-radius:8px;border-left:4px solid #7b1fa2;">' +
+            '<div style="font-size:10px;color:#7b1fa2;">總計畫預算</div>' +
+            '<div style="font-size:16px;font-weight:bold;color:#4a148c;">' + fmtYen(maxCum) + ' 元</div></div>' +
+        '<div style="flex:1;min-width:120px;padding:10px;background:#e3f2fd;border-radius:8px;border-left:4px solid #1976d2;">' +
+            '<div style="font-size:10px;color:#1565c0;">計畫累積至今</div>' +
+            '<div style="font-size:16px;font-weight:bold;color:#0d47a1;">' + fmtYen(todayCum) + ' 元</div>' +
+            '<div style="font-size:10px;color:#555;">' + (maxCum>0?Math.round(todayCum/maxCum*100):0) + '%</div></div>' +
+        '<div style="flex:1;min-width:120px;padding:10px;background:#e8f5e9;border-radius:8px;border-left:4px solid #388e3c;">' +
+            '<div style="font-size:10px;color:#2e7d32;">實際已完成</div>' +
+            '<div style="font-size:16px;font-weight:bold;color:#1b5e20;">' + fmtYen(actualDone) + ' 元</div>' +
+            '<div style="font-size:10px;color:#555;">' + (maxCum>0?Math.round(actualDone/maxCum*100):0) + '%</div></div>' +
+        '</div>';
+
+    // SVG chart
+    var svgHtml = '';
+    if (rows.length >= 2) {
+        var W = 680, H = 220;
+        var PL = 64, PR = 16, PT = 16, PB = 36;
+        var cW = W - PL - PR, cH = H - PT - PB;
+        var yMax = maxCum * 1.08;
+        var n = rows.length;
+        var pts = rows.map(function(r, i) {
+            return { x: PL + (n > 1 ? i * cW / (n-1) : cW/2), y: PT + cH - (r.cumulative / yMax) * cH, month: r.month, cum: r.cumulative, mon: r.monthly };
+        });
+        // today line
+        var todayIdx = -1;
+        rows.forEach(function(r, i) { if (r.month <= todayStr) todayIdx = i; });
+        var todayX = todayIdx >= 0 ? pts[todayIdx].x : -1;
+
+        // Y ticks
+        var yGrid = '', yLbl = '';
+        for (var ti = 0; ti <= 4; ti++) {
+            var v = yMax * ti / 4;
+            var ty = PT + cH - (v / yMax) * cH;
+            yGrid += '<line x1="' + PL + '" y1="' + ty + '" x2="' + (W-PR) + '" y2="' + ty + '" stroke="#eee"/>';
+            yLbl += '<text x="' + (PL-4) + '" y="' + (ty+4) + '" font-size="9" fill="#999" text-anchor="end">' + fmtYen(v) + '</text>';
+        }
+        // X labels
+        var xLbl = '';
+        var step = n > 18 ? 3 : n > 9 ? 2 : 1;
+        pts.forEach(function(p, i) {
+            if (i % step === 0) xLbl += '<text x="' + p.x + '" y="' + (H-PB+14) + '" font-size="8" fill="#888" text-anchor="middle">' + p.month.slice(5) + '</text>';
+        });
+        // area path
+        var areaPath = 'M ' + pts[0].x + ',' + (PT+cH) + ' ' + pts.map(function(p){ return 'L '+p.x+','+p.y; }).join(' ') + ' L ' + pts[pts.length-1].x + ',' + (PT+cH) + ' Z';
+        var linePts = pts.map(function(p){ return p.x+','+p.y; }).join(' ');
+        // actual done line (single point at today)
+        var actualLine = '';
+        if (actualDone > 0 && todayX > 0) {
+            var actY = PT + cH - (actualDone / yMax) * cH;
+            actualLine = '<circle cx="' + todayX + '" cy="' + actY + '" r="6" fill="#388e3c" stroke="white" stroke-width="2"><title>實際完成：' + fmtYen(actualDone) + '元</title></circle>' +
+                '<line x1="' + PL + '" y1="' + actY + '" x2="' + todayX + '" y2="' + actY + '" stroke="#388e3c" stroke-width="1.5" stroke-dasharray="4,3"/>' +
+                '<text x="' + (todayX+8) + '" y="' + (actY+4) + '" font-size="9" fill="#2e7d32">實際</text>';
+        }
+        var todayLine = todayX > 0 ? '<line x1="' + todayX + '" y1="' + PT + '" x2="' + todayX + '" y2="' + (PT+cH) + '" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3"/><text x="' + (todayX+2) + '" y="' + (PT+10) + '" font-size="8" fill="#e53935">今</text>' : '';
+        var circles = pts.map(function(p) {
+            return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#7b1fa2" stroke="white" stroke-width="1"><title>' + p.month + '｜當月：' + fmtYen(p.mon) + '｜累積：' + fmtYen(p.cum) + '</title></circle>';
+        }).join('');
+
+        svgHtml = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;margin-bottom:10px;">' +
+            '<defs><linearGradient id="scg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.2"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.02"/></linearGradient></defs>' +
+            yGrid + '<path d="' + areaPath + '" fill="url(#scg2)"/>' +
+            '<polyline points="' + linePts + '" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>' +
+            actualLine + todayLine + circles + yLbl + xLbl +
+            '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT+cH) + '" stroke="#ccc"/>' +
+            '<line x1="' + PL + '" y1="' + (PT+cH) + '" x2="' + (W-PR) + '" y2="' + (PT+cH) + '" stroke="#ccc"/>' +
+            '</svg>';
+    } else if (rows.length === 0) {
+        svgHtml = '<div style="text-align:center;padding:30px;color:#aaa;">尚無含單價的甘特圖項目<br><small>請先設定施工單價</small></div>';
+    }
+
+    // Table
+    var tableRows = rows.map(function(r) {
+        var isToday = r.month === todayStr;
+        return '<tr style="background:' + (isToday?'#fff9c4':'') + ';">' +
+            '<td style="padding:4px 8px;border:1px solid #eee;' + (isToday?'font-weight:bold;color:#e65100;':'') + '">' + r.month + (isToday?' ◀':'') + '</td>' +
+            '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;">' + fmtYen(r.monthly) + ' 元</td>' +
+            '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;">' + fmtYen(r.cumulative) + ' 元</td>' +
+            '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#7b1fa2;">' + (maxCum>0?Math.round(r.cumulative/maxCum*100):0) + '%</td>' +
+            '</tr>';
+    }).join('');
+
+    panel.innerHTML = '<div style="background:white;border-radius:12px;width:90%;max-width:800px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.3);overflow:hidden;">' +
+        '<div style="background:linear-gradient(135deg,#4a148c,#7b1fa2);color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
+            '<span style="font-size:15px;font-weight:bold;">📈 S 曲線 — 累積預算金額</span>' +
+            '<div style="display:flex;gap:8px;">' +
+                '<button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 10px;border-radius:4px;">⚙️ 施工單價管理</button>' +
+                '<button onclick="document.getElementById(\'_sCurvePanel\').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:16px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>' +
+            '</div></div>' +
+        '<div style="overflow:auto;flex:1;padding:16px;">' +
+            statsHtml + svgHtml +
+            (rows.length > 0 ? '<div style="font-size:11px;font-weight:bold;color:#4a148c;margin-bottom:6px;">📋 逐月明細</div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
+            '<thead><tr style="background:#f3e5f5;"><th style="padding:5px 8px;text-align:left;border:1px solid #e1bee7;">月份</th>' +
+            '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">當月預算</th>' +
+            '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積預算</th>' +
+            '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積比例</th></tr></thead>' +
+            '<tbody>' + tableRows + '</tbody></table>' : '') +
+        '</div></div>';
+    document.body.appendChild(panel);
+    panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
+}
+
+// ===== 施工單價管理（blob 視窗版）=====
+function showUnitPriceMgr() {
+    var old = document.getElementById('_upMgr');
+    if (old) old.remove();
+
+    var methodKeys = new Set();
+    segments.forEach(function(seg) {
+        var k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
+        if (k) methodKeys.add(k);
+    });
+
+    var panel = document.createElement('div');
+    panel.id = '_upMgr';
+    panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9950;display:flex;align-items:center;justify-content:center;';
+
+    function renderMgrContent() {
+        var tableRows = unitPrices.map(function(p) {
+            return '<tr><td style="padding:5px 8px;border:1px solid #eee;">' + p.methodKey + '</td>' +
+                '<td style="padding:5px 8px;border:1px solid #eee;text-align:right;">' +
+                    '<input type="number" id="up2_' + p.methodKey.replace(/[^a-zA-Z0-9]/g,'_') + '" value="' + p.unitPrice + '" style="width:90px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px;"></td>' +
+                '<td style="padding:5px 8px;border:1px solid #eee;text-align:center;">' +
+                    '<button onclick="saveUp2(\'' + p.methodKey.replace(/'/g,"\\'") + '\')" style="padding:3px 8px;background:#00695C;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">💾</button>' +
+                    ' <button onclick="delUp2(\'' + p.methodKey.replace(/'/g,"\\'") + '\')" style="padding:3px 8px;background:#e53935;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">🗑️</button>' +
+                '</td></tr>';
+        }).join('');
+
+        var newKeyOpts = '<option value="">-- 選擇工法 --</option>';
+        methodKeys.forEach(function(k) {
+            if (!unitPrices.find(function(p){ return p.methodKey === k; }))
+                newKeyOpts += '<option value="' + k + '">' + k + '</option>';
+        });
+
+        panel.querySelector('#_upMgrBody').innerHTML =
+            '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;">' +
+            '<thead><tr style="background:#e8f5e9;"><th style="padding:6px 8px;text-align:left;border:1px solid #c8e6c9;">施工方式</th>' +
+            '<th style="padding:6px 8px;text-align:right;border:1px solid #c8e6c9;">單價（元/m）</th>' +
+            '<th style="padding:6px 8px;text-align:center;border:1px solid #c8e6c9;">操作</th></tr></thead>' +
+            '<tbody>' + (tableRows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#aaa;">尚無資料</td></tr>') + '</tbody></table>' +
+            '<div style="background:#f9f9f9;border-radius:6px;padding:12px;border:1px solid #eee;">' +
+            '<div style="font-size:12px;font-weight:bold;margin-bottom:8px;">＋ 新增單價</div>' +
+            '<select id="up2_newKey" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' + newKeyOpts + '</select>' +
+            '<input id="up2_newKeyManual" placeholder="或手動輸入工法名稱" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' +
+            '<input id="up2_newPrice" type="number" placeholder="單價（元/m）" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;font-size:12px;box-sizing:border-box;">' +
+            '<button onclick="addUp2()" style="width:100%;padding:8px;background:#00695C;color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:bold;">＋ 新增</button>' +
+            '</div>';
+    }
+
+    panel.innerHTML = '<div style="background:white;border-radius:10px;width:88%;max-width:580px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;">' +
+        '<div style="background:#00695C;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
+            '<span style="font-weight:bold;">⚙️ 施工單價管理</span>' +
+            '<button onclick="document.getElementById(\'_upMgr\').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>' +
+        '</div>' +
+        '<div id="_upMgrBody" style="overflow:auto;flex:1;padding:16px;"></div>' +
+        '</div>';
+    document.body.appendChild(panel);
+    panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
+    renderMgrContent();
+
+    window.saveUp2 = async function(methodKey) {
+        var safeId = methodKey.replace(/[^a-zA-Z0-9]/g, '_');
+        var el = document.getElementById('up2_' + safeId);
+        if (!el) return;
+        var unitPrice = parseFloat(el.value);
+        if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效單價', 'warning'); return; }
+        try {
+            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
+            var result = await res.json();
+            if (result.success) {
+                showToast('已儲存 ' + methodKey, 'success');
+                var idx = unitPrices.findIndex(function(p){ return p.methodKey === methodKey; });
+                if (idx >= 0) unitPrices[idx].unitPrice = unitPrice;
+                else unitPrices.push({ methodKey: methodKey, projectName: '', unitPrice: unitPrice, unit: 'm' });
+                renderMgrContent();
+            } else showToast(result.error || '儲存失敗', 'error');
+        } catch(e) { showToast(e.message, 'error'); }
+    };
+
+    window.delUp2 = async function(methodKey) {
+        if (!await showConfirm({ title: '刪除單價', message: '確定刪除「' + methodKey + '」的單價？', okText: '刪除', danger: true })) return;
+        try {
+            var res = await fetch(API_URL + '?action=deleteUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=');
+            var result = await res.json();
+            if (result.success) {
+                showToast('已刪除', 'success');
+                unitPrices = unitPrices.filter(function(p){ return p.methodKey !== methodKey; });
+                renderMgrContent();
+            } else showToast(result.error || '刪除失敗', 'error');
+        } catch(e) { showToast(e.message, 'error'); }
+    };
+
+    window.addUp2 = async function() {
+        var selKey = document.getElementById('up2_newKey').value;
+        var manualKey = document.getElementById('up2_newKeyManual').value.trim();
+        var methodKey = manualKey || selKey;
+        var unitPrice = parseFloat(document.getElementById('up2_newPrice').value);
+        if (!methodKey) { showToast('請選擇或輸入施工方式', 'warning'); return; }
+        if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效單價', 'warning'); return; }
+        try {
+            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
+            var result = await res.json();
+            if (result.success) {
+                showToast('已新增 ' + methodKey, 'success');
+                var idx = unitPrices.findIndex(function(p){ return p.methodKey === methodKey; });
+                if (idx >= 0) unitPrices[idx].unitPrice = unitPrice;
+                else unitPrices.push({ methodKey: methodKey, projectName: '', unitPrice: unitPrice, unit: 'm' });
+                renderMgrContent();
+            } else showToast(result.error || '新增失敗', 'error');
+        } catch(e) { showToast(e.message, 'error'); }
+    };
 }
 
 // 里程碑管理面板（表格式）
