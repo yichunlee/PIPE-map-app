@@ -7048,7 +7048,7 @@ function renderMilestones() {
     // ===== 累積預算金額 vs 時間 迷你圖 =====
     var budgetRows = computeMonthlyCumulative();
     if (budgetRows.length >= 2) {
-        var todayStr2 = new Date().toISOString().slice(0, 7);
+        var totalRange2 = maxDate.getTime() - minDate.getTime();
         var maxCum2 = budgetRows[budgetRows.length-1].cumulative;
         var actualDone2 = 0;
         items.forEach(function(item) {
@@ -7058,89 +7058,96 @@ function renderMilestones() {
         });
         
         if (maxCum2 > 0) {
-            var W2 = 600, H2 = 120, PL2 = 0, PR2 = 0, PT2 = 12, PB2 = 24;
-            var cW2 = W2 - PL2 - PR2, cH2 = H2 - PT2 - PB2;
             var yMax2 = maxCum2 * 1.1;
-            var totalRange2 = maxDate.getTime() - minDate.getTime();
+            var todayStr2 = new Date().toISOString().slice(0, 7);
             
-            // X 座標使用與甘特圖相同的時間比例（minDate/maxDate 已在外層計算）
-            function dateToX2(d) {
-                var pct = Math.max(0, Math.min(1, (d.getTime() - minDate.getTime()) / totalRange2));
-                return PL2 + pct * cW2;
+            // date → left% (same formula as gantt chart track)
+            function dateToPct(d) {
+                return Math.max(0, Math.min(100, (d.getTime() - minDate.getTime()) / totalRange2 * 100));
+            }
+            // value → bottom% within chart area
+            function valToBottom(v) {
+                return (v / yMax2 * 100).toFixed(2);
             }
             
-            // 每個月的中間日期對應 X 座標
+            // Build data points (month middle date)
             var pts2 = budgetRows.map(function(r) {
                 var parts = r.month.split('-');
-                var yr = parseInt(parts[0]), mo = parseInt(parts[1]);
-                var midDate = new Date(yr, mo - 1, 15); // 月中
-                return {
-                    x: dateToX2(midDate),
-                    y: PT2 + cH2 - (r.cumulative / yMax2) * cH2,
-                    month: r.month, cum: r.cumulative, date: midDate
-                };
+                var midDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, 15);
+                return { pct: dateToPct(midDate), cum: r.cum || r.cumulative, month: r.month };
             });
             
-            // today line
-            var todayX2 = dateToX2(new Date());
-            // actual Y
-            var actY2 = PT2 + cH2 - (actualDone2 / yMax2) * cH2;
-            // Y ticks
-            var yGrid2 = '', yLbl2 = '';
-            for (var ti2 = 0; ti2 <= 3; ti2++) {
-                var v2 = yMax2 * ti2 / 3;
-                var ty2 = PT2 + cH2 - (v2 / yMax2) * cH2;
-                yGrid2 += '<line x1="' + PL2 + '" y1="' + ty2 + '" x2="' + (W2-PR2) + '" y2="' + ty2 + '" stroke="#eee" stroke-width="1"/>';
-                yLbl2 += '<text x="' + (PL2-4) + '" y="' + (ty2+4) + '" font-size="8" fill="#aaa" text-anchor="end">' + fmtYen(v2) + '</text>';
-            }
-            // milestone vertical lines on budget chart
-            var msLabels2 = '';
+            // Build SVG polyline using % coordinates mapped to 0-100 viewBox
+            // Use a 1000x100 viewBox where x=pct*10, y=(1-val/yMax)*100
+            var svgPts = pts2.map(function(p) {
+                return (p.pct * 10).toFixed(1) + ',' + ((1 - p.cum/yMax2)*100).toFixed(1);
+            }).join(' ');
+            var svgArea = 'M0,100 ' + pts2.map(function(p) {
+                return 'L' + (p.pct*10).toFixed(1) + ',' + ((1-p.cum/yMax2)*100).toFixed(1);
+            }).join(' ') + ' L' + (pts2[pts2.length-1].pct*10).toFixed(1) + ',100 Z';
+            
+            // Today X
+            var todayPct = dateToPct(new Date());
+            var todayX = (todayPct * 10).toFixed(1);
+            // Actual dot
+            var actY = ((1 - actualDone2/yMax2)*100).toFixed(1);
+            
+            // Y axis labels (absolute positioned on left div)
+            var yLabels = '';
+            [0, 0.33, 0.67, 1].forEach(function(frac) {
+                var v = yMax2 * frac;
+                var btm = (frac * 100).toFixed(0);
+                yLabels += '<div style="position:absolute;right:4px;bottom:' + btm + '%;transform:translateY(50%);font-size:8px;color:#aaa;white-space:nowrap;">' + fmtYen(v) + '</div>';
+            });
+            
+            // Milestone vertical lines + labels
+            var msLines = '';
             visibleMilestones.forEach(function(ms) {
                 var mDate = new Date(ms.endDate);
-                var mx = dateToX2(mDate);
-                // find the cumulative budget at this milestone date
+                var mPct = dateToPct(mDate);
                 var mStr = mDate.getFullYear() + '-' + String(mDate.getMonth()+1).padStart(2,'0');
-                var mRow = budgetRows.reduce(function(acc, r) {
-                    return r.month <= mStr ? r : acc;
-                }, null);
-                msLabels2 += '<line x1="' + mx + '" y1="' + PT2 + '" x2="' + mx + '" y2="' + (PT2+cH2) + '" stroke="#3f51b5" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>';
-                msLabels2 += '<text x="' + mx + '" y="' + (H2-PB2+14) + '" font-size="8" fill="#3f51b5" text-anchor="middle">' + (mDate.getMonth()+1) + '/' + mDate.getDate() + '</text>';
-                if (mRow) {
-                    var labelY = PT2 + cH2 - (mRow.cumulative / yMax2) * cH2 - 5;
-                    msLabels2 += '<text x="' + mx + '" y="' + labelY + '" font-size="8" fill="#7b1fa2" text-anchor="middle" font-weight="bold">' + fmtYen(mRow.cumulative) + '</text>';
+                var mRow = budgetRows.reduce(function(acc, r) { return r.month <= mStr ? r : acc; }, null);
+                var cumAtMs = mRow ? (mRow.cum || mRow.cumulative) : 0;
+                var mY = ((1 - cumAtMs/yMax2)*100).toFixed(1);
+                msLines += '<div style="position:absolute;left:' + mPct.toFixed(2) + '%;top:0;bottom:0;width:1px;background:#3f51b5;opacity:0.5;"></div>';
+                msLines += '<div style="position:absolute;left:' + mPct.toFixed(2) + '%;bottom:0;transform:translateX(-50%);font-size:8px;color:#3f51b5;white-space:nowrap;">' + (mDate.getMonth()+1) + '/' + mDate.getDate() + '</div>';
+                if (cumAtMs > 0) {
+                    msLines += '<div style="position:absolute;left:' + mPct.toFixed(2) + '%;bottom:' + valToBottom(cumAtMs) + '%;transform:translate(-50%,50%) translateY(-14px);font-size:8px;color:#7b1fa2;font-weight:bold;white-space:nowrap;">' + fmtYen(cumAtMs) + '</div>';
                 }
             });
-            // today line
-            var todayLineEl2 = '<line x1="' + todayX2 + '" y1="' + PT2 + '" x2="' + todayX2 + '" y2="' + (PT2+cH2) + '" stroke="#e53935" stroke-width="1.5" stroke-dasharray="3,2"/>';
-            // actual dot at today X
-            var actualDot2 = (actualDone2 > 0) ?
-                '<circle cx="' + todayX2 + '" cy="' + actY2 + '" r="4" fill="#388e3c" stroke="white" stroke-width="1.5"><title>實際完成：' + fmtYen(actualDone2) + '元</title></circle>' +
-                '<line x1="' + PL2 + '" y1="' + actY2 + '" x2="' + todayX2 + '" y2="' + actY2 + '" stroke="#388e3c" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>' : '';
-            var linePts2 = pts2.map(function(p){ return p.x+','+p.y; }).join(' ');
-            var areaPath2 = 'M ' + pts2[0].x + ',' + (PT2+cH2) + ' ' + pts2.map(function(p){ return 'L '+p.x+','+p.y; }).join(' ') + ' L ' + pts2[pts2.length-1].x + ',' + (PT2+cH2) + ' Z';
-            
-            // Y軸刻度嵌入 SVG（overflow:visible，延伸到左側 div）
-            // 用負座標畫在 SVG 左側，讓 SVG 本身佔 flex:1 的完整寬度
-            var yLbl2 = '';
-            for (var ti2b = 0; ti2b <= 3; ti2b++) {
-                var v2b = yMax2 * ti2b / 3;
-                var ty2b = PT2 + cH2 - (v2b / yMax2) * cH2;
-                yLbl2 += '<text x="-4" y="' + (ty2b+4) + '" font-size="9" fill="#aaa" text-anchor="end">' + fmtYen(v2b) + '</text>';
-            }
             
             html += '<div style="display:flex;margin-top:8px;">';
-            html += '<div style="width:180px;flex-shrink:0;font-size:10px;color:#7b1fa2;font-weight:bold;padding:8px 8px 0 8px;display:flex;align-items:flex-start;">💰 預算進度</div>';
-            html += '<div style="flex:1;padding-right:80px;overflow:visible;">';
-            html += '<svg viewBox="0 0 ' + W2 + ' ' + H2 + '" width="100%" style="display:block;overflow:visible;">' +
-                '<defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.15"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.01"/></linearGradient></defs>' +
-                yGrid2 +
-                '<path d="' + areaPath2 + '" fill="url(#bg2)"/>' +
-                '<polyline points="' + linePts2 + '" fill="none" stroke="#7b1fa2" stroke-width="1.5"/>' +
-                yLbl2 + msLabels2 + todayLineEl2 + actualDot2 +
-                '<line x1="' + PL2 + '" y1="' + PT2 + '" x2="' + PL2 + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
-                '<line x1="' + PL2 + '" y1="' + (PT2+cH2) + '" x2="' + (W2-PR2) + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
-                '</svg>';
-            html += '</div></div>';
+            // Left label div - same width:180px as gantt label
+            html += '<div style="width:180px;flex-shrink:0;font-size:10px;color:#7b1fa2;font-weight:bold;padding:8px 8px 20px 8px;position:relative;">';
+            html += '💰 預算進度';
+            html += yLabels;
+            html += '</div>';
+            // Chart area - same padding-right:80px as gantt track
+            html += '<div style="flex:1;padding-right:80px;position:relative;height:100px;">';
+            // SVG for curve (100% wide, fills exactly the same area as gantt bars)
+            html += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="80" style="display:block;position:absolute;top:0;left:0;right:0;">';
+            html += '<defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.2"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.02"/></linearGradient></defs>';
+            // Horizontal grid lines
+            [0.33, 0.67, 1].forEach(function(frac) {
+                var gy = ((1-frac)*100).toFixed(1);
+                html += '<line x1="0" y1="' + gy + '" x2="1000" y2="' + gy + '" stroke="#eee" stroke-width="0.5"/>';
+            });
+            html += '<path d="' + svgArea + '" fill="url(#bg2)"/>';
+            html += '<polyline points="' + svgPts + '" fill="none" stroke="#7b1fa2" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+            // Today line
+            html += '<line x1="' + todayX + '" y1="0" x2="' + todayX + '" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
+            // Actual dot
+            if (actualDone2 > 0) {
+                html += '<circle cx="' + todayX + '" cy="' + actY + '" r="3" fill="#388e3c" stroke="white" stroke-width="1" vector-effect="non-scaling-stroke"><title>實際完成：' + fmtYen(actualDone2) + '元</title></circle>';
+                html += '<line x1="0" y1="' + actY + '" x2="' + todayX + '" y2="' + actY + '" stroke="#388e3c" stroke-width="1" stroke-dasharray="3,2" opacity="0.7" vector-effect="non-scaling-stroke"/>';
+            }
+            html += '</svg>';
+            // Bottom axis line
+            html += '<div style="position:absolute;bottom:20px;left:0;right:0;height:1px;background:#ddd;"></div>';
+            // Milestone overlays (DOM-based for correct % alignment)
+            html += msLines;
+            html += '</div>';
+            html += '</div>';
         }
     }
     
