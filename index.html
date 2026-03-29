@@ -5886,16 +5886,7 @@ kbd {
                 console.log('載入項目數:', items.length, '里程碑數:', milestones.length, '單價筆數:', unitPrices.length);
                 
                 // 資料備妥，產生完整 HTML 並替換視窗內容
-                let html;
-                try {
-                    html = createGanttWindowHTML(items, currentPipeline, milestones, unitPrices);
-                } catch(buildErr) {
-                    console.error('createGanttWindowHTML failed:', buildErr);
-                    showToast('甘特圖建立失敗: ' + buildErr.message, 'error');
-                    if (window.ganttWindow && !window.ganttWindow.closed) window.ganttWindow.close();
-                    return;
-                }
-                console.log('Blob HTML length:', html.length, 'chars');
+                const html = createGanttWindowHTML(items, currentPipeline, milestones, unitPrices);
                 const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 
@@ -5915,12 +5906,19 @@ kbd {
         };
         
         function createGanttWindowHTML(items, pipeline, milestones, unitPrices) {
-            const itemsJson = JSON.stringify(items).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
-            const segmentsJson = JSON.stringify(pipeline.segments || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
-            const pipelineJson = JSON.stringify(pipeline).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
-            const milestonesJson = JSON.stringify(milestones || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+            function safeJson(obj) {
+                return JSON.stringify(obj)
+                    .replace(/</g, '\\u003c')
+                    .replace(/>/g, '\\u003e')
+                    .replace(/`/g, '\\u0060')
+                    .replace(/\$\{/g, '\\u0024{');
+            }
+            const itemsJson = safeJson(items);
+            const segmentsJson = safeJson(pipeline.segments || []);
+            const pipelineJson = safeJson(pipeline);
+            const milestonesJson = safeJson(milestones || []);
             const nameEscaped = (pipeline.name || '').replace(/'/g, "\\'").replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-            const unitPricesJson = JSON.stringify(unitPrices || []).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+            const unitPricesJson = safeJson(unitPrices || []);
             const apiUrl = API_URL;
             
             return `<!DOCTYPE html>
@@ -6040,7 +6038,6 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 <button class="add-btn" onclick="showAddForm()" title="新增甘特圖項目" style="bottom:80px;">＋</button>
 <button class="add-btn" onclick="showMilestoneManager()" title="里程碑管理" style="bottom:20px;background:#3f51b5;font-size:18px;">📅</button>
 <script>
-console.log("BLOB SCRIPT STARTING");
 const items = ${itemsJson};
 const segments = ${segmentsJson};
 const pipeline = ${pipelineJson};
