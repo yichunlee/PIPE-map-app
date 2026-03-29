@@ -144,7 +144,7 @@
         /* 圖層切換按鈕 */
         .layer-switch-button {
             position: absolute;
-            top: 170px; /* 與眼睛按鈕交換位置 */
+            top: 170px;
             left: 10px;
             z-index: 1000;
             background: white;
@@ -159,47 +159,89 @@
             align-items: center;
             justify-content: center;
         }
-        .layer-switch-button:hover {
-            background: #f4f4f4;
-        }
-        
-        /* 圖層面板 */
+        .layer-switch-button:hover { background: #f4f4f4; }
+        .layer-switch-button.active { background: #1565c0; color: white; }
+
+        /* 整合圖層面板 */
         .layer-panel {
             position: absolute;
-            top: 170px; /* 對齊圖層切換按鈕 */
+            top: 170px;
             left: 54px;
             z-index: 1000;
             background: white;
-            padding: 12px;
-            border-radius: 6px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            min-width: 140px;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+            width: 240px;
+            max-height: 70vh;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
         }
-        
-        .layer-option {
-            padding: 8px 10px;
-            cursor: pointer;
-            border-radius: 4px;
+        .layer-panel.show { display: flex; }
+        .layer-panel-header {
+            padding: 10px 14px 6px;
+            font-weight: bold;
             font-size: 13px;
-            margin: 2px 0;
+            color: #1565c0;
+            border-bottom: 1px solid #e0e0e0;
+            flex-shrink: 0;
+        }
+        .layer-panel-section {
+            padding: 8px 14px 4px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+        .layer-panel-body {
+            overflow-y: auto;
+            flex: 1;
+            padding-bottom: 8px;
+        }
+        .layer-option {
+            padding: 7px 14px;
+            cursor: pointer;
+            font-size: 13px;
             display: flex;
             align-items: center;
             gap: 8px;
         }
-        
-        .layer-option:hover {
-            background: #f0f0f0;
+        .layer-option:hover { background: #f5f5f5; }
+        .layer-option.active { background: #e3f2fd; color: #1565c0; font-weight: 600; }
+        .layer-radio { font-size: 15px; flex-shrink: 0; }
+        .layer-divider { height: 1px; background: #eeeeee; margin: 4px 14px; flex-shrink: 0; }
+
+        /* WGIS 在圖層面板內的樣式 */
+        .wgis-in-panel { padding: 0 14px 8px; }
+        .wgis-upload-btn {
+            width: 100%; padding: 6px; background: #1565c0; color: white;
+            border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold;
+            margin-bottom: 6px;
         }
-        
-        .layer-option.active {
-            background: #e3f2fd;
-            color: #2196F3;
-            font-weight: 600;
+        .wgis-upload-btn:hover { background: #0d47a1; }
+        .wgis-file-list { display: flex; flex-direction: column; gap: 4px; }
+        .wgis-file-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 7px; border-radius: 5px; background: #f5f5f5;
+            font-size: 12px; cursor: pointer; border: 1px solid transparent;
         }
-        
-        .layer-radio {
-            font-size: 16px;
+        .wgis-file-item:hover { background: #e3f2fd; border-color: #90caf9; }
+        .wgis-file-item.active { background: #e3f2fd; border-color: #1565c0; }
+        .wgis-file-item input[type=checkbox] { cursor: pointer; accent-color: #1565c0; width: 14px; height: 14px; flex-shrink: 0; }
+        .wgis-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+        .wgis-file-count { color: #888; font-size: 10px; flex-shrink: 0; }
+        .wgis-file-del { color: #ccc; font-size: 12px; flex-shrink: 0; cursor: pointer; }
+        .wgis-file-del:hover { color: #e53935; }
+        .wgis-info { color: #999; font-size: 10px; margin-top: 4px; line-height: 1.5; }
+        .wgis-tooltip {
+            background: rgba(30,30,30,0.88) !important; color: white !important;
+            border: none !important; border-radius: 5px !important;
+            font-size: 11px !important; padding: 4px 8px !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
         }
+        .wgis-tooltip::before { display: none !important; }
         
         /* 備註圖示樣式 */
         .note-marker-custom {
@@ -673,74 +715,7 @@
         .permit-zone-button:hover { background: #f4f4f4; }
         .permit-zone-button.hidden-markers { background: #7f8c8d; color: white; }
         
-        /* WGIS 管線圖層按鈕 */
-        .wgis-button {
-            position: absolute;
-            top: 349px;
-            left: 10px;
-            z-index: 1000;
-            background: white;
-            padding: 10px;
-            border-radius: 4px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-            cursor: pointer;
-            font-size: 20px;
-            width: 34px;
-            height: 34px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .wgis-button:hover { background: #f4f4f4; }
-        .wgis-button.active { background: #1565c0; color: white; }
 
-        /* WGIS 面板 */
-        .wgis-panel {
-            position: absolute;
-            top: 349px;
-            left: 54px;
-            z-index: 1000;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-            padding: 14px 16px;
-            min-width: 240px;
-            max-width: 280px;
-            display: none;
-            font-size: 13px;
-        }
-        .wgis-panel.show { display: block; }
-        .wgis-panel-title { font-weight: bold; color: #1565c0; margin-bottom: 10px; font-size: 13px; }
-        .wgis-panel input[type=file] { display: none; }
-        .wgis-upload-btn {
-            width: 100%; padding: 7px; background: #1565c0; color: white;
-            border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold;
-        }
-        .wgis-upload-btn:hover { background: #0d47a1; }
-        .wgis-file-list { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
-        .wgis-file-item {
-            display: flex; align-items: center; gap: 7px;
-            padding: 5px 7px; border-radius: 5px; background: #f5f5f5;
-            font-size: 12px; cursor: pointer; border: 1px solid transparent;
-        }
-        .wgis-file-item:hover { background: #e3f2fd; border-color: #90caf9; }
-        .wgis-file-item.active { background: #e3f2fd; border-color: #1565c0; }
-        .wgis-file-item input[type=checkbox] { cursor: pointer; accent-color: #1565c0; width: 14px; height: 14px; flex-shrink: 0; }
-        .wgis-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .wgis-file-count { color: #888; font-size: 10px; flex-shrink: 0; }
-        .wgis-file-del { color: #ccc; font-size: 13px; flex-shrink: 0; cursor: pointer; }
-        .wgis-file-del:hover { color: #e53935; }
-        .wgis-info { color: #888; font-size: 11px; margin-top: 8px; line-height: 1.5; }
-        .wgis-tooltip {
-            background: rgba(30,30,30,0.85) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 5px !important;
-            font-size: 11px !important;
-            padding: 4px 8px !important;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
-        }
-        .wgis-tooltip::before { display: none !important; }
         
         /* 施工日期標註按鈕 */
         .date-label-button {
@@ -1451,30 +1426,32 @@ kbd {
     <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
     
     <div id="measureButton" class="measure-button" title="測量距離">📏</div>
-    <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel()" title="切換底圖">🗺️</div>
-    <div id="layerPanel" class="layer-panel" style="display:none;">
-        <div style="font-weight:bold; margin-bottom:8px; color:#2196F3;">🗺️ 底圖選擇</div>
-        <div onclick="switchBaseLayer('street')" class="layer-option active" id="layer-street">
-            <span class="layer-radio">●</span> 街道圖
-        </div>
-        <div onclick="switchBaseLayer('satellite')" class="layer-option" id="layer-satellite">
-            <span class="layer-radio">○</span> 衛星圖
-        </div>
-        <div onclick="switchBaseLayer('topo')" class="layer-option" id="layer-topo">
-            <span class="layer-radio">○</span> 地形圖
+    <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel()" title="圖層設定">🗺️</div>
+    <div id="layerPanel" class="layer-panel">
+        <div class="layer-panel-header">🗺️ 圖層設定</div>
+        <div class="layer-panel-body">
+            <div class="layer-panel-section">底圖</div>
+            <div onclick="switchBaseLayer('street')" class="layer-option active" id="layer-street">
+                <span class="layer-radio">●</span> 街道圖
+            </div>
+            <div onclick="switchBaseLayer('satellite')" class="layer-option" id="layer-satellite">
+                <span class="layer-radio">○</span> 衛星圖
+            </div>
+            <div onclick="switchBaseLayer('topo')" class="layer-option" id="layer-topo">
+                <span class="layer-radio">○</span> 地形圖
+            </div>
+            <div class="layer-divider"></div>
+            <div class="layer-panel-section">WGIS 管線底圖</div>
+            <div class="wgis-in-panel">
+                <input type="file" id="wgisFileInput" accept=".csv" onchange="loadWgisFile(this)">
+                <button class="wgis-upload-btn" id="wgisUploadBtn" onclick="document.getElementById('wgisFileInput').click()">📂 上傳 WGIS CSV</button>
+                <div class="wgis-file-list" id="wgisFileList"></div>
+                <div class="wgis-info" id="wgisInfo">支援台水 WGIS 匯出的 CSV 格式</div>
+            </div>
         </div>
     </div>
     <div id="roadworkButton" class="roadwork-button" title="台中市挖掘許可" onclick="toggleRoadworkLayer()">🚧</div>
     <div id="permitZoneButton" class="permit-zone-button hidden" title="隱藏所有標記（備註/工作井/挖掘範圍）" onclick="toggleAllMarkers()">👁️</div>
-    <!-- WGIS 管線底圖按鈕 -->
-    <div id="wgisButton" class="wgis-button" title="WGIS 管線底圖" onclick="toggleWgisPanel()">🗺️</div>
-    <div id="wgisPanel" class="wgis-panel">
-        <div class="wgis-panel-title">🗺️ WGIS 管線底圖</div>
-        <input type="file" id="wgisFileInput" accept=".csv" onchange="loadWgisFile(this)">
-        <button class="wgis-upload-btn" onclick="document.getElementById('wgisFileInput').click()">📂 上傳 WGIS CSV</button>
-        <div class="wgis-file-list" id="wgisFileList"></div>
-        <div class="wgis-info" id="wgisInfo">支援台水 WGIS 匯出的 CSV 格式<br>（需含 TWD97 端點座標欄位）</div>
-    </div>
     <div id="dateLabelButton" class="date-label-button hidden" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()">📅</div>
     <div id="roadworkPanel" class="roadwork-panel">
         <div style="font-weight:bold; margin-bottom:6px; color:#FF5722;">🚧 台中市挖掘許可</div>
@@ -4851,15 +4828,7 @@ kbd {
         // ========== WGIS 管線底圖功能 ==========
         // wgisDatasets = [{ id(driveId), name, lines, polylines, visible, loaded }]
         let wgisDatasets = [];
-        let wgisPanelOpen = false;
         let wgisCloudFiles = [];  // Drive 上的檔案清單
-
-        function toggleWgisPanel() {
-            wgisPanelOpen = !wgisPanelOpen;
-            document.getElementById('wgisPanel').classList.toggle('show', wgisPanelOpen);
-            document.getElementById('wgisButton').classList.toggle('active', wgisPanelOpen || wgisDatasets.some(d=>d.visible));
-            if (wgisPanelOpen) refreshWgisFileList();
-        }
 
         // ── 雲端檔案清單 ──
         async function refreshWgisFileList() {
@@ -4896,7 +4865,7 @@ kbd {
                 </div>`;
             }).join('');
 
-            document.getElementById('wgisButton').classList.toggle('active', wgisDatasets.some(d=>d.visible) || wgisPanelOpen);
+            document.getElementById('layerSwitchButton').classList.toggle('active', wgisDatasets.some(d=>d.visible) || document.getElementById('layerPanel').classList.contains('show'));
         }
 
         function escapeHtml(s) {
@@ -7895,13 +7864,18 @@ window.addEventListener('message', async function(event) {
             loadMapNotes();
         }
         
-        // 切換圖層面板
+        // 切換圖層面板（整合底圖 + WGIS）
         function toggleLayerPanel() {
             const panel = document.getElementById('layerPanel');
-            if (panel.style.display === 'none') {
-                panel.style.display = 'block';
-            } else {
-                panel.style.display = 'none';
+            const btn   = document.getElementById('layerSwitchButton');
+            const isOpen = panel.classList.toggle('show');
+            btn.classList.toggle('active', isOpen);
+            if (isOpen) {
+                // 每次打開時更新 WGIS 雲端清單 & 上傳按鈕顯示
+                refreshWgisFileList();
+                const isSup = currentUser && (currentUser.role === 'supervisor' || currentUser.role === 'admin');
+                const uploadBtn = document.getElementById('wgisUploadBtn');
+                if (uploadBtn) uploadBtn.style.display = isSup ? 'block' : 'none';
             }
         }
         
