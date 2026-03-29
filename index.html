@@ -942,7 +942,7 @@ kbd {
         <div id="measureButton" class="measure-button" title="測量距離" style="display:none;">📏</div>
         <div id="dateLabelButton" class="date-label-button" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()" style="display:none;">📅</div>
     </div>
-    <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()">
+    <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()" style="display:none;">
         <div class="layer-panel-header">🗺️ 圖層設定</div>
         <div class="layer-panel-body">
             <div class="layer-panel-section">底圖</div>
@@ -7386,6 +7386,8 @@ window.addEventListener('message', async function(event) {
             const panel = document.getElementById('layerPanel');
             const btn   = document.getElementById('layerSwitchButton');
             const isOpen = panel.classList.toggle('show');
+            // 用 style.display 確保覆蓋 inline style
+            panel.style.display = isOpen ? 'flex' : 'none';
             btn.classList.toggle('active', isOpen);
             if (isOpen) {
                 // 每次打開時更新 WGIS 雲端清單 & 上傳按鈕顯示
@@ -7435,7 +7437,8 @@ window.addEventListener('message', async function(event) {
             }
             
             // 關閉面板
-            document.getElementById('layerPanel').classList.remove('show');
+            const lp = document.getElementById('layerPanel');
+            lp.classList.remove('show'); lp.style.display = 'none';
             document.getElementById('layerSwitchButton').classList.remove('active');
         }
         
@@ -10100,6 +10103,7 @@ window.addEventListener('message', async function(event) {
                 !panel.contains(e.target) &&
                 !btn.contains(e.target)) {
                 panel.classList.remove('show');
+                panel.style.display = 'none';
                 btn.classList.remove('active');
             }
         });
