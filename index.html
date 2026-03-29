@@ -117,7 +117,10 @@
         @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
         @keyframes scaleIn { from { opacity:0; transform:scale(0.92); } to { opacity:1; transform:scale(1); } }
                 .measure-button {
-            /* 由 #leftToolbar 管理位置 */
+            position: absolute;
+            top: 260px;
+            left: 10px;
+            z-index: 1000;
             background: white;
             padding: 8px;
             border-radius: 4px;
@@ -129,13 +132,21 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
         }
-        .measure-button:hover { background: #f4f4f4; }
-        .measure-button.active { background: #667eea; color: white; }
-
+        .measure-button:hover {
+            background: #f4f4f4;
+        }
+        .measure-button.active {
+            background: #667eea;
+            color: white;
+        }
+        
         /* 圖層切換按鈕 */
         .layer-switch-button {
+            position: absolute;
+            top: 125px;
+            left: 10px;
+            z-index: 1000;
             background: white;
             padding: 8px;
             border-radius: 4px;
@@ -147,24 +158,11 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
         }
         .layer-switch-button:hover { background: #f4f4f4; }
         .layer-switch-button.active { background: #1565c0; color: white; }
 
-        /* 左側工具列容器 */
-        #leftToolbar {
-            position: absolute;
-            top: 80px;
-            left: 10px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            align-items: center;
-        }
-
-        /* 整合圖層面板（底圖 + WGIS） */
+        /* 整合圖層面板 */
         .layer-panel {
             position: absolute;
             top: 80px;
@@ -214,6 +212,8 @@
         .layer-option.active { background: #e3f2fd; color: #1565c0; font-weight: 600; }
         .layer-radio { font-size: 15px; flex-shrink: 0; }
         .layer-divider { height: 1px; background: #eeeeee; margin: 4px 14px; flex-shrink: 0; }
+
+        /* WGIS 在圖層面板內的樣式 */
         .wgis-in-panel { padding: 0 14px 8px; }
         .wgis-upload-btn {
             width: 100%; padding: 6px; background: #1565c0; color: white;
@@ -242,57 +242,546 @@
             box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
         }
         .wgis-tooltip::before { display: none !important; }
-
-        /* 眼睛按鈕 */
-        .permit-zone-button {
+        
+        /* 備註圖示樣式 */
+        .note-marker-custom {
+            background: transparent !important;
+            border: none !important;
+        }
+        
+        /* 懸停照片預覽 */
+        .marker-photo-preview {
+            position: absolute;
+            z-index: 10000;
             background: white;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             padding: 8px;
+            pointer-events: none;
+            max-width: 300px;
+        }
+        .marker-photo-preview img {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            display: block;
+        }
+        .marker-photo-preview-label {
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+        
+        /* 右鍵選單項目 */
+        .rcm-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .rcm-item:hover { background: #f5f5f5; }
+        
+        /* 甘特圖面板 */
+        .gantt-btn {
+            position: absolute;
+            bottom: 70px;
+            right: 10px;
+            z-index: 1000;
+            background: #00695C;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            display: none;
+        }
+        .gantt-btn:hover { background: #004D40; }
+        
+        /* 手機版優化 */
+        @media (max-width: 768px) {
+            /* 縮小右側按鈕 */
+            .gantt-btn, .milestone-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+                border-radius: 6px;
+            }
+            .gantt-btn { bottom: 60px; right: 8px; }
+            .milestone-btn { bottom: 25px; right: 8px; }
+        }
+        
+        /* 甘特圖改為浮動視窗 */
+        .gantt-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            background: white;
+            display: none;
+            flex-direction: row;
+            overflow: hidden;
+            width: 90%;
+            max-width: 1400px;
+            height: 80%;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        /* 半透明背景遮罩 */
+        .gantt-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1999;
+            display: none;
+        }
+        .gantt-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-right: 2px solid #e0e0e0;
+        }
+        .gantt-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            background: #f9f9f9;
+            overflow-y: auto;
+        }
+        .gantt-sidebar-header {
+            background: #00695C;
+            color: white;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .gantt-sidebar-body {
+            padding: 10px;
+            flex: 1;
+        }
+        .gantt-panel-header {
+            background: #00695C;
+            color: white;
+            padding: 6px 10px;
+            font-weight: bold;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .gantt-panel-body {
+            overflow: auto;
+            flex: 1;
+            padding: 8px;
+        }
+        .gantt-panel-footer {
+            padding: 6px 8px;
+            border-top: 1px solid #eee;
+            flex-shrink: 0;
+        }
+        .gantt-chart { position: relative; }
+        .gantt-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 11px;
+        }
+        .gantt-label {
+            width: 160px;
+            flex-shrink: 0;
+            padding-right: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .gantt-track {
+            flex: 1;
+            height: 22px;
+            position: relative;
+            background: #f5f5f5;
+            border-radius: 3px;
+        }
+        .gantt-bar {
+            position: absolute;
+            height: 100%;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            cursor: pointer;
+            transition: opacity 0.1s;
+        }
+        .gantt-bar:hover { opacity: 0.85; }
+        .gantt-today-line {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            background: #e53935;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .gantt-header-row {
+            display: flex;
+            margin-bottom: 4px;
+            font-size: 10px;
+            color: #999;
+        }
+        .gantt-actions { display: flex; gap: 4px; }
+        
+        /* 施工里程碑面板 */
+        .milestone-btn {
+            position: absolute;
+            bottom: 30px;
+            right: 10px;
+            z-index: 1000;
+            background: #3f51b5;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            display: none;
+        }
+        .milestone-btn:hover { background: #303f9f; }
+        .milestone-panel {
+            position: absolute;
+            bottom: 70px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            width: 420px;
+            max-height: 420px;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .milestone-panel-header {
+            background: #3f51b5;
+            color: white;
+            padding: 10px 14px;
+            font-weight: bold;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .milestone-panel-body {
+            overflow-y: auto;
+            flex: 1;
+        }
+        .milestone-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .milestone-table th {
+            background: #e8eaf6;
+            color: #3f51b5;
+            padding: 6px 8px;
+            text-align: center;
+            border-bottom: 2px solid #c5cae9;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .milestone-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .milestone-table tr:hover td { background: #f5f5f5; }
+        .milestone-actual { color: #1976d2; font-weight: bold; }
+        .milestone-ahead { color: #27ae60; }
+        .milestone-behind { color: #e53935; }
+        .milestone-panel-footer {
+            padding: 8px 10px;
+            border-top: 1px solid #eee;
+            flex-shrink: 0;
+        }
+        
+        /* 段落管理面板 */
+        .segment-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 2000;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            width: 450px;
+            max-height: calc(100vh - 100px);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .segment-panel.minimized {
+            height: auto;
+            max-height: none;
+        }
+        .segment-panel.minimized .segment-panel-body {
+            display: none;
+        }
+        .segment-panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .segment-panel-body {
+            overflow-y: auto;
+            flex: 1;
+            padding: 15px;
+        }
+        .segment-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .segment-table th {
+            background: #f5f5f5;
+            color: #333;
+            padding: 8px 4px;
+            text-align: center;
+            border-bottom: 2px solid #ddd;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            font-weight: 600;
+            font-size: 11px;
+        }
+        .segment-table td {
+            padding: 6px 4px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 11px;
+        }
+        .segment-table tr:hover td { background: #f9f9f9; }
+        .segment-panel-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #eee;
+            flex-shrink: 0;
+        }
+        .btn-add-segment {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-add-segment:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+        }
+        .btn-visual-segment {
+            padding: 10px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-visual-segment:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(240, 147, 251, 0.4);
+        }
+        .btn-visual-segment.active {
+            background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+            box-shadow: 0 0 0 2px rgba(245, 87, 108, 0.3);
+        }
+        
+        /* 視覺化分段線標記 */
+        .segment-divider-marker {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: 3px solid white;
+            border-radius: 50%;
+            cursor: move;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            z-index: 2000;
+            transition: all 0.2s;
+        }
+        .segment-divider-marker:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.5);
+        }
+        .segment-divider-marker.dragging {
+            transform: scale(1.3);
+            box-shadow: 0 6px 16px rgba(245, 87, 108, 0.6);
+            cursor: grabbing;
+        }
+        .segment-divider-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        
+        .btn-edit-segment, .btn-delete-segment {
+            padding: 4px 6px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            margin: 0 1px;
+            transition: all 0.2s;
+        }
+        .btn-edit-segment {
+            background: #4CAF50;
+            color: white;
+        }
+        .btn-edit-segment:hover {
+            background: #45a049;
+        }
+        .btn-delete-segment {
+            background: #f44336;
+            color: white;
+        }
+        .btn-delete-segment:hover {
+            background: #da190b;
+        }
+        
+        /* 標記顯示/隱藏按鈕 */
+        .permit-zone-button {
+            position: absolute;
+            top: 215px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
             border-radius: 4px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.4);
             cursor: pointer;
-            font-size: 18px;
+            font-size: 20px;
             width: 34px;
             height: 34px;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
         }
         .permit-zone-button:hover { background: #f4f4f4; }
         .permit-zone-button.hidden-markers { background: #7f8c8d; color: white; }
+        
 
+        
         /* 施工日期標註按鈕 */
         .date-label-button {
+            position: absolute;
+            top: 305px;
+            left: 10px;
+            z-index: 1000;
             background: white;
-            padding: 8px;
+            padding: 10px;
             border-radius: 4px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.4);
             cursor: pointer;
-            font-size: 18px;
+            font-size: 20px;
             width: 34px;
             height: 34px;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
         }
         .date-label-button:hover { background: #f4f4f4; }
         .date-label-button.active { background: #00695C; color: white; }
-
+        
+        /* 施工日期標籤 - 簡化單行樣式 */
+        .schedule-label-watermark {
+            background: rgba(255, 255, 255, 0.92);
+            border: 2px solid rgba(0, 121, 107, 0.8);
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #00695C;
+            white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            pointer-events: none;
+            text-shadow: 0 0 4px white, 0 0 4px white;
+        }
+        
+        /* 箭頭線樣式 - 更明顯 */
+        .schedule-arrow {
+            stroke: #00796B;
+            stroke-width: 2.5;
+            fill: none;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+        .schedule-arrow-marker {
+            fill: #00BFA5;
+        }
+        
         /* 台中挖掘許可按鈕 */
         .roadwork-button {
+            position: absolute;
+            top: 170px;
+            left: 10px;
+            z-index: 1000;
             background: white;
-            padding: 8px;
+            padding: 10px;
             border-radius: 4px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.4);
             cursor: pointer;
-            font-size: 18px;
+            font-size: 20px;
             width: 34px;
             height: 34px;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
         }
         .roadwork-button:hover { background: #f4f4f4; }
         .roadwork-button.active { background: #FF5722; color: white; }
@@ -935,14 +1424,9 @@ kbd {
     <!-- 工程列表切換按鈕 -->
     <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
     
-    <div id="leftToolbar">
-        <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
-        <div id="roadworkButton" class="roadwork-button" title="台中市挖掘許可" onclick="toggleRoadworkLayer()" style="display:none;">🚧</div>
-        <div id="permitZoneButton" class="permit-zone-button" title="隱藏所有標記（備註/工作井/挖掘範圍）" onclick="toggleAllMarkers()" style="display:none;">👁️</div>
-        <div id="measureButton" class="measure-button" title="測量距離" style="display:none;">📏</div>
-        <div id="dateLabelButton" class="date-label-button" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()" style="display:none;">📅</div>
-    </div>
-    <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()" style="display:none;">
+    <div id="measureButton" class="measure-button" title="測量距離" style="display:none;">📏</div>
+    <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
+    <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()">
         <div class="layer-panel-header">🗺️ 圖層設定</div>
         <div class="layer-panel-body">
             <div class="layer-panel-section">底圖</div>
@@ -965,7 +1449,9 @@ kbd {
             </div>
         </div>
     </div>
-    
+    <div id="roadworkButton" class="roadwork-button" title="台中市挖掘許可" onclick="toggleRoadworkLayer()" style="display:none;">🚧</div>
+    <div id="permitZoneButton" class="permit-zone-button" title="隱藏所有標記（備註/工作井/挖掘範圍）" onclick="toggleAllMarkers()" style="display:none;">👁️</div>
+    <div id="dateLabelButton" class="date-label-button" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()" style="display:none;">📅</div>
     <div id="roadworkPanel" class="roadwork-panel">
         <div style="font-weight:bold; margin-bottom:6px; color:#FF5722;">🚧 台中市挖掘許可</div>
         <div id="roadworkCount" style="color:#666; margin-bottom:8px;">尚未載入</div>
@@ -7386,8 +7872,6 @@ window.addEventListener('message', async function(event) {
             const panel = document.getElementById('layerPanel');
             const btn   = document.getElementById('layerSwitchButton');
             const isOpen = panel.classList.toggle('show');
-            // 用 style.display 確保覆蓋 inline style
-            panel.style.display = isOpen ? 'flex' : 'none';
             btn.classList.toggle('active', isOpen);
             if (isOpen) {
                 // 每次打開時更新 WGIS 雲端清單 & 上傳按鈕顯示
@@ -7437,8 +7921,7 @@ window.addEventListener('message', async function(event) {
             }
             
             // 關閉面板
-            const lp = document.getElementById('layerPanel');
-            lp.classList.remove('show'); lp.style.display = 'none';
+            document.getElementById('layerPanel').classList.remove('show');
             document.getElementById('layerSwitchButton').classList.remove('active');
         }
         
@@ -10103,7 +10586,6 @@ window.addEventListener('message', async function(event) {
                 !panel.contains(e.target) &&
                 !btn.contains(e.target)) {
                 panel.classList.remove('show');
-                panel.style.display = 'none';
                 btn.classList.remove('active');
             }
         });
