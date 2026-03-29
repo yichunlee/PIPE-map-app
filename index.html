@@ -2126,6 +2126,15 @@ kbd {
             });
             allPolylines = [];
             
+            // WGIS polylines 已被清除，重置狀態（保留資料，只清 polyline 物件）
+            if (window.wgisDatasets) {
+                window.wgisDatasets.forEach(ds => {
+                    ds.polylines = [];
+                    ds.visible = false;
+                });
+                if (typeof renderWgisFileList === 'function') renderWgisFileList();
+            }
+            
             // 清除計畫備註標記
             projectPermitZones = [];
             projectPermitLabels = [];
@@ -4829,7 +4838,7 @@ kbd {
         
         // ========== WGIS 管線底圖功能 ==========
         // wgisDatasets = [{ id(driveId), name, lines, polylines, visible, loaded }]
-        let wgisDatasets = [];
+        window.wgisDatasets = [];
         let wgisCloudFiles = [];  // Drive 上的檔案清單
 
         // ── 雲端檔案清單 ──
@@ -7904,6 +7913,15 @@ window.addEventListener('message', async function(event) {
             if (newLayer) {
                 newLayer.addTo(map);
                 window.currentBaseLayer = newLayer;
+            }
+            
+            // 切換底圖後把 WGIS 管線重新加回（底圖切換不應清除 WGIS）
+            if (window.wgisDatasets) {
+                window.wgisDatasets.forEach(ds => {
+                    if (ds.visible && ds.polylines) {
+                        ds.polylines.forEach(pl => { try { pl.addTo(map); } catch(e){} });
+                    }
+                });
             }
             
             // 更新選項樣式
