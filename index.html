@@ -6428,12 +6428,22 @@ function hideEditForm() {
 }
 
 // ===== S 曲線 =====
+function getEffectiveUnitPrice(item) {
+    // 先用 item 本身的 unitPrice，若無則從 unitPrices 快取比對 methodKey
+    if (item.unitPrice && item.unitPrice > 0) return item.unitPrice;
+    var label = item.label || '';
+    var match = unitPrices.find(function(p) {
+        return label.indexOf(p.methodKey) >= 0;
+    });
+    return match ? match.unitPrice : 0;
+}
+
 function computeMonthlyCumulative() {
     var monthMap = {};
     items.forEach(function(item) {
         var prog = getItemProgress(item);
         var totalLen = prog ? prog.total : 0;
-        var up = item.unitPrice || 0;
+        var up = getEffectiveUnitPrice(item);
         if (!totalLen || !up) return;
         var totalYen = totalLen * up;
         var start = new Date(item.startDate);
@@ -6465,6 +6475,9 @@ function fmtYen(v) {
     return Math.round(v).toLocaleString();
 }
 
+function closeSCWin() { var el=document.getElementById('_sCurvePanel'); if(el) el.remove(); }
+function closeUpMgrWin() { var el=document.getElementById('_upMgr'); if(el) el.remove(); }
+
 function showSCurveWindow() {
     // 移除舊面板
     var old = document.getElementById('_sCurvePanel');
@@ -6483,7 +6496,8 @@ function showSCurveWindow() {
     var actualDone = 0;
     items.forEach(function(item) {
         var prog = getItemProgress(item);
-        if (prog && item.unitPrice) actualDone += prog.done * item.unitPrice;
+        var up = getEffectiveUnitPrice(item);
+        if (prog && up) actualDone += prog.done * up;
     });
 
     var statsHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">' +
@@ -6574,7 +6588,7 @@ function showSCurveWindow() {
             '<span style="font-size:15px;font-weight:bold;">📈 S 曲線 — 累積預算金額</span>' +
             '<div style="display:flex;gap:8px;">' +
                 '<button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 10px;border-radius:4px;">⚙️ 施工單價管理</button>' +
-                '<button onclick="document.getElementById(\"_sCurvePanel\").remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:16px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>' +
+                '<button onclick="closeSCWin()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:16px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>' +
             '</div></div>' +
         '<div style="overflow:auto;flex:1;padding:16px;">' +
             statsHtml + svgHtml +
@@ -6587,7 +6601,7 @@ function showSCurveWindow() {
             '<tbody>' + tableRows + '</tbody></table>' : '') +
         '</div></div>';
     document.body.appendChild(panel);
-    panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
+    panel.addEventListener('click', function(e) { if (e.target === panel) closeSCWin(); });
 }
 
 // ===== 施工單價管理（blob 視窗版）=====
@@ -6630,7 +6644,7 @@ function showUnitPriceMgr() {
             '<th style="padding:6px 8px;text-align:center;border:1px solid #c8e6c9;">操作</th></tr></thead>' +
             '<tbody>' + (tableRows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#aaa;">尚無資料</td></tr>') + '</tbody></table>' +
             '<div style="background:#f9f9f9;border-radius:6px;padding:12px;border:1px solid #eee;">' +
-            '<div style="font-size:12px;font-weight:bold;margin-bottom:8px;">＋ 新增单價</div>' +
+            '<div style="font-size:12px;font-weight:bold;margin-bottom:8px;">＋ 新增單價</div>' +
             '<select id="up2_newKey" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' + newKeyOpts + '</select>' +
             '<input id="up2_newKeyManual" placeholder="或手動輸入工法名稱" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' +
             '<input id="up2_newPrice" type="number" placeholder="単價（元/m）" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;font-size:12px;box-sizing:border-box;">' +
@@ -6641,12 +6655,12 @@ function showUnitPriceMgr() {
     panel.innerHTML = '<div style="background:white;border-radius:10px;width:88%;max-width:580px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;">' +
         '<div style="background:#00695C;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
             '<span style="font-weight:bold;">⚙️ 施工單價管理</span>' +
-            '<button onclick="document.getElementById(\"_upMgr\").remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>' +
+            '<button onclick="closeUpMgrWin()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>' +
         '</div>' +
         '<div id="_upMgrBody" style="overflow:auto;flex:1;padding:16px;"></div>' +
         '</div>';
     document.body.appendChild(panel);
-    panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
+    panel.addEventListener('click', function(e) { if (e.target === panel) closeUpMgrWin(); });
     renderMgrContent();
 
     window.saveUp2 = async function(idx) {
@@ -6656,7 +6670,7 @@ function showUnitPriceMgr() {
         var el = document.getElementById('up2_' + safeId);
         if (!el) return;
         var unitPrice = parseFloat(el.value);
-        if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效单價', 'warning'); return; }
+        if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效單價', 'warning'); return; }
         try {
             var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
             var result = await res.json();
@@ -6671,7 +6685,7 @@ function showUnitPriceMgr() {
     window.delUp2 = async function(idx) {
         var p = unitPrices[idx];
         if (!p) return;
-        if (!await showConfirm({ title: '刪除单價', message: '確定刪除「' + p.methodKey + '」的单價？', okText: '刪除', danger: true })) return;
+        if (!await showConfirm({ title: '刪除單價', message: '確定刪除「' + p.methodKey + '」的單價？', okText: '刪除', danger: true })) return;
         try {
             var res = await fetch(API_URL + '?action=deleteUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&projectName=');
             var result = await res.json();
@@ -6689,7 +6703,7 @@ function showUnitPriceMgr() {
         var methodKey = manualKey || selKey;
         var unitPrice = parseFloat(document.getElementById('up2_newPrice').value);
         if (!methodKey) { showToast('請選擇或輸入施工方式', 'warning'); return; }
-        if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效单價', 'warning'); return; }
+        if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效單價', 'warning'); return; }
         try {
             var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
             var result = await res.json();
@@ -7030,6 +7044,84 @@ function renderMilestones() {
     });
     
     html += '</div></div>';
+    
+    // ===== 累積預算金額 vs 時間 迷你圖 =====
+    var budgetRows = computeMonthlyCumulative();
+    if (budgetRows.length >= 2) {
+        var todayStr2 = new Date().toISOString().slice(0, 7);
+        var maxCum2 = budgetRows[budgetRows.length-1].cumulative;
+        var actualDone2 = 0;
+        items.forEach(function(item) {
+            var prog = getItemProgress(item);
+            var up2 = getEffectiveUnitPrice(item);
+            if (prog && up2) actualDone2 += prog.done * up2;
+        });
+        
+        if (maxCum2 > 0) {
+            var W2 = 680, H2 = 120, PL2 = 60, PR2 = 16, PT2 = 12, PB2 = 24;
+            var cW2 = W2 - PL2 - PR2, cH2 = H2 - PT2 - PB2;
+            var n2 = budgetRows.length;
+            var yMax2 = maxCum2 * 1.1;
+            var pts2 = budgetRows.map(function(r, i) {
+                return {
+                    x: PL2 + (n2 > 1 ? i * cW2 / (n2-1) : cW2/2),
+                    y: PT2 + cH2 - (r.cumulative / yMax2) * cH2,
+                    month: r.month, cum: r.cumulative
+                };
+            });
+            // today line
+            var todayIdx2 = -1;
+            budgetRows.forEach(function(r,i){ if(r.month <= todayStr2) todayIdx2 = i; });
+            var todayX2 = todayIdx2 >= 0 ? pts2[todayIdx2].x : -1;
+            // actual Y
+            var actY2 = PT2 + cH2 - (actualDone2 / yMax2) * cH2;
+            // Y ticks
+            var yGrid2 = '', yLbl2 = '';
+            for (var ti2 = 0; ti2 <= 3; ti2++) {
+                var v2 = yMax2 * ti2 / 3;
+                var ty2 = PT2 + cH2 - (v2 / yMax2) * cH2;
+                yGrid2 += '<line x1="' + PL2 + '" y1="' + ty2 + '" x2="' + (W2-PR2) + '" y2="' + ty2 + '" stroke="#eee" stroke-width="1"/>';
+                yLbl2 += '<text x="' + (PL2-4) + '" y="' + (ty2+4) + '" font-size="8" fill="#aaa" text-anchor="end">' + fmtYen(v2) + '</text>';
+            }
+            // X labels - milestones
+            var msLabels2 = '';
+            visibleMilestones.forEach(function(ms) {
+                var mDate = new Date(ms.endDate);
+                var mStr = mDate.getFullYear() + '-' + String(mDate.getMonth()+1).padStart(2,'0');
+                var mRow = budgetRows.find(function(r){ return r.month >= mStr; });
+                if (!mRow) return;
+                var mIdx = budgetRows.indexOf(mRow);
+                var mx = PL2 + (n2 > 1 ? mIdx * cW2 / (n2-1) : cW2/2);
+                var cum = mRow.cumulative;
+                msLabels2 += '<line x1="' + mx + '" y1="' + PT2 + '" x2="' + mx + '" y2="' + (PT2+cH2) + '" stroke="#3f51b5" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>';
+                msLabels2 += '<text x="' + mx + '" y="' + (H2-PB2+14) + '" font-size="8" fill="#3f51b5" text-anchor="middle">' + (mDate.getMonth()+1) + '/' + mDate.getDate() + '</text>';
+                msLabels2 += '<text x="' + mx + '" y="' + (PT2+cH2-(cum/yMax2)*cH2-4) + '" font-size="8" fill="#7b1fa2" text-anchor="middle">' + fmtYen(cum) + '</text>';
+            });
+            // today line
+            var todayLine2 = todayX2 > 0 ? '<line x1="' + todayX2 + '" y1="' + PT2 + '" x2="' + todayX2 + '" y2="' + (PT2+cH2) + '" stroke="#e53935" stroke-width="1.5" stroke-dasharray="3,2"/>' : '';
+            // actual dot
+            var actualDot2 = (todayX2 > 0 && actualDone2 > 0) ?
+                '<circle cx="' + todayX2 + '" cy="' + actY2 + '" r="4" fill="#388e3c" stroke="white" stroke-width="1.5"><title>實際完成：' + fmtYen(actualDone2) + '元</title></circle>' +
+                '<line x1="' + PL2 + '" y1="' + actY2 + '" x2="' + todayX2 + '" y2="' + actY2 + '" stroke="#388e3c" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>' : '';
+            var linePts2 = pts2.map(function(p){ return p.x+','+p.y; }).join(' ');
+            var areaPath2 = 'M ' + pts2[0].x + ',' + (PT2+cH2) + ' ' + pts2.map(function(p){ return 'L '+p.x+','+p.y; }).join(' ') + ' L ' + pts2[pts2.length-1].x + ',' + (PT2+cH2) + ' Z';
+            
+            html += '<div style="display:flex;margin-top:8px;">';
+            html += '<div style="width:180px;font-size:10px;color:#7b1fa2;padding:8px 8px 0 8px;font-weight:bold;">💰 預算進度</div>';
+            html += '<div style="flex:1;padding-right:80px;">';
+            html += '<svg viewBox="0 0 ' + W2 + ' ' + H2 + '" width="100%" style="display:block;">' +
+                '<defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.15"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.01"/></linearGradient></defs>' +
+                yGrid2 +
+                '<path d="' + areaPath2 + '" fill="url(#bg2)"/>' +
+                '<polyline points="' + linePts2 + '" fill="none" stroke="#7b1fa2" stroke-width="1.5"/>' +
+                msLabels2 + todayLine2 + actualDot2 + yLbl2 +
+                '<line x1="' + PL2 + '" y1="' + PT2 + '" x2="' + PL2 + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
+                '<line x1="' + PL2 + '" y1="' + (PT2+cH2) + '" x2="' + (W2-PR2) + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
+                '</svg>';
+            html += '</div></div>';
+        }
+    }
+    
     container.innerHTML = html;
     
     // 綁定 hover 事件
