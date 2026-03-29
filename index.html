@@ -737,7 +737,6 @@
         }
         .date-label-button:hover { background: #f4f4f4; }
         .date-label-button.active { background: #00695C; color: white; }
-        .date-label-button.hidden { display: none; }
         
         /* 施工日期標籤 - 簡化單行樣式 */
         .schedule-label-watermark {
@@ -1425,8 +1424,8 @@ kbd {
     <!-- 工程列表切換按鈕 -->
     <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
     
-    <div id="measureButton" class="measure-button" title="測量距離">📏</div>
-    <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel()" title="圖層設定">🗺️</div>
+    <div id="measureButton" class="measure-button" title="測量距離" style="display:none;">📏</div>
+    <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
     <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()">
         <div class="layer-panel-header">🗺️ 圖層設定</div>
         <div class="layer-panel-body">
@@ -1450,9 +1449,9 @@ kbd {
             </div>
         </div>
     </div>
-    <div id="roadworkButton" class="roadwork-button" title="台中市挖掘許可" onclick="toggleRoadworkLayer()">🚧</div>
-    <div id="permitZoneButton" class="permit-zone-button hidden" title="隱藏所有標記（備註/工作井/挖掘範圍）" onclick="toggleAllMarkers()">👁️</div>
-    <div id="dateLabelButton" class="date-label-button hidden" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()">📅</div>
+    <div id="roadworkButton" class="roadwork-button" title="台中市挖掘許可" onclick="toggleRoadworkLayer()" style="display:none;">🚧</div>
+    <div id="permitZoneButton" class="permit-zone-button" title="隱藏所有標記（備註/工作井/挖掘範圍）" onclick="toggleAllMarkers()" style="display:none;">👁️</div>
+    <div id="dateLabelButton" class="date-label-button" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()" style="display:none;">📅</div>
     <div id="roadworkPanel" class="roadwork-panel">
         <div style="font-weight:bold; margin-bottom:6px; color:#FF5722;">🚧 台中市挖掘許可</div>
         <div id="roadworkCount" style="color:#666; margin-bottom:8px;">尚未載入</div>
@@ -2016,17 +2015,66 @@ kbd {
             document.getElementById('loadingScreen').style.display = show ? 'flex' : 'none';
         }
         
-        function showProjectSelector() {
+        // ══════════════════════════════════════════════
+        // 統一管理左側按鈕狀態
+        // context: 'none' | 'project' | 'pipeline'
+        // ══════════════════════════════════════════════
+        function setMapContext(context, projectPipelines) {
+            const ids = {
+                layer:    document.getElementById('layerSwitchButton'),
+                roadwork: document.getElementById('roadworkButton'),
+                eye:      document.getElementById('permitZoneButton'),
+                measure:  document.getElementById('measureButton'),
+                date:     document.getElementById('dateLabelButton'),
+            };
+
+            if (context === 'none') {
+                // 計畫選擇畫面：全部隱藏
+                Object.values(ids).forEach(el => { if (el) el.style.display = 'none'; });
+                return;
+            }
+
+            if (context === 'project') {
+                // 中地圖（計畫總覽）：🗺️ 🚧 👁️ 📐 全顯示，📅 隱藏
+                if (ids.layer)    { ids.layer.style.display = 'flex'; }
+                if (ids.roadwork) { ids.roadwork.style.display = 'flex'; ids.roadwork.classList.remove('active'); }
+                if (ids.measure)  { ids.measure.style.display = 'flex'; }
+                if (ids.date)     { ids.date.style.display = 'none'; ids.date.classList.remove('active'); }
+                // 👁️ 改成「看路權」功能
+                if (ids.eye) {
+                    ids.eye.style.display = 'flex';
+                    ids.eye.classList.remove('hidden', 'hidden-markers');
+                    ids.eye.textContent = '👁️';
+                    ids.eye.title = '顯示所有工程路權申請狀況';
+                    ids.eye.onclick = () => toggleProjectNotes(projectPipelines);
+                }
+                return;
+            }
+
+            if (context === 'pipeline') {
+                // 子工程地圖：全部顯示
+                if (ids.layer)    { ids.layer.style.display = 'flex'; }
+                if (ids.roadwork) { ids.roadwork.style.display = 'flex'; }
+                if (ids.measure)  { ids.measure.style.display = 'flex'; }
+                if (ids.date)     { ids.date.style.display = 'flex'; }
+                // 👁️ 改成「看標記」功能
+                if (ids.eye) {
+                    ids.eye.style.display = 'flex';
+                    ids.eye.classList.remove('hidden', 'hidden-markers');
+                    ids.eye.textContent = '👁️';
+                    ids.eye.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍）';
+                    ids.eye.onclick = toggleAllMarkers;
+                }
+                return;
+            }
+        }
+
+                function showProjectSelector() {
             document.getElementById('projectSelector').classList.remove('hidden');
             if (map) clearMap(true);
             
-            // 隱藏測量距離、挖掘許可和圖層切換按鈕
-            const measureBtn = document.getElementById('measureButton');
-            const roadworkBtn = document.getElementById('roadworkButton');
-            const layerBtn = document.getElementById('layerSwitchButton');
-            if (measureBtn) measureBtn.style.display = 'none';
-            if (roadworkBtn) roadworkBtn.style.display = 'none';
-            if (layerBtn) layerBtn.style.display = 'none';
+            // 隱藏所有左側按鈕（計畫選擇畫面不需要）
+            setMapContext('none');
             
             renderProjectGrid();
         }
@@ -2083,40 +2131,8 @@ kbd {
             projectPermitLabels = [];
             projectPermitVisible = false;
             
-            // 隱藏個別工程的按鈕
-            const ganttBtn = document.getElementById('ganttBtn');
-            if (ganttBtn) ganttBtn.style.display = 'none';
-            
-            const milestoneBtn = document.getElementById('milestoneBtn');
-            if (milestoneBtn) milestoneBtn.style.display = 'none';
-            
-            const permitZoneBtn = document.getElementById('permitZoneButton');
-            if (permitZoneBtn) {
-                permitZoneBtn.classList.add('hidden');
-                permitZoneBtn.classList.remove('hidden-markers');
-            }
-            
-            const dateLabelBtn = document.getElementById('dateLabelButton');
-            if (dateLabelBtn) {
-                dateLabelBtn.classList.add('hidden');
-                dateLabelBtn.classList.remove('active');
-            }
-            
-            // 隱藏台中挖掘許可按鈕（如果有的話）
-            const roadworkBtn = document.getElementById('roadworkButton');
-            if (roadworkBtn) {
-                roadworkBtn.classList.remove('active');
-            }
-            
-            // 顯示計畫總覽的路權按鈕
-            const projectNotesBtn = document.getElementById('permitZoneButton');
-            if (projectNotesBtn) {
-                projectNotesBtn.classList.remove('hidden');
-                projectNotesBtn.classList.remove('hidden-markers');
-                projectNotesBtn.textContent = '👁️';
-                projectNotesBtn.title = '顯示所有工程路權申請狀況';
-                projectNotesBtn.onclick = () => toggleProjectNotes(projectPipelines);
-            }
+            // 設定中地圖（計畫總覽）按鈕狀態
+            setMapContext('project', projectPipelines);
             
             // 顯示工程列表（會設定按鈕為顯示）
             showPipelineList(projectPipelines);
@@ -2298,13 +2314,8 @@ kbd {
         async function showPipelineDetail(pipelineId, keepView = false) {
             currentPipeline = allPipelines.find(p => p.id === pipelineId);
             
-            // 顯示測量距離、挖掘許可和圖層切換按鈕
-            const measureBtn = document.getElementById('measureButton');
-            const roadworkBtn = document.getElementById('roadworkButton');
-            const layerBtn = document.getElementById('layerSwitchButton');
-            if (measureBtn) measureBtn.style.display = 'block';
-            if (roadworkBtn) roadworkBtn.style.display = 'block';
-            if (layerBtn) layerBtn.style.display = 'block';
+            // 設定子工程地圖按鈕狀態
+            setMapContext('pipeline');
             
             // 只在首次進入工程時重置標記可見性（編輯後重載時保持狀態）
             if (!keepView) {
@@ -2957,14 +2968,6 @@ kbd {
             loadShafts();
             
             // 載入挖掘許可範圍
-            const permitBtn = document.getElementById('permitZoneButton');
-            if (permitBtn) {
-                permitBtn.classList.remove('hidden');
-                permitBtn.classList.remove('hidden-markers');
-                permitBtn.textContent = '👁️';
-                permitBtn.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍）';
-                permitBtn.onclick = toggleAllMarkers; // 設定為切換所有標記功能
-            }
             loadPermitZones();
             
             // 隱藏獨立的工具按鈕（改用抽屜）
@@ -2975,8 +2978,7 @@ kbd {
             // 顯示工具抽屜按鈕
             document.getElementById('toolsDrawerToggle').style.display = 'block';
             
-            // 顯示日期標註按鈕並載入甘特圖資料
-            document.getElementById('dateLabelButton').classList.remove('hidden');
+            // 載入甘特圖資料（📅 按鈕已由 setMapContext 顯示）
             loadGanttItemsForLabels();
             
             // 恢復標記可見性狀態
@@ -8053,7 +8055,6 @@ window.addEventListener('message', async function(event) {
             // 只有真正返回大地圖時才重置隱藏狀態
             if (resetMarkerVisibility) {
                 allMarkersVisible = true;
-                document.getElementById('permitZoneButton').classList.add('hidden');
                 document.getElementById('permitZoneButton').classList.remove('hidden-markers');
                 document.getElementById('milestoneBtn').style.display = 'none';
                 document.getElementById('milestonePanel').style.display = 'none';
@@ -8065,8 +8066,7 @@ window.addEventListener('message', async function(event) {
                 ganttData = [];
                 // 隱藏工程列表切換按鈕
                 document.getElementById('pipelineListToggle').style.display = 'none';
-                // 隱藏日期標註按鈕並清除標籤
-                document.getElementById('dateLabelButton').classList.add('hidden');
+                // 清除日期標籤（按鈕顯示由 setMapContext 管理）
                 document.getElementById('dateLabelButton').classList.remove('active');
                 clearDateLabels();
                 dateLabelsVisible = false;
