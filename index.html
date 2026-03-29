@@ -693,7 +693,7 @@
         }
         .wgis-button:hover { background: #f4f4f4; }
         .wgis-button.active { background: #1565c0; color: white; }
-        
+
         /* WGIS 面板 */
         .wgis-panel {
             position: absolute;
@@ -704,7 +704,8 @@
             border-radius: 8px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.2);
             padding: 14px 16px;
-            min-width: 220px;
+            min-width: 240px;
+            max-width: 280px;
             display: none;
             font-size: 13px;
         }
@@ -716,20 +717,28 @@
             border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold;
         }
         .wgis-upload-btn:hover { background: #0d47a1; }
-        .wgis-toggle-btn {
-            width: 100%; padding: 7px; background: #f5f5f5; color: #333;
-            border: 1px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 12px; margin-top: 6px;
+        .wgis-file-list { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+        .wgis-file-item {
+            display: flex; align-items: center; gap: 7px;
+            padding: 5px 7px; border-radius: 5px; background: #f5f5f5;
+            font-size: 12px; cursor: pointer; border: 1px solid transparent;
         }
-        .wgis-toggle-btn.on { background: #e3f2fd; color: #1565c0; border-color: #1565c0; font-weight: bold; }
+        .wgis-file-item:hover { background: #e3f2fd; border-color: #90caf9; }
+        .wgis-file-item.active { background: #e3f2fd; border-color: #1565c0; }
+        .wgis-file-item input[type=checkbox] { cursor: pointer; accent-color: #1565c0; width: 14px; height: 14px; flex-shrink: 0; }
+        .wgis-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wgis-file-count { color: #888; font-size: 10px; flex-shrink: 0; }
+        .wgis-file-del { color: #ccc; font-size: 13px; flex-shrink: 0; cursor: pointer; }
+        .wgis-file-del:hover { color: #e53935; }
         .wgis-info { color: #888; font-size: 11px; margin-top: 8px; line-height: 1.5; }
         .wgis-tooltip {
-            background: rgba(21,101,192,0.92) !important;
+            background: rgba(30,30,30,0.85) !important;
             color: white !important;
             border: none !important;
             border-radius: 5px !important;
             font-size: 11px !important;
             padding: 4px 8px !important;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
         }
         .wgis-tooltip::before { display: none !important; }
         
@@ -1463,7 +1472,7 @@ kbd {
         <div class="wgis-panel-title">🗺️ WGIS 管線底圖</div>
         <input type="file" id="wgisFileInput" accept=".csv" onchange="loadWgisFile(this)">
         <button class="wgis-upload-btn" onclick="document.getElementById('wgisFileInput').click()">📂 上傳 WGIS CSV</button>
-        <button id="wgisToggleBtn" class="wgis-toggle-btn" onclick="toggleWgisLayer()" style="display:none;">👁️ 顯示管線</button>
+        <div class="wgis-file-list" id="wgisFileList"></div>
         <div class="wgis-info" id="wgisInfo">支援台水 WGIS 匯出的 CSV 格式<br>（需含 TWD97 端點座標欄位）</div>
     </div>
     <div id="dateLabelButton" class="date-label-button hidden" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()">📅</div>
@@ -4840,17 +4849,15 @@ kbd {
         }
         
         // ========== WGIS 管線底圖功能 ==========
-        let wgisLines = [];        // 轉換後的線段資料 [{coords:[[lat,lon],[lat,lon]], d, m, l}]
-        let wgisPolylines = [];    // Leaflet polyline 物件
-        let wgisVisible = false;   // 目前是否顯示
+        // ========== WGIS 管線底圖功能 ==========
+        // 多檔案管理：wgisDatasets = [{ id, name, lines, polylines, visible }]
+        let wgisDatasets = [];
         let wgisPanelOpen = false;
 
         function toggleWgisPanel() {
             wgisPanelOpen = !wgisPanelOpen;
-            const panel = document.getElementById('wgisPanel');
-            const btn = document.getElementById('wgisButton');
-            panel.classList.toggle('show', wgisPanelOpen);
-            btn.classList.toggle('active', wgisPanelOpen);
+            document.getElementById('wgisPanel').classList.toggle('show', wgisPanelOpen);
+            document.getElementById('wgisButton').classList.toggle('active', wgisPanelOpen);
         }
 
         function twd97ToWgs84(x, y) {
@@ -4881,67 +4888,6 @@ kbd {
             return [lat*180/Math.PI, lon*180/Math.PI];
         }
 
-        function loadWgisFile(input) {
-            const file = input.files[0];
-            if (!file) return;
-            const info = document.getElementById('wgisInfo');
-            info.textContent = '⏳ 解析中...';
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    // 嘗試 Big5 解碼
-                    const bytes = new Uint8Array(e.target.result);
-                    const decoder = new TextDecoder('big5');
-                    const text = decoder.decode(bytes);
-                    const lines = text.split(/\r?\n/).filter(l => l.trim());
-                    if (lines.length < 2) throw new Error('檔案內容不足');
-                    
-                    // 解析 CSV header
-                    const headers = parseCSVLine(lines[0]);
-                    const x1i = headers.findIndex(h => h.includes('端點1') && h.includes('x'));
-                    const y1i = headers.findIndex(h => h.includes('端點1') && h.includes('y'));
-                    const x2i = headers.findIndex(h => h.includes('端點2') && h.includes('x'));
-                    const y2i = headers.findIndex(h => h.includes('端點2') && h.includes('y'));
-                    const di  = headers.findIndex(h => h.includes('管徑寬度'));
-                    const mi  = headers.findIndex(h => h.includes('管種材料'));
-                    const li  = headers.findIndex(h => h.includes('管線長度'));
-                    
-                    if (x1i<0||y1i<0||x2i<0||y2i<0) throw new Error('找不到 TWD97 座標欄位');
-                    
-                    wgisLines = [];
-                    let ok = 0, skip = 0;
-                    for (let i = 1; i < lines.length; i++) {
-                        const cols = parseCSVLine(lines[i]);
-                        try {
-                            const x1 = parseFloat(cols[x1i]), y1 = parseFloat(cols[y1i]);
-                            const x2 = parseFloat(cols[x2i]), y2 = parseFloat(cols[y2i]);
-                            if (isNaN(x1)||isNaN(y1)||isNaN(x2)||isNaN(y2)) { skip++; continue; }
-                            const [lat1,lon1] = twd97ToWgs84(x1, y1);
-                            const [lat2,lon2] = twd97ToWgs84(x2, y2);
-                            wgisLines.push({
-                                coords: [[lat1,lon1],[lat2,lon2]],
-                                d: di>=0 ? cols[di]||'' : '',
-                                m: mi>=0 ? cols[mi]||'' : '',
-                                l: li>=0 ? cols[li]||'' : ''
-                            });
-                            ok++;
-                        } catch(err) { skip++; }
-                    }
-                    
-                    info.textContent = `✅ 已載入 ${ok} 條管線${skip>0?' ('+skip+' 筆略過)':''}`;
-                    const toggleBtn = document.getElementById('wgisToggleBtn');
-                    toggleBtn.style.display = 'block';
-                    
-                    // 自動顯示
-                    if (!wgisVisible) toggleWgisLayer();
-                    
-                } catch(err) {
-                    info.textContent = '❌ 解析失敗：' + err.message;
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
         function parseCSVLine(line) {
             const result = [];
             let cur = '', inQ = false;
@@ -4955,39 +4901,133 @@ kbd {
             return result;
         }
 
-        function toggleWgisLayer() {
-            if (wgisLines.length === 0) return;
-            wgisVisible = !wgisVisible;
-            const btn = document.getElementById('wgisToggleBtn');
-            const mapBtn = document.getElementById('wgisButton');
-            
-            if (wgisVisible) {
-                // 畫線
-                wgisPolylines = wgisLines.map(seg => {
+        function loadWgisFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            input.value = '';  // 允許重複上傳同名檔案
+            const info = document.getElementById('wgisInfo');
+            info.textContent = '⏳ 解析中...';
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const bytes = new Uint8Array(e.target.result);
+                    const decoder = new TextDecoder('big5');
+                    const text = decoder.decode(bytes);
+                    const lines = text.split(/\r?\n/).filter(l => l.trim());
+                    if (lines.length < 2) throw new Error('檔案內容不足');
+
+                    const headers = parseCSVLine(lines[0]);
+                    const x1i = headers.findIndex(h => h.includes('端點1') && h.includes('x'));
+                    const y1i = headers.findIndex(h => h.includes('端點1') && h.includes('y'));
+                    const x2i = headers.findIndex(h => h.includes('端點2') && h.includes('x'));
+                    const y2i = headers.findIndex(h => h.includes('端點2') && h.includes('y'));
+                    const di  = headers.findIndex(h => h.includes('管徑寬度'));
+                    const mi  = headers.findIndex(h => h.includes('管種材料'));
+                    const li  = headers.findIndex(h => h.includes('管線長度'));
+
+                    if (x1i<0||y1i<0||x2i<0||y2i<0) throw new Error('找不到 TWD97 座標欄位');
+
+                    const parsedLines = [];
+                    let ok = 0, skip = 0;
+                    for (let i = 1; i < lines.length; i++) {
+                        const cols = parseCSVLine(lines[i]);
+                        try {
+                            const x1 = parseFloat(cols[x1i]), y1 = parseFloat(cols[y1i]);
+                            const x2 = parseFloat(cols[x2i]), y2 = parseFloat(cols[y2i]);
+                            if (isNaN(x1)||isNaN(y1)||isNaN(x2)||isNaN(y2)) { skip++; continue; }
+                            const [lat1,lon1] = twd97ToWgs84(x1, y1);
+                            const [lat2,lon2] = twd97ToWgs84(x2, y2);
+                            parsedLines.push({
+                                coords: [[lat1,lon1],[lat2,lon2]],
+                                d: di>=0 ? cols[di]||'' : '',
+                                m: mi>=0 ? cols[mi]||'' : '',
+                                l: li>=0 ? cols[li]||'' : ''
+                            });
+                            ok++;
+                        } catch(err) { skip++; }
+                    }
+
+                    // 加入資料集（保留舊檔案）
+                    const dsId = 'wgis_' + Date.now();
+                    const fname = file.name.replace(/\.csv$/i, '');
+                    wgisDatasets.push({ id: dsId, name: fname, lines: parsedLines, polylines: [], visible: false });
+
+                    info.textContent = `✅ 已載入「${fname}」${ok} 條管線${skip>0?' ('+skip+' 筆略過)':''}`;
+                    renderWgisFileList();
+
+                    // 自動勾選顯示新上傳的
+                    setWgisVisible(dsId, true);
+
+                } catch(err) {
+                    info.textContent = '❌ 解析失敗：' + err.message;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function renderWgisFileList() {
+            const list = document.getElementById('wgisFileList');
+            if (wgisDatasets.length === 0) { list.innerHTML = ''; return; }
+            list.innerHTML = wgisDatasets.map(ds => `
+                <div class="wgis-file-item ${ds.visible ? 'active' : ''}" onclick="toggleWgisDataset('${ds.id}')">
+                    <input type="checkbox" ${ds.visible ? 'checked' : ''} onclick="event.stopPropagation();toggleWgisDataset('${ds.id}')">
+                    <span class="wgis-file-name" title="${ds.name}">${ds.name}</span>
+                    <span class="wgis-file-count">${ds.lines.length}條</span>
+                    <span class="wgis-file-del" title="移除" onclick="event.stopPropagation();removeWgisDataset('${ds.id}')">✕</span>
+                </div>
+            `).join('');
+            // 有資料時更新主按鈕狀態
+            const anyVisible = wgisDatasets.some(d => d.visible);
+            document.getElementById('wgisButton').classList.toggle('active', anyVisible || wgisPanelOpen);
+        }
+
+        function toggleWgisDataset(id) {
+            const ds = wgisDatasets.find(d => d.id === id);
+            if (!ds) return;
+            setWgisVisible(id, !ds.visible);
+        }
+
+        function setWgisVisible(id, visible) {
+            const ds = wgisDatasets.find(d => d.id === id);
+            if (!ds) return;
+            if (visible && ds.polylines.length === 0) {
+                // 畫線（黑色粗線）
+                ds.polylines = ds.lines.map(seg => {
                     const tooltip = [
                         seg.d ? '管徑: ' + seg.d + 'mm' : '',
                         seg.m ? '管材: ' + seg.m : '',
-                        seg.l ? '長度: ' + parseFloat(seg.l).toFixed(1) + 'm' : ''
+                        seg.l ? '長度: ' + parseFloat(seg.l||0).toFixed(1) + 'm' : ''
                     ].filter(Boolean).join(' | ');
                     const pl = L.polyline(seg.coords, {
-                        color: '#90a4ae',
-                        weight: 1.5,
-                        opacity: 0.7,
-                        interactive: true
+                        color: '#212121',
+                        weight: 3,
+                        opacity: 0.75,
+                        interactive: !!tooltip
                     });
                     if (tooltip) pl.bindTooltip(tooltip, { sticky: true, className: 'wgis-tooltip' });
                     pl.addTo(map);
                     return pl;
                 });
-                btn.textContent = '🙈 隱藏管線';
-                btn.classList.add('on');
-                mapBtn.classList.add('active');
+                ds.visible = true;
+            } else if (!visible && ds.polylines.length > 0) {
+                ds.polylines.forEach(pl => map.removeLayer(pl));
+                ds.polylines = [];
+                ds.visible = false;
             } else {
-                wgisPolylines.forEach(pl => map.removeLayer(pl));
-                wgisPolylines = [];
-                btn.textContent = '👁️ 顯示管線';
-                btn.classList.remove('on');
-                mapBtn.classList.remove('active');
+                ds.visible = visible;
+            }
+            renderWgisFileList();
+        }
+
+        function removeWgisDataset(id) {
+            const idx = wgisDatasets.findIndex(d => d.id === id);
+            if (idx < 0) return;
+            const ds = wgisDatasets[idx];
+            ds.polylines.forEach(pl => map.removeLayer(pl));
+            wgisDatasets.splice(idx, 1);
+            renderWgisFileList();
+            if (wgisDatasets.length === 0) {
+                document.getElementById('wgisInfo').textContent = '支援台水 WGIS 匯出的 CSV 格式\n（需含 TWD97 端點座標欄位）';
             }
         }
         // ========== WGIS 管線底圖功能結束 ==========
