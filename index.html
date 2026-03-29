@@ -1480,7 +1480,11 @@ kbd {
         <div class="gantt-main">
             <div class="gantt-panel-header" style="display:flex;justify-content:space-between;align-items:center;">
                 <span>📊 施工甘特圖 - <span id="ganttPipelineName"></span></span>
-                <button onclick="toggleGanttPanel()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:16px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕ 關閉</button>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button onclick="showSCurvePanel()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:3px 9px;border-radius:4px;">📈 S曲線</button>
+                    <button onclick="showUnitPriceManager()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:3px 9px;border-radius:4px;">⚙️ 單價</button>
+                    <button onclick="toggleGanttPanel()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:16px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕ 關閉</button>
+                </div>
             </div>
             <div class="gantt-panel-body" id="ganttPanelBody" style="overflow:auto;flex:1;padding:12px;">
                 <div style="color:#aaa;text-align:center;padding:30px;">載入中...</div>
@@ -1498,6 +1502,29 @@ kbd {
         </div>
     </div>
     
+    <!-- S 曲線面板 -->
+    <div id="sCurveBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3100;" onclick="closeSCurvePanel()"></div>
+    <div id="sCurvePanel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;max-width:860px;max-height:88vh;background:#fff;border-radius:12px;z-index:3101;box-shadow:0 8px 40px rgba(0,0,0,0.3);overflow:hidden;flex-direction:column;">
+        <div style="background:linear-gradient(135deg,#4a148c,#6a1b9a);color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+            <span style="font-size:15px;font-weight:bold;">📈 S 曲線 — 累積預算金額</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button onclick="showUnitPriceManager()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 10px;border-radius:4px;">⚙️ 施工單價管理</button>
+                <button onclick="closeSCurvePanel()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:16px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>
+            </div>
+        </div>
+        <div id="sCurvePanelBody" style="overflow:auto;flex:1;padding:16px;"></div>
+    </div>
+
+    <!-- 施工單價管理 Modal -->
+    <div id="unitPriceBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:3200;" onclick="closeUnitPriceManager()"></div>
+    <div id="unitPriceModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;max-width:600px;max-height:85vh;background:#fff;border-radius:10px;z-index:3201;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;flex-direction:column;">
+        <div style="background:#00695C;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+            <span style="font-weight:bold;">⚙️ 施工單價管理</span>
+            <button onclick="closeUnitPriceManager()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>
+        </div>
+        <div id="unitPriceModalBody" style="overflow:auto;flex:1;padding:16px;"></div>
+    </div>
+
     <!-- 施工里程碑 -->
     <div id="milestoneBtn" class="milestone-btn" onclick="toggleMilestonePanel()">📅 施工里程碑</div>
     <div id="milestonePanel" class="milestone-panel">
@@ -5804,6 +5831,7 @@ kbd {
         // ========== 甘特圖功能 ==========
         let ganttData = [];
         let ganttPanelOpen = false;
+        let unitPricesCache = []; // 施工單價快取
         
         // 從 label 解析段落+小段範圍，計算完工進度
         function getItemProgress(item) {
@@ -6757,12 +6785,18 @@ window.addEventListener('message', async function(event) {
         }
         async function loadGanttData() {
             try {
-                const res = await fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id));
-                const result = await res.json();
+                const [res1, res2] = await Promise.all([
+                    fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id)),
+                    fetch(API_URL + '?action=getUnitPrices&projectName=' + encodeURIComponent(currentProject ? currentProject.name || '' : ''))
+                ]);
+                const result = await res1.json();
+                const upResult = await res2.json();
                 ganttData = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
-                console.log('甘特圖資料:', ganttData); // Debug: 檢查資料結構
+                unitPricesCache = upResult.prices || [];
+                console.log('甘特圖資料:', ganttData);
+                console.log('施工單價:', unitPricesCache);
                 ganttData.forEach(item => {
-                    console.log(`項目: ${item.label}, 備註: ${item.notes || '(無)'}`);
+                    console.log(`項目: ${item.label}, 備註: ${item.notes || '(無)'}`, `單價: ${item.unitPrice||0}`);
                 });
                 renderGanttChart();
             } catch(e) { console.error('甘特圖載入失敗', e); }
@@ -6881,13 +6915,30 @@ window.addEventListener('message', async function(event) {
             const days = Math.round((new Date(item.endDate) - new Date(item.startDate)) / 86400000);
             document.getElementById('ganttSidebarTitle').textContent = '📋 ' + item.label;
             const body = document.getElementById('ganttSidebarBody');
+            
+            // 計算金額資訊
+            const prog = getItemProgress(item);
+            const totalLen = prog ? prog.total : 0;
+            const unitPrice = item.unitPrice || 0;
+            const totalBudget = totalLen && unitPrice ? totalLen * unitPrice : 0;
+            const doneBudget = prog && unitPrice ? prog.done * unitPrice : 0;
+            
+            const budgetHtml = unitPrice > 0 ? `
+                <div style="margin-top:6px;padding:6px 8px;background:#e8f5e9;border-radius:4px;border-left:3px solid #388e3c;">
+                    <div style="font-size:10px;color:#2e7d32;font-weight:bold;margin-bottom:2px;">💰 預算資訊</div>
+                    <div style="font-size:11px;color:#333;">單價：<b>${unitPrice.toLocaleString()} 元/m</b></div>
+                    ${totalBudget ? `<div style="font-size:11px;color:#333;">總金額：<b>${(totalBudget/10000).toFixed(1)} 萬元</b></div>` : ''}
+                    ${doneBudget && prog.done > 0 ? `<div style="font-size:11px;color:#1976d2;">已完成：<b>${(doneBudget/10000).toFixed(1)} 萬元</b></div>` : ''}
+                </div>` : '<div style="font-size:10px;color:#aaa;margin-top:4px;">尚未設定施工單價</div>';
+            
             body.innerHTML = `
                 <div style="font-size:12px;margin-bottom:8px;">
                     <div style="margin-bottom:4px;">📅 ${item.startDate}</div>
                     <div style="margin-bottom:4px;">🏁 ${item.endDate}</div>
                     <div style="margin-bottom:4px;">⏱️ ${days} 天</div>
-                    ${(()=>{const p=getItemProgress(item);return p?`<div style="margin-bottom:4px;">進度：<b>${p.done}m/${p.total}m（${Math.round(p.rate*100)}%）</b></div>`:'';})()}
+                    ${prog ? `<div style="margin-bottom:4px;">進度：<b>${prog.done}m/${prog.total}m（${Math.round(prog.rate*100)}%）</b></div>` : ''}
                     ${item.notes ? '<div style="color:#666;margin-top:4px;">備註：'+item.notes+'</div>' : ''}
+                    ${budgetHtml}
                 </div>
             `;
             const editBtn = document.createElement('button');
@@ -6898,8 +6949,13 @@ window.addEventListener('message', async function(event) {
             delBtn.textContent = '🗑️ 刪除';
             delBtn.style.cssText = 'width:100%;margin-top:4px;padding:7px;background:#e53935;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px;';
             delBtn.onclick = () => deleteGanttItem(item.id);
+            const sCurveBtn = document.createElement('button');
+            sCurveBtn.textContent = '📈 S 曲線';
+            sCurveBtn.style.cssText = 'width:100%;margin-top:4px;padding:7px;background:#6a1b9a;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px;';
+            sCurveBtn.onclick = () => showSCurvePanel();
             body.appendChild(editBtn);
             body.appendChild(delBtn);
+            body.appendChild(sCurveBtn);
         };
         
         window.showAddGanttForm = function() { showGanttForm({}, false); };
@@ -6961,7 +7017,9 @@ window.addEventListener('message', async function(event) {
                 `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">開始日期</div><input id="gt_startDate" type="date" value="${item.startDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></div>`,
                 `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">完成日期</div><input id="gt_endDate" type="date" value="${item.endDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></div>`,
                 `</div>`,
-                `<input id="gt_notes" placeholder="備註（選填）" value="${item.notes||''}" style="${inputStyle}">`
+                `<input id="gt_notes" placeholder="備註（選填）" value="${item.notes||''}" style="${inputStyle}">`,
+                `<div style="font-size:10px;color:#666;margin-bottom:2px;">施工單價（元/m）<span id="gt_unitPriceHint" style="color:#1976d2;font-size:10px;margin-left:4px;"></span></div>`,
+                `<input id="gt_unitPrice" type="number" placeholder="輸入或自動帶入" value="${item.unitPrice||''}" style="${inputStyle}" oninput="document.getElementById('gt_unitPriceHint').textContent='';">`
             ].join('');
             
             // 如果是編輯模式，設定預選值
@@ -7033,6 +7091,17 @@ window.addEventListener('message', async function(event) {
             const labelEl = document.getElementById('gt_label');
             if (labelEl) labelEl.value = label;
             
+            // 自動帶入施工單價（從 unitPricesCache 查詢 methodKey = prefix）
+            const priceEl = document.getElementById('gt_unitPrice');
+            const hintEl = document.getElementById('gt_unitPriceHint');
+            if (priceEl && !priceEl.value && prefix) {
+                const match = unitPricesCache.find(p => p.methodKey === prefix);
+                if (match) {
+                    priceEl.value = match.unitPrice;
+                    if (hintEl) hintEl.textContent = '（自動帶入）';
+                }
+            }
+            
             // 計算選取範圍的完工率
             const seg = (currentPipeline.segments || []).find(s => String(s.segmentNumber) === String(segNum));
             if (seg) {
@@ -7053,7 +7122,8 @@ window.addEventListener('message', async function(event) {
                 startDate: document.getElementById('gt_startDate').value,
                 endDate: document.getElementById('gt_endDate').value,
                 status: '',
-                notes: document.getElementById('gt_notes').value.trim()
+                notes: document.getElementById('gt_notes').value.trim(),
+                unitPrice: document.getElementById('gt_unitPrice') ? (document.getElementById('gt_unitPrice').value || '') : ''
             };
         }
         
@@ -7066,18 +7136,16 @@ window.addEventListener('message', async function(event) {
                 '&startDate=' + encodeURIComponent(data.startDate) +
                 '&endDate=' + encodeURIComponent(data.endDate) +
                 '&status=' + encodeURIComponent(data.status) +
-                '&notes=' + encodeURIComponent(data.notes);
+                '&notes=' + encodeURIComponent(data.notes) +
+                '&unitPrice=' + encodeURIComponent(data.unitPrice || '');
             try {
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
                 if (result.success) { 
                     map.closePopup(); 
                     await loadGanttData();
-                    // 重新載入甘特圖快取並更新地圖標註
                     await loadGanttItemsForLabels();
-                    if (dateLabelsVisible) {
-                        showDateLabels();
-                    }
+                    if (dateLabelsVisible) showDateLabels();
                 }
                 else showToast((result.error || '儲存失敗'), 'error');
             } catch(e) { showToast(e.message, 'error'); }
@@ -7091,18 +7159,16 @@ window.addEventListener('message', async function(event) {
                 '&startDate=' + encodeURIComponent(data.startDate) +
                 '&endDate=' + encodeURIComponent(data.endDate) +
                 '&status=' + encodeURIComponent(data.status) +
-                '&notes=' + encodeURIComponent(data.notes);
+                '&notes=' + encodeURIComponent(data.notes) +
+                '&unitPrice=' + encodeURIComponent(data.unitPrice || '');
             try {
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
                 if (result.success) { 
                     map.closePopup(); 
                     await loadGanttData();
-                    // 重新載入甘特圖快取並更新地圖標註
                     await loadGanttItemsForLabels();
-                    if (dateLabelsVisible) {
-                        showDateLabels();
-                    }
+                    if (dateLabelsVisible) showDateLabels();
                 }
                 else showToast((result.error || '更新失敗'), 'error');
             } catch(e) { showToast(e.message, 'error'); }
@@ -7126,6 +7192,408 @@ window.addEventListener('message', async function(event) {
             } catch(e) { showToast(e.message, 'error'); }
         };
         // ========== 甘特圖功能結束 ==========
+
+        // ========== S 曲線 / 施工單價管理功能 ==========
+
+        function showSCurvePanel() {
+            document.getElementById('sCurveBackdrop').style.display = 'block';
+            document.getElementById('sCurvePanel').style.display = 'flex';
+            renderSCurve();
+        }
+
+        function closeSCurvePanel() {
+            document.getElementById('sCurveBackdrop').style.display = 'none';
+            document.getElementById('sCurvePanel').style.display = 'none';
+        }
+
+        // 計算每月累積預算（S 曲線）
+        function computeMonthlyCumulative() {
+            // monthMap: { 'YYYY-MM': totalYen }
+            const monthMap = {};
+            ganttData.forEach(item => {
+                const prog = getItemProgress(item);
+                const totalLen = prog ? prog.total : 0;
+                const unitPrice = item.unitPrice || 0;
+                if (!totalLen || !unitPrice) return;
+                const totalYen = totalLen * unitPrice;
+
+                const start = new Date(item.startDate);
+                const end = new Date(item.endDate);
+                const totalDays = Math.max(1, Math.round((end - start) / 86400000));
+
+                // 逐月切割
+                let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+                while (cur <= end) {
+                    const mStart = new Date(Math.max(cur, start));
+                    const nextMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+                    const mEnd = new Date(Math.min(nextMonth - 1, end));
+                    const mDays = Math.max(0, Math.round((mEnd - mStart) / 86400000) + 1);
+                    const mYen = totalYen * (mDays / totalDays);
+                    const key = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0');
+                    monthMap[key] = (monthMap[key] || 0) + mYen;
+                    cur = nextMonth;
+                }
+            });
+
+            // 排序 → 累積
+            const sorted = Object.keys(monthMap).sort();
+            let cumulative = 0;
+            return sorted.map(m => {
+                cumulative += monthMap[m];
+                return { month: m, monthly: monthMap[m], cumulative };
+            });
+        }
+
+        function renderSCurve() {
+            const body = document.getElementById('sCurvePanelBody');
+            const rows = computeMonthlyCumulative();
+
+            if (rows.length === 0) {
+                body.innerHTML = `
+                    <div style="text-align:center;padding:40px;color:#999;">
+                        <div style="font-size:40px;margin-bottom:12px;">📊</div>
+                        <div>尚無可計算預算的甘特圖項目</div>
+                        <div style="font-size:12px;margin-top:8px;color:#bbb;">請先在甘特圖項目中設定施工單價，<br>或至「施工單價管理」建立單價資料</div>
+                        <button onclick="showUnitPriceManager()" style="margin-top:16px;padding:8px 20px;background:#00695C;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">⚙️ 前往施工單價管理</button>
+                    </div>`;
+                return;
+            }
+
+            const maxCum = rows[rows.length - 1].cumulative;
+            const totalItems = ganttData.filter(i => i.unitPrice > 0).length;
+            const totalBudget = maxCum;
+
+            // 計算今日累積預算（截至今天的累積）
+            const todayStr = new Date().toISOString().slice(0, 7); // YYYY-MM
+            const todayRow = rows.filter(r => r.month <= todayStr);
+            const todayCum = todayRow.length > 0 ? todayRow[todayRow.length - 1].cumulative : 0;
+
+            // 計算實際完成金額（用 progress rate × 總金額）
+            let actualDone = 0;
+            ganttData.forEach(item => {
+                const prog = getItemProgress(item);
+                if (prog && item.unitPrice) actualDone += prog.done * item.unitPrice;
+            });
+
+            // 統計卡
+            const fmt = v => v >= 1e8 ? (v/1e8).toFixed(2)+'億' : v >= 1e4 ? (v/1e4).toFixed(1)+'萬' : Math.round(v).toLocaleString();
+
+            let html = `
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+                    <div style="flex:1;min-width:130px;padding:10px 14px;background:#f3e5f5;border-radius:8px;border-left:4px solid #7b1fa2;">
+                        <div style="font-size:10px;color:#7b1fa2;margin-bottom:2px;">總計畫預算</div>
+                        <div style="font-size:18px;font-weight:bold;color:#4a148c;">${fmt(totalBudget)} 元</div>
+                    </div>
+                    <div style="flex:1;min-width:130px;padding:10px 14px;background:#e3f2fd;border-radius:8px;border-left:4px solid #1976d2;">
+                        <div style="font-size:10px;color:#1565c0;margin-bottom:2px;">計畫累積至今（${todayStr}）</div>
+                        <div style="font-size:18px;font-weight:bold;color:#0d47a1;">${fmt(todayCum)} 元</div>
+                        <div style="font-size:10px;color:#555;">${totalBudget>0?Math.round(todayCum/totalBudget*100):0}%</div>
+                    </div>
+                    <div style="flex:1;min-width:130px;padding:10px 14px;background:#e8f5e9;border-radius:8px;border-left:4px solid #388e3c;">
+                        <div style="font-size:10px;color:#2e7d32;margin-bottom:2px;">實際已完成金額</div>
+                        <div style="font-size:18px;font-weight:bold;color:#1b5e20;">${fmt(actualDone)} 元</div>
+                        <div style="font-size:10px;color:#555;">${totalBudget>0?Math.round(actualDone/totalBudget*100):0}%</div>
+                    </div>
+                </div>`;
+
+            // SVG 圖表
+            const W = 740, H = 260, PAD = { top: 20, right: 20, bottom: 40, left: 72 };
+            const chartW = W - PAD.left - PAD.right;
+            const chartH = H - PAD.top - PAD.bottom;
+            const n = rows.length;
+            const xStep = n > 1 ? chartW / (n - 1) : chartW;
+
+            const yMax = maxCum * 1.08;
+            const yScale = v => chartH - (v / yMax) * chartH;
+
+            // 折線點
+            const pts = rows.map((r, i) => ({
+                x: PAD.left + (n > 1 ? i * (chartW / (n - 1)) : chartW / 2),
+                y: PAD.top + yScale(r.cumulative),
+                month: r.month,
+                cum: r.cumulative,
+                mon: r.monthly
+            }));
+
+            // 今日線位置
+            const todayIdx = rows.findLastIndex(r => r.month <= todayStr);
+            const todayX = todayIdx >= 0 ? pts[todayIdx].x : -1;
+
+            // 實際進度折線（按月累積實際完成）
+            // 簡化：計算每個月底的累積實際完成（用完工率×金額按比例分配到期間內）
+            let actualPts = [];
+            {
+                const actualMonthMap = {};
+                ganttData.forEach(item => {
+                    const prog = getItemProgress(item);
+                    if (!prog || !item.unitPrice) return;
+                    const done = prog.done * item.unitPrice;
+                    if (done <= 0) return;
+                    // 假設已完成部分均勻分布在施工期間到今天
+                    const start = new Date(item.startDate);
+                    const today = new Date();
+                    const effectiveEnd = new Date(Math.min(new Date(item.endDate), today));
+                    const totalDays = Math.max(1, Math.round((effectiveEnd - start) / 86400000));
+                    let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+                    while (cur <= effectiveEnd) {
+                        const mStart = new Date(Math.max(cur, start));
+                        const nextMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+                        const mEnd = new Date(Math.min(nextMonth - 1, effectiveEnd));
+                        const mDays = Math.max(0, Math.round((mEnd - mStart) / 86400000) + 1);
+                        const mYen = done * (mDays / totalDays);
+                        const key = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0');
+                        actualMonthMap[key] = (actualMonthMap[key] || 0) + mYen;
+                        cur = nextMonth;
+                    }
+                });
+                let cumAct = 0;
+                const sortedAct = Object.keys(actualMonthMap).sort();
+                actualPts = sortedAct.map(m => {
+                    cumAct += actualMonthMap[m];
+                    const rowIdx = rows.findIndex(r => r.month === m);
+                    const x = rowIdx >= 0 ? pts[rowIdx].x : null;
+                    return { month: m, cum: cumAct, x };
+                }).filter(p => p.x !== null);
+            }
+
+            // Y 軸刻度
+            const yTicks = 5;
+            let yLabels = '';
+            let yGrids = '';
+            for (let i = 0; i <= yTicks; i++) {
+                const v = yMax * i / yTicks;
+                const y = PAD.top + yScale(v);
+                const label = v >= 1e8 ? (v/1e8).toFixed(1)+'億' : v >= 1e4 ? (v/1e4).toFixed(0)+'萬' : Math.round(v);
+                yGrids += `<line x1="${PAD.left}" y1="${y}" x2="${W-PAD.right}" y2="${y}" stroke="#eee" stroke-width="1"/>`;
+                yLabels += `<text x="${PAD.left-6}" y="${y+4}" font-size="10" fill="#888" text-anchor="end">${label}</text>`;
+            }
+
+            // X 軸月份標籤
+            let xLabels = '';
+            const step = n > 18 ? 3 : n > 9 ? 2 : 1;
+            pts.forEach((p, i) => {
+                if (i % step === 0) {
+                    xLabels += `<text x="${p.x}" y="${H-PAD.bottom+14}" font-size="9" fill="#888" text-anchor="middle">${p.month.slice(0,4)==(i>0?pts[i-1].month.slice(0,4):'') ? p.month.slice(5) : p.month}</text>`;
+                }
+            });
+
+            // 計畫線面積
+            const polyPts = pts.map(p => `${p.x},${p.y}`).join(' ');
+            const areaPath = `M ${pts[0].x},${PAD.top+chartH} ` + pts.map(p => `L ${p.x},${p.y}`).join(' ') + ` L ${pts[pts.length-1].x},${PAD.top+chartH} Z`;
+
+            // 實際線
+            const actualLine = actualPts.length >= 2
+                ? `<polyline points="${actualPts.map(p=>`${p.x},${PAD.top+yScale(p.cum)}`).join(' ')}" fill="none" stroke="#388e3c" stroke-width="2.5" stroke-dasharray="5,3"/>`
+                : '';
+
+            // hover tooltip circles
+            const circles = pts.map((p, i) =>
+                `<circle cx="${p.x}" cy="${p.y}" r="4" fill="#7b1fa2" stroke="white" stroke-width="1.5" opacity="0.8">
+                    <title>${p.month}｜當月：${fmt(p.mon)}元｜累積：${fmt(p.cum)}元</title>
+                </circle>`
+            ).join('');
+
+            const todayLine = todayX > 0
+                ? `<line x1="${todayX}" y1="${PAD.top}" x2="${todayX}" y2="${PAD.top+chartH}" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3"/>
+                   <text x="${todayX+3}" y="${PAD.top+10}" font-size="9" fill="#e53935">今日</text>`
+                : '';
+
+            html += `
+                <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible;">
+                    <defs>
+                        <linearGradient id="scGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.25"/>
+                            <stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.03"/>
+                        </linearGradient>
+                    </defs>
+                    ${yGrids}
+                    <path d="${areaPath}" fill="url(#scGrad)"/>
+                    <polyline points="${polyPts}" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>
+                    ${actualLine}
+                    ${todayLine}
+                    ${circles}
+                    ${yLabels}
+                    ${xLabels}
+                    <line x1="${PAD.left}" y1="${PAD.top}" x2="${PAD.left}" y2="${PAD.top+chartH}" stroke="#ccc"/>
+                    <line x1="${PAD.left}" y1="${PAD.top+chartH}" x2="${W-PAD.right}" y2="${PAD.top+chartH}" stroke="#ccc"/>
+                    <!-- 圖例 -->
+                    <rect x="${W-PAD.right-160}" y="${PAD.top}" width="12" height="4" fill="#7b1fa2" rx="2"/>
+                    <text x="${W-PAD.right-144}" y="${PAD.top+5}" font-size="10" fill="#555">計畫累積金額</text>
+                    <line x1="${W-PAD.right-160}" y1="${PAD.top+14}" x2="${W-PAD.right-148}" y2="${PAD.top+14}" stroke="#388e3c" stroke-width="2" stroke-dasharray="4,2"/>
+                    <text x="${W-PAD.right-144}" y="${PAD.top+18}" font-size="10" fill="#555">實際完成金額</text>
+                </svg>`;
+
+            // 月份明細表
+            html += `
+                <div style="margin-top:12px;">
+                    <div style="font-size:12px;font-weight:bold;color:#4a148c;margin-bottom:6px;">📋 逐月明細</div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                            <thead>
+                                <tr style="background:#f3e5f5;">
+                                    <th style="padding:5px 8px;text-align:left;border:1px solid #e1bee7;">月份</th>
+                                    <th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">當月預算</th>
+                                    <th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積預算</th>
+                                    <th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積比例</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows.map((r, i) => {
+                                    const isToday = r.month === todayStr;
+                                    const isPast = r.month < todayStr;
+                                    const bg = isToday ? '#fff9c4' : '';
+                                    return `<tr style="background:${bg};">
+                                        <td style="padding:4px 8px;border:1px solid #eee;${isToday?'font-weight:bold;color:#f57f17;':''}">${r.month}${isToday?' ◀':''}</td>
+                                        <td style="padding:4px 8px;border:1px solid #eee;text-align:right;">${fmt(r.monthly)} 元</td>
+                                        <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;">${fmt(r.cumulative)} 元</td>
+                                        <td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#7b1fa2;">${Math.round(r.cumulative/maxCum*100)}%</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+            body.innerHTML = html;
+        }
+
+        // ========== 施工單價管理 ==========
+
+        function showUnitPriceManager() {
+            document.getElementById('unitPriceBackdrop').style.display = 'block';
+            document.getElementById('unitPriceModal').style.display = 'flex';
+            renderUnitPriceManager();
+        }
+
+        function closeUnitPriceManager() {
+            document.getElementById('unitPriceBackdrop').style.display = 'none';
+            document.getElementById('unitPriceModal').style.display = 'none';
+        }
+
+        function renderUnitPriceManager() {
+            const body = document.getElementById('unitPriceModalBody');
+            // 取得目前工程的所有 methodKey（從 segments）
+            const methodKeys = new Set();
+            if (currentPipeline && currentPipeline.segments) {
+                currentPipeline.segments.forEach(seg => {
+                    const k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
+                    if (k) methodKeys.add(k);
+                });
+            }
+
+            const projectName = currentProject ? (currentProject.name || '') : '';
+            const inputStyle = 'width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:13px;';
+
+            let tableRows = '';
+            unitPricesCache.forEach(p => {
+                tableRows += `<tr>
+                    <td style="padding:5px 8px;border:1px solid #eee;">${p.methodKey}</td>
+                    <td style="padding:5px 8px;border:1px solid #eee;text-align:right;">
+                        <input type="number" value="${p.unitPrice}" style="width:90px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px;" id="up_${CSS.escape(p.methodKey)}">
+                    </td>
+                    <td style="padding:5px 8px;border:1px solid #eee;text-align:center;">
+                        <button onclick="saveOneUnitPrice('${p.methodKey.replace(/'/g,"\\'")}','${projectName}')" style="padding:3px 8px;background:#00695C;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">💾</button>
+                        <button onclick="deleteOneUnitPrice('${p.methodKey.replace(/'/g,"\\'")}','${projectName}')" style="padding:3px 8px;background:#e53935;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;margin-left:3px;">🗑️</button>
+                    </td>
+                </tr>`;
+            });
+
+            // 新增行
+            let newKeyOptions = '<option value="">-- 選擇工法 --</option>';
+            methodKeys.forEach(k => {
+                const exists = unitPricesCache.find(p => p.methodKey === k);
+                if (!exists) newKeyOptions += `<option value="${k}">${k}</option>`;
+            });
+
+            body.innerHTML = `
+                <div style="font-size:12px;color:#666;margin-bottom:10px;">
+                    計畫：<b>${projectName || '（全域）'}</b>　工程：<b>${currentPipeline ? currentPipeline.name || currentPipeline.id : '—'}</b>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;">
+                    <thead>
+                        <tr style="background:#e8f5e9;">
+                            <th style="padding:6px 8px;text-align:left;border:1px solid #c8e6c9;">施工方式（管徑+管種+工法）</th>
+                            <th style="padding:6px 8px;text-align:right;border:1px solid #c8e6c9;">單價（元/m）</th>
+                            <th style="padding:6px 8px;text-align:center;border:1px solid #c8e6c9;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#aaa;">尚無資料</td></tr>'}</tbody>
+                </table>
+                <div style="background:#f9f9f9;border-radius:6px;padding:12px;border:1px solid #eee;">
+                    <div style="font-size:12px;font-weight:bold;color:#333;margin-bottom:8px;">＋ 新增單價</div>
+                    <div style="margin-bottom:6px;">
+                        <div style="font-size:11px;color:#666;margin-bottom:2px;">施工方式</div>
+                        <select id="up_newKey" style="${inputStyle}">
+                            ${newKeyOptions}
+                        </select>
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">或手動輸入：</div>
+                        <input id="up_newKeyManual" placeholder="例：2200 DIP 埋設" style="${inputStyle}margin-top:2px;">
+                    </div>
+                    <div style="margin-bottom:8px;">
+                        <div style="font-size:11px;color:#666;margin-bottom:2px;">單價（元/m）</div>
+                        <input id="up_newPrice" type="number" placeholder="例：15000" style="${inputStyle}">
+                    </div>
+                    <button onclick="addNewUnitPrice('${projectName}')" style="width:100%;padding:8px;background:#00695C;color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:bold;">＋ 新增</button>
+                </div>`;
+        }
+
+        window.saveOneUnitPrice = async function(methodKey, projectName) {
+            const escaped = CSS.escape(methodKey);
+            const priceEl = document.getElementById('up_' + escaped);
+            if (!priceEl) return;
+            const unitPrice = parseFloat(priceEl.value);
+            if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效單價', 'warning'); return; }
+            try {
+                const qs = `?action=saveUnitPrice&methodKey=${encodeURIComponent(methodKey)}&projectName=${encodeURIComponent(projectName)}&unitPrice=${unitPrice}&unit=m`;
+                const res = await fetch(API_URL + qs);
+                const result = await res.json();
+                if (result.success) {
+                    showToast('已儲存 ' + methodKey, 'success');
+                    // 更新快取
+                    const idx = unitPricesCache.findIndex(p => p.methodKey === methodKey && p.projectName === projectName);
+                    if (idx >= 0) unitPricesCache[idx].unitPrice = unitPrice;
+                    else unitPricesCache.push({ methodKey, projectName, unitPrice, unit: 'm', remark: '' });
+                } else showToast(result.error || '儲存失敗', 'error');
+            } catch(e) { showToast(e.message, 'error'); }
+        };
+
+        window.deleteOneUnitPrice = async function(methodKey, projectName) {
+            if (!await showConfirm({ title: '刪除單價', message: `確定刪除「${methodKey}」的單價？`, okText: '刪除', danger: true })) return;
+            try {
+                const qs = `?action=deleteUnitPrice&methodKey=${encodeURIComponent(methodKey)}&projectName=${encodeURIComponent(projectName)}`;
+                const res = await fetch(API_URL + qs);
+                const result = await res.json();
+                if (result.success) {
+                    showToast('已刪除', 'success');
+                    unitPricesCache = unitPricesCache.filter(p => !(p.methodKey === methodKey && p.projectName === projectName));
+                    renderUnitPriceManager();
+                } else showToast(result.error || '刪除失敗', 'error');
+            } catch(e) { showToast(e.message, 'error'); }
+        };
+
+        window.addNewUnitPrice = async function(projectName) {
+            const selKey = document.getElementById('up_newKey').value;
+            const manualKey = document.getElementById('up_newKeyManual').value.trim();
+            const methodKey = manualKey || selKey;
+            const unitPrice = parseFloat(document.getElementById('up_newPrice').value);
+            if (!methodKey) { showToast('請選擇或輸入施工方式', 'warning'); return; }
+            if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效單價', 'warning'); return; }
+            try {
+                const qs = `?action=saveUnitPrice&methodKey=${encodeURIComponent(methodKey)}&projectName=${encodeURIComponent(projectName)}&unitPrice=${unitPrice}&unit=m`;
+                const res = await fetch(API_URL + qs);
+                const result = await res.json();
+                if (result.success) {
+                    showToast('已新增 ' + methodKey, 'success');
+                    const idx = unitPricesCache.findIndex(p => p.methodKey === methodKey && p.projectName === projectName);
+                    if (idx >= 0) unitPricesCache[idx].unitPrice = unitPrice;
+                    else unitPricesCache.push({ methodKey, projectName, unitPrice, unit: 'm', remark: '' });
+                    renderUnitPriceManager();
+                } else showToast(result.error || '新增失敗', 'error');
+            } catch(e) { showToast(e.message, 'error'); }
+        };
+
+        // ========== S 曲線功能結束 ==========
+
         // ========== 施工里程碑功能 ==========
         let milestoneData = [];
         let milestonePanelOpen = false;
