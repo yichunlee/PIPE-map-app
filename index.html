@@ -6599,13 +6599,14 @@ function showUnitPriceMgr() {
     panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9950;display:flex;align-items:center;justify-content:center;';
 
     function renderMgrContent() {
-        var tableRows = unitPrices.map(function(p) {
+        var tableRows = unitPrices.map(function(p, idx) {
+            var safeId = p.methodKey.replace(/[^a-zA-Z0-9]/g, '_');
             return '<tr><td style="padding:5px 8px;border:1px solid #eee;">' + p.methodKey + '</td>' +
                 '<td style="padding:5px 8px;border:1px solid #eee;text-align:right;">' +
-                    '<input type="number" id="up2_' + p.methodKey.replace(/[^a-zA-Z0-9]/g,'_') + '" value="' + p.unitPrice + '" style="width:90px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px;"></td>' +
+                    '<input type="number" id="up2_' + safeId + '" value="' + p.unitPrice + '" style="width:90px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px;"></td>' +
                 '<td style="padding:5px 8px;border:1px solid #eee;text-align:center;">' +
-                    '<button onclick="saveUp2(\'' + p.methodKey.replace(/'/g,"\\'") + '\')" style="padding:3px 8px;background:#00695C;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">💾</button>' +
-                    ' <button onclick="delUp2(\'' + p.methodKey.replace(/'/g,"\\'") + '\')" style="padding:3px 8px;background:#e53935;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">🗑️</button>' +
+                    '<button onclick="saveUp2(' + idx + ')" style="padding:3px 8px;background:#00695C;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">💾</button>' +
+                    ' <button onclick="delUp2(' + idx + ')" style="padding:3px 8px;background:#e53935;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">🗑️</button>' +
                 '</td></tr>';
         }).join('');
 
@@ -6618,14 +6619,14 @@ function showUnitPriceMgr() {
         panel.querySelector('#_upMgrBody').innerHTML =
             '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;">' +
             '<thead><tr style="background:#e8f5e9;"><th style="padding:6px 8px;text-align:left;border:1px solid #c8e6c9;">施工方式</th>' +
-            '<th style="padding:6px 8px;text-align:right;border:1px solid #c8e6c9;">單價（元/m）</th>' +
+            '<th style="padding:6px 8px;text-align:right;border:1px solid #c8e6c9;">単價（元/m）</th>' +
             '<th style="padding:6px 8px;text-align:center;border:1px solid #c8e6c9;">操作</th></tr></thead>' +
             '<tbody>' + (tableRows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#aaa;">尚無資料</td></tr>') + '</tbody></table>' +
             '<div style="background:#f9f9f9;border-radius:6px;padding:12px;border:1px solid #eee;">' +
-            '<div style="font-size:12px;font-weight:bold;margin-bottom:8px;">＋ 新增單價</div>' +
+            '<div style="font-size:12px;font-weight:bold;margin-bottom:8px;">＋ 新增单價</div>' +
             '<select id="up2_newKey" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' + newKeyOpts + '</select>' +
             '<input id="up2_newKeyManual" placeholder="或手動輸入工法名稱" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' +
-            '<input id="up2_newPrice" type="number" placeholder="單價（元/m）" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;font-size:12px;box-sizing:border-box;">' +
+            '<input id="up2_newPrice" type="number" placeholder="単價（元/m）" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;font-size:12px;box-sizing:border-box;">' +
             '<button onclick="addUp2()" style="width:100%;padding:8px;background:#00695C;color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:bold;">＋ 新增</button>' +
             '</div>';
     }
@@ -6641,33 +6642,35 @@ function showUnitPriceMgr() {
     panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
     renderMgrContent();
 
-    window.saveUp2 = async function(methodKey) {
-        var safeId = methodKey.replace(/[^a-zA-Z0-9]/g, '_');
+    window.saveUp2 = async function(idx) {
+        var p = unitPrices[idx];
+        if (!p) return;
+        var safeId = p.methodKey.replace(/[^a-zA-Z0-9]/g, '_');
         var el = document.getElementById('up2_' + safeId);
         if (!el) return;
         var unitPrice = parseFloat(el.value);
-        if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效單價', 'warning'); return; }
+        if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效单價', 'warning'); return; }
         try {
-            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
+            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
             var result = await res.json();
             if (result.success) {
-                showToast('已儲存 ' + methodKey, 'success');
-                var idx = unitPrices.findIndex(function(p){ return p.methodKey === methodKey; });
-                if (idx >= 0) unitPrices[idx].unitPrice = unitPrice;
-                else unitPrices.push({ methodKey: methodKey, projectName: '', unitPrice: unitPrice, unit: 'm' });
+                showToast('已儲存 ' + p.methodKey, 'success');
+                unitPrices[idx].unitPrice = unitPrice;
                 renderMgrContent();
             } else showToast(result.error || '儲存失敗', 'error');
         } catch(e) { showToast(e.message, 'error'); }
     };
 
-    window.delUp2 = async function(methodKey) {
-        if (!await showConfirm({ title: '刪除單價', message: '確定刪除「' + methodKey + '」的單價？', okText: '刪除', danger: true })) return;
+    window.delUp2 = async function(idx) {
+        var p = unitPrices[idx];
+        if (!p) return;
+        if (!await showConfirm({ title: '刪除单價', message: '確定刪除「' + p.methodKey + '」的单價？', okText: '刪除', danger: true })) return;
         try {
-            var res = await fetch(API_URL + '?action=deleteUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=');
+            var res = await fetch(API_URL + '?action=deleteUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&projectName=');
             var result = await res.json();
             if (result.success) {
                 showToast('已刪除', 'success');
-                unitPrices = unitPrices.filter(function(p){ return p.methodKey !== methodKey; });
+                unitPrices = unitPrices.filter(function(_, i){ return i !== idx; });
                 renderMgrContent();
             } else showToast(result.error || '刪除失敗', 'error');
         } catch(e) { showToast(e.message, 'error'); }
@@ -6679,14 +6682,14 @@ function showUnitPriceMgr() {
         var methodKey = manualKey || selKey;
         var unitPrice = parseFloat(document.getElementById('up2_newPrice').value);
         if (!methodKey) { showToast('請選擇或輸入施工方式', 'warning'); return; }
-        if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效單價', 'warning'); return; }
+        if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效单價', 'warning'); return; }
         try {
             var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
             var result = await res.json();
             if (result.success) {
                 showToast('已新增 ' + methodKey, 'success');
-                var idx = unitPrices.findIndex(function(p){ return p.methodKey === methodKey; });
-                if (idx >= 0) unitPrices[idx].unitPrice = unitPrice;
+                var existing = unitPrices.findIndex(function(p){ return p.methodKey === methodKey; });
+                if (existing >= 0) unitPrices[existing].unitPrice = unitPrice;
                 else unitPrices.push({ methodKey: methodKey, projectName: '', unitPrice: unitPrice, unit: 'm' });
                 renderMgrContent();
             } else showToast(result.error || '新增失敗', 'error');
