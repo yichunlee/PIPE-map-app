@@ -1427,7 +1427,7 @@ kbd {
     
     <div id="measureButton" class="measure-button" title="測量距離">📏</div>
     <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel()" title="圖層設定">🗺️</div>
-    <div id="layerPanel" class="layer-panel">
+    <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()">
         <div class="layer-panel-header">🗺️ 圖層設定</div>
         <div class="layer-panel-body">
             <div class="layer-panel-section">底圖</div>
@@ -7865,7 +7865,8 @@ window.addEventListener('message', async function(event) {
         }
         
         // 切換圖層面板（整合底圖 + WGIS）
-        function toggleLayerPanel() {
+        function toggleLayerPanel(event) {
+            if (event) event.stopPropagation();
             const panel = document.getElementById('layerPanel');
             const btn   = document.getElementById('layerSwitchButton');
             const isOpen = panel.classList.toggle('show');
@@ -7918,7 +7919,8 @@ window.addEventListener('message', async function(event) {
             }
             
             // 關閉面板
-            document.getElementById('layerPanel').style.display = 'none';
+            document.getElementById('layerPanel').classList.remove('show');
+            document.getElementById('layerSwitchButton').classList.remove('active');
         }
         
         function toggleMeasureMode() {
@@ -10575,6 +10577,19 @@ window.addEventListener('message', async function(event) {
             }
         };
         
+        // 點擊地圖其他地方時關閉圖層面板
+        document.addEventListener('click', function(e) {
+            const panel = document.getElementById('layerPanel');
+            const btn   = document.getElementById('layerSwitchButton');
+            if (panel && btn &&
+                panel.classList.contains('show') &&
+                !panel.contains(e.target) &&
+                !btn.contains(e.target)) {
+                panel.classList.remove('show');
+                btn.classList.remove('active');
+            }
+        });
+
         // 點擊地圖其他地方時關閉抽屜
         document.addEventListener('click', function(e) {
             const drawer = document.getElementById('toolsDrawer');
