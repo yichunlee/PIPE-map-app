@@ -7060,19 +7060,29 @@ function renderMilestones() {
         if (maxCum2 > 0) {
             var W2 = 680, H2 = 120, PL2 = 60, PR2 = 16, PT2 = 12, PB2 = 24;
             var cW2 = W2 - PL2 - PR2, cH2 = H2 - PT2 - PB2;
-            var n2 = budgetRows.length;
             var yMax2 = maxCum2 * 1.1;
-            var pts2 = budgetRows.map(function(r, i) {
+            var totalRange2 = maxDate.getTime() - minDate.getTime();
+            
+            // X 座標使用與甘特圖相同的時間比例（minDate/maxDate 已在外層計算）
+            function dateToX2(d) {
+                var pct = Math.max(0, Math.min(1, (d.getTime() - minDate.getTime()) / totalRange2));
+                return PL2 + pct * cW2;
+            }
+            
+            // 每個月的中間日期對應 X 座標
+            var pts2 = budgetRows.map(function(r) {
+                var parts = r.month.split('-');
+                var yr = parseInt(parts[0]), mo = parseInt(parts[1]);
+                var midDate = new Date(yr, mo - 1, 15); // 月中
                 return {
-                    x: PL2 + (n2 > 1 ? i * cW2 / (n2-1) : cW2/2),
+                    x: dateToX2(midDate),
                     y: PT2 + cH2 - (r.cumulative / yMax2) * cH2,
-                    month: r.month, cum: r.cumulative
+                    month: r.month, cum: r.cumulative, date: midDate
                 };
             });
+            
             // today line
-            var todayIdx2 = -1;
-            budgetRows.forEach(function(r,i){ if(r.month <= todayStr2) todayIdx2 = i; });
-            var todayX2 = todayIdx2 >= 0 ? pts2[todayIdx2].x : -1;
+            var todayX2 = dateToX2(new Date());
             // actual Y
             var actY2 = PT2 + cH2 - (actualDone2 / yMax2) * cH2;
             // Y ticks
@@ -7083,24 +7093,27 @@ function renderMilestones() {
                 yGrid2 += '<line x1="' + PL2 + '" y1="' + ty2 + '" x2="' + (W2-PR2) + '" y2="' + ty2 + '" stroke="#eee" stroke-width="1"/>';
                 yLbl2 += '<text x="' + (PL2-4) + '" y="' + (ty2+4) + '" font-size="8" fill="#aaa" text-anchor="end">' + fmtYen(v2) + '</text>';
             }
-            // X labels - milestones
+            // milestone vertical lines on budget chart
             var msLabels2 = '';
             visibleMilestones.forEach(function(ms) {
                 var mDate = new Date(ms.endDate);
+                var mx = dateToX2(mDate);
+                // find the cumulative budget at this milestone date
                 var mStr = mDate.getFullYear() + '-' + String(mDate.getMonth()+1).padStart(2,'0');
-                var mRow = budgetRows.find(function(r){ return r.month >= mStr; });
-                if (!mRow) return;
-                var mIdx = budgetRows.indexOf(mRow);
-                var mx = PL2 + (n2 > 1 ? mIdx * cW2 / (n2-1) : cW2/2);
-                var cum = mRow.cumulative;
-                msLabels2 += '<line x1="' + mx + '" y1="' + PT2 + '" x2="' + mx + '" y2="' + (PT2+cH2) + '" stroke="#3f51b5" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>';
+                var mRow = budgetRows.reduce(function(acc, r) {
+                    return r.month <= mStr ? r : acc;
+                }, null);
+                msLabels2 += '<line x1="' + mx + '" y1="' + PT2 + '" x2="' + mx + '" y2="' + (PT2+cH2) + '" stroke="#3f51b5" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>';
                 msLabels2 += '<text x="' + mx + '" y="' + (H2-PB2+14) + '" font-size="8" fill="#3f51b5" text-anchor="middle">' + (mDate.getMonth()+1) + '/' + mDate.getDate() + '</text>';
-                msLabels2 += '<text x="' + mx + '" y="' + (PT2+cH2-(cum/yMax2)*cH2-4) + '" font-size="8" fill="#7b1fa2" text-anchor="middle">' + fmtYen(cum) + '</text>';
+                if (mRow) {
+                    var labelY = PT2 + cH2 - (mRow.cumulative / yMax2) * cH2 - 5;
+                    msLabels2 += '<text x="' + mx + '" y="' + labelY + '" font-size="8" fill="#7b1fa2" text-anchor="middle" font-weight="bold">' + fmtYen(mRow.cumulative) + '</text>';
+                }
             });
             // today line
-            var todayLine2 = todayX2 > 0 ? '<line x1="' + todayX2 + '" y1="' + PT2 + '" x2="' + todayX2 + '" y2="' + (PT2+cH2) + '" stroke="#e53935" stroke-width="1.5" stroke-dasharray="3,2"/>' : '';
-            // actual dot
-            var actualDot2 = (todayX2 > 0 && actualDone2 > 0) ?
+            var todayLineEl2 = '<line x1="' + todayX2 + '" y1="' + PT2 + '" x2="' + todayX2 + '" y2="' + (PT2+cH2) + '" stroke="#e53935" stroke-width="1.5" stroke-dasharray="3,2"/>';
+            // actual dot at today X
+            var actualDot2 = (actualDone2 > 0) ?
                 '<circle cx="' + todayX2 + '" cy="' + actY2 + '" r="4" fill="#388e3c" stroke="white" stroke-width="1.5"><title>實際完成：' + fmtYen(actualDone2) + '元</title></circle>' +
                 '<line x1="' + PL2 + '" y1="' + actY2 + '" x2="' + todayX2 + '" y2="' + actY2 + '" stroke="#388e3c" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>' : '';
             var linePts2 = pts2.map(function(p){ return p.x+','+p.y; }).join(' ');
@@ -7114,7 +7127,7 @@ function renderMilestones() {
                 yGrid2 +
                 '<path d="' + areaPath2 + '" fill="url(#bg2)"/>' +
                 '<polyline points="' + linePts2 + '" fill="none" stroke="#7b1fa2" stroke-width="1.5"/>' +
-                msLabels2 + todayLine2 + actualDot2 + yLbl2 +
+                msLabels2 + todayLineEl2 + actualDot2 + yLbl2 +
                 '<line x1="' + PL2 + '" y1="' + PT2 + '" x2="' + PL2 + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
                 '<line x1="' + PL2 + '" y1="' + (PT2+cH2) + '" x2="' + (W2-PR2) + '" y2="' + (PT2+cH2) + '" stroke="#ddd"/>' +
                 '</svg>';
