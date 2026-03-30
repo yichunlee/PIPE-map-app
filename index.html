@@ -5938,7 +5938,8 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; displ
 .container { background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 10px; }
 .gantt-row { display: flex; margin-bottom: 3px; align-items: center; cursor: pointer; }
 .gantt-row:hover { background: #f5f5f5; }
-.gantt-label { width: 180px; font-size: 11px; padding: 2px 4px 2px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.gantt-row:hover .gantt-label { background: #f5f5f5; }
+.gantt-label { width: 180px; font-size: 11px; padding: 2px 4px 2px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; position:sticky; left:0; background:white; z-index:2; }
 .gantt-notes { font-size: 10px; color: #777; font-style: italic; padding: 1px 4px 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gantt-timeline-container { flex: 1; position: relative; }
 .gantt-timeline { height: 26px; background: #f9f9f9; border-radius: 3px; position: relative; }
@@ -6026,13 +6027,14 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </head>
 <body>
 <div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showAddForm()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">＋ 新增</button><button onclick="showMilestoneManager()" style="background:rgba(63,81,181,0.7);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📅 里程碑</button><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button><button onclick="exportToExcel()" style="background:rgba(76,175,80,0.8);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📥 匯出Excel</button></div></div>
-<div style="background:#f5f5f5;border-bottom:1px solid #e0e0e0;padding:4px 12px;display:flex;align-items:center;gap:8px;font-size:12px;color:#555;">
-    <span>🔍 縮放：</span>
-    <button onclick="setZoom(2)" id="z2" style="padding:2px 8px;border:1px solid #ddd;border-radius:3px;cursor:pointer;font-size:11px;background:#00695C;color:white;">概覽</button>
-    <button onclick="setZoom(8)" id="z8" style="padding:2px 8px;border:1px solid #ddd;border-radius:3px;cursor:pointer;font-size:11px;background:white;">詳細</button>
-    <span style="color:#aaa;font-size:11px;">← 可水平捲動</span>
+<div style="background:#f5f5f5;border-bottom:1px solid #e0e0e0;padding:4px 12px;display:flex;align-items:center;gap:6px;font-size:12px;color:#555;">
+    <span>🔍</span>
+    <button onclick="adjustZoom(-1)" style="padding:1px 9px;border:1px solid #bbb;border-radius:3px;cursor:pointer;font-size:15px;font-weight:bold;background:white;line-height:1.4;">−</button>
+    <span id="zoomLabel" style="min-width:60px;text-align:center;font-size:11px;color:#666;">概覽</span>
+    <button onclick="adjustZoom(1)" style="padding:1px 9px;border:1px solid #bbb;border-radius:3px;cursor:pointer;font-size:15px;font-weight:bold;background:white;line-height:1.4;">＋</button>
+    <span style="color:#aaa;font-size:11px;margin-left:4px;">← 可水平捲動</span>
 </div>
-<div class="chart-area" id="chartScrollOuter" style="overflow-x:auto;overflow-y:auto;">
+<div id="chartScrollOuter" class="chart-area" style="overflow-x:auto;overflow-y:auto;padding:10px;">
     <div id="chartScrollInner" style="min-width:100%;">
     <div class="container" id="chart"></div>
     <div class="container milestone-section" id="milestones"></div>
@@ -6057,16 +6059,23 @@ let unitPrices = ${unitPricesJson};
 const API_URL = '${apiUrl}';
 let editingItem = null;
 let pxPerDay = 2;  // 縮放：每天幾像素（概覽模式）
+const ZOOM_LEVELS = [1, 2, 4, 8, 16, 32];
+const ZOOM_LABELS = ['極小', '概覽', '正常', '詳細', '精細', '放大'];
+let zoomIdx = 1;  // 預設概覽(2px)
+
+function adjustZoom(delta) {
+    zoomIdx = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, zoomIdx + delta));
+    pxPerDay = ZOOM_LEVELS[zoomIdx];
+    var lbl = document.getElementById('zoomLabel');
+    if (lbl) lbl.textContent = ZOOM_LABELS[zoomIdx] + ' (' + pxPerDay + 'px/日)';
+    renderChart();
+    renderMilestones();
+}
 
 function setZoom(px) {
+    zoomIdx = ZOOM_LEVELS.indexOf(px);
+    if (zoomIdx < 0) zoomIdx = 1;
     pxPerDay = px;
-    ['z2','z8'].forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) { el.style.background = 'white'; el.style.color = '#333'; }
-    });
-    var activeId = 'z' + px;
-    var active = document.getElementById(activeId);
-    if (active) { active.style.background = '#00695C'; active.style.color = 'white'; }
     renderChart();
     renderMilestones();
 }
@@ -6283,7 +6292,7 @@ function renderChart() {
     if (scrollInner) scrollInner.style.minWidth = minPxWidth + 'px';
     
 
-    let html = '<div style="display:flex;margin-bottom:6px;"><div style="width:180px;"></div><div style="flex:1;position:relative;height:28px;padding-right:80px;border-bottom:1px solid #ddd;">';
+    let html = '<div style="display:flex;margin-bottom:6px;"><div style="width:180px;position:sticky;left:0;background:white;z-index:2;flex-shrink:0;"></div><div style="flex:1;position:relative;height:28px;padding-right:80px;border-bottom:1px solid #ddd;">';
     
     // 第一步：繪製年份背景色塊和標籤
     const yearColors = {
@@ -7118,7 +7127,7 @@ function renderMilestones() {
     
     // 建立里程碑時間軸容器（簡化版）
     let html = '<div style="display:flex;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">';
-    html += '<div style="width:180px;font-size:11px;font-weight:bold;color:#3f51b5;padding:8px;">🎯 里程碑</div>';
+    html += '<div style="width:180px;font-size:11px;font-weight:bold;color:#3f51b5;padding:8px;position:sticky;left:0;background:white;z-index:2;flex-shrink:0;">🎯 里程碑</div>';
     html += '<div style="flex:1;position:relative;height:60px;padding-right:80px;">';
     
     const totalRange = maxDate.getTime() - minDate.getTime();
@@ -7197,7 +7206,7 @@ function renderMilestones() {
     
     // ===== 累積預算金額 vs 時間 迷你圖 =====
     var budgetRows = computeMonthlyCumulative();
-    if (budgetRows.length >= 2 && maxDate.getTime() > minDate.getTime()) {
+    if (budgetRows.length >= 1 && maxDate.getTime() > minDate.getTime()) {
         var totalRange2 = maxDate.getTime() - minDate.getTime();
         var maxCum2 = budgetRows[budgetRows.length-1].cumulative;
         var actualDone2 = 0;
@@ -7252,7 +7261,7 @@ function renderMilestones() {
             });
 
             html += '<div style="display:flex;margin-top:8px;">';
-            html += '<div style="width:180px;flex-shrink:0;font-size:10px;color:#7b1fa2;font-weight:bold;padding:8px 8px 20px 8px;position:relative;">';
+            html += '<div style="width:180px;flex-shrink:0;font-size:10px;color:#7b1fa2;font-weight:bold;padding:8px 8px 20px 8px;position:sticky;left:0;background:white;z-index:2;">'; 
             html += '💰 預算進度';
             html += yLabels;
             html += '</div>';
