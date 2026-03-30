@@ -1519,7 +1519,10 @@ kbd {
     <div id="unitPriceBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:3200;" onclick="closeUnitPriceManager()"></div>
     <div id="unitPriceModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;max-width:600px;max-height:85vh;background:#fff;border-radius:10px;z-index:3201;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;flex-direction:column;">
         <div style="background:#00695C;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-            <span style="font-weight:bold;">⚙️ 施工單價管理</span>
+            <div>
+                <div style="font-weight:bold;">⚙️ 施工單價管理</div>
+                <div id="unitPriceModalSubtitle" style="font-size:11px;opacity:0.8;margin-top:2px;"></div>
+            </div>
             <button onclick="closeUnitPriceManager()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>
         </div>
         <div id="unitPriceModalBody" style="overflow:auto;flex:1;padding:16px;"></div>
@@ -5876,7 +5879,7 @@ kbd {
                 const [result, milestoneResult, upResult] = await Promise.all([
                     fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id)).then(r => r.json()),
                     fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(currentPipeline.id)).then(r => r.json()),
-                    fetch(API_URL + '?action=getUnitPrices&projectName=' + encodeURIComponent(projName)).then(r => r.json())
+                    fetch(API_URL + '?action=getUnitPrices&pipelineId=' + encodeURIComponent(currentPipeline.id) + '&projectName=' + encodeURIComponent(projName)).then(r => r.json())
                 ]);
                 
                 const items = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
@@ -6553,7 +6556,7 @@ async function reloadGanttData() {
         const [r1, r2, r3] = await Promise.all([
             fetch(API_URL + '?action=getGanttItems&pipelineId=' + pipeline.id).then(r => r.json()),
             fetch(API_URL + '?action=getMilestones&pipelineId=' + pipeline.id).then(r => r.json()),
-            fetch(API_URL + '?action=getUnitPrices&projectName=').then(r => r.json())
+            fetch(API_URL + '?action=getUnitPrices&pipelineId=' + encodeURIComponent(pipeline.id)).then(r => r.json())
         ]);
         items.length = 0;
         (r1.items || []).sort((a,b) => new Date(a.startDate)-new Date(b.startDate)).forEach(i => items.push(i));
@@ -6784,21 +6787,24 @@ function showUnitPriceMgr() {
         panel.querySelector('#_upMgrBody').innerHTML =
             '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;">' +
             '<thead><tr style="background:#e8f5e9;"><th style="padding:6px 8px;text-align:left;border:1px solid #c8e6c9;">施工方式</th>' +
-            '<th style="padding:6px 8px;text-align:right;border:1px solid #c8e6c9;">単價（元/m）</th>' +
+            '<th style="padding:6px 8px;text-align:right;border:1px solid #c8e6c9;">單價（元/m）</th>' +
             '<th style="padding:6px 8px;text-align:center;border:1px solid #c8e6c9;">操作</th></tr></thead>' +
             '<tbody>' + (tableRows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#aaa;">尚無資料</td></tr>') + '</tbody></table>' +
             '<div style="background:#f9f9f9;border-radius:6px;padding:12px;border:1px solid #eee;">' +
             '<div style="font-size:12px;font-weight:bold;margin-bottom:8px;">＋ 新增單價</div>' +
             '<select id="up2_newKey" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' + newKeyOpts + '</select>' +
             '<input id="up2_newKeyManual" placeholder="或手動輸入工法名稱" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;font-size:12px;box-sizing:border-box;">' +
-            '<input id="up2_newPrice" type="number" placeholder="単價（元/m）" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;font-size:12px;box-sizing:border-box;">' +
+            '<input id="up2_newPrice" type="number" placeholder="單價（元/m）" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;font-size:12px;box-sizing:border-box;">' +
             '<button onclick="addUp2()" style="width:100%;padding:8px;background:#00695C;color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-weight:bold;">＋ 新增</button>' +
             '</div>';
     }
 
     panel.innerHTML = '<div style="background:white;border-radius:10px;width:88%;max-width:580px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;">' +
         '<div style="background:#00695C;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
-            '<span style="font-weight:bold;">⚙️ 施工單價管理</span>' +
+            '<div>' +
+                '<div style="font-weight:bold;">⚙️ 施工單價管理</div>' +
+                '<div style="font-size:11px;opacity:0.8;margin-top:2px;">📍 ' + (pipeline.name || pipeline.id) + '　（單價為本工程專屬）</div>' +
+            '</div>' +
             '<button onclick="closeUpMgrWin()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>' +
         '</div>' +
         '<div id="_upMgrBody" style="overflow:auto;flex:1;padding:16px;"></div>' +
@@ -6816,7 +6822,7 @@ function showUnitPriceMgr() {
         var unitPrice = parseFloat(el.value);
         if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效單價', 'warning'); return; }
         try {
-            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
+            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&pipelineId=' + encodeURIComponent(pipeline.id) + '&projectName=' + encodeURIComponent(pipeline.projectName || '') + '&unitPrice=' + unitPrice + '&unit=m');
             var result = await res.json();
             if (result.success) {
                 showToast('已儲存 ' + p.methodKey, 'success');
@@ -6831,7 +6837,7 @@ function showUnitPriceMgr() {
         if (!p) return;
         if (!await showConfirm({ title: '刪除單價', message: '確定刪除「' + p.methodKey + '」的單價？', okText: '刪除', danger: true })) return;
         try {
-            var res = await fetch(API_URL + '?action=deleteUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&projectName=');
+            var res = await fetch(API_URL + '?action=deleteUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&pipelineId=' + encodeURIComponent(pipeline.id) + '&projectName=');
             var result = await res.json();
             if (result.success) {
                 showToast('已刪除', 'success');
@@ -6849,7 +6855,7 @@ function showUnitPriceMgr() {
         if (!methodKey) { showToast('請選擇或輸入施工方式', 'warning'); return; }
         if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效單價', 'warning'); return; }
         try {
-            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&projectName=&unitPrice=' + unitPrice + '&unit=m');
+            var res = await fetch(API_URL + '?action=saveUnitPrice&methodKey=' + encodeURIComponent(methodKey) + '&pipelineId=' + encodeURIComponent(pipeline.id) + '&projectName=' + encodeURIComponent(pipeline.projectName || '') + '&unitPrice=' + unitPrice + '&unit=m');
             var result = await res.json();
             if (result.success) {
                 showToast('已新增 ' + methodKey, 'success');
@@ -7388,7 +7394,7 @@ window.addEventListener('message', async function(event) {
             try {
                 const [res1, res2] = await Promise.all([
                     fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id)),
-                    fetch(API_URL + '?action=getUnitPrices&projectName=' + encodeURIComponent(currentProject ? currentProject.name || '' : ''))
+                    fetch(API_URL + '?action=getUnitPrices&pipelineId=' + encodeURIComponent(currentPipeline.id) + '&projectName=' + encodeURIComponent(currentProject ? currentProject.name || '' : ''))
                 ]);
                 const result = await res1.json();
                 const upResult = await res2.json();
@@ -8063,6 +8069,11 @@ window.addEventListener('message', async function(event) {
         function showUnitPriceManager() {
             document.getElementById('unitPriceBackdrop').style.display = 'block';
             document.getElementById('unitPriceModal').style.display = 'flex';
+            const sub = document.getElementById('unitPriceModalSubtitle');
+            if (sub) {
+                const pname = currentPipeline ? (currentPipeline.name || currentPipeline.id) : '—';
+                sub.textContent = '📍 ' + pname + '　（單價為本工程專屬）';
+            }
             renderUnitPriceManager();
         }
 
@@ -8145,7 +8156,7 @@ window.addEventListener('message', async function(event) {
             const unitPrice = parseFloat(priceEl.value);
             if (isNaN(unitPrice) || unitPrice < 0) { showToast('請輸入有效單價', 'warning'); return; }
             try {
-                const qs = `?action=saveUnitPrice&methodKey=${encodeURIComponent(methodKey)}&projectName=${encodeURIComponent(projectName)}&unitPrice=${unitPrice}&unit=m`;
+                const qs = `?action=saveUnitPrice&methodKey=${encodeURIComponent(methodKey)}&pipelineId=${encodeURIComponent(currentPipeline ? currentPipeline.id : '')}&projectName=${encodeURIComponent(projectName)}&unitPrice=${unitPrice}&unit=m`;
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
                 if (result.success) {
@@ -8161,7 +8172,7 @@ window.addEventListener('message', async function(event) {
         window.deleteOneUnitPrice = async function(methodKey, projectName) {
             if (!await showConfirm({ title: '刪除單價', message: `確定刪除「${methodKey}」的單價？`, okText: '刪除', danger: true })) return;
             try {
-                const qs = `?action=deleteUnitPrice&methodKey=${encodeURIComponent(methodKey)}&projectName=${encodeURIComponent(projectName)}`;
+                const qs = `?action=deleteUnitPrice&methodKey=${encodeURIComponent(methodKey)}&pipelineId=${encodeURIComponent(currentPipeline ? currentPipeline.id : '')}&projectName=${encodeURIComponent(projectName)}`;
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
                 if (result.success) {
@@ -8180,7 +8191,7 @@ window.addEventListener('message', async function(event) {
             if (!methodKey) { showToast('請選擇或輸入施工方式', 'warning'); return; }
             if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效單價', 'warning'); return; }
             try {
-                const qs = `?action=saveUnitPrice&methodKey=${encodeURIComponent(methodKey)}&projectName=${encodeURIComponent(projectName)}&unitPrice=${unitPrice}&unit=m`;
+                const qs = `?action=saveUnitPrice&methodKey=${encodeURIComponent(methodKey)}&pipelineId=${encodeURIComponent(currentPipeline ? currentPipeline.id : '')}&projectName=${encodeURIComponent(projectName)}&unitPrice=${unitPrice}&unit=m`;
                 const res = await fetch(API_URL + qs);
                 const result = await res.json();
                 if (result.success) {
