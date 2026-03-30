@@ -308,13 +308,9 @@
         /* 手機版優化 */
         @media (max-width: 768px) {
             /* 縮小右側按鈕 */
-            .gantt-btn, .milestone-btn {
-                padding: 6px 10px;
-                font-size: 11px;
-                border-radius: 6px;
-            }
+            .gantt-btn, 
             .gantt-btn { bottom: 60px; right: 8px; }
-            .milestone-btn { bottom: 25px; right: 8px; }
+            
         }
         
         /* 甘特圖改為浮動視窗 */
@@ -449,81 +445,19 @@
         .gantt-actions { display: flex; gap: 4px; }
         
         /* 施工里程碑面板 */
-        .milestone-btn {
-            position: absolute;
-            bottom: 30px;
-            right: 10px;
-            z-index: 1000;
-            background: #3f51b5;
-            color: white;
-            padding: 10px 14px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-            display: none;
-        }
-        .milestone-btn:hover { background: #303f9f; }
-        .milestone-panel {
-            position: absolute;
-            bottom: 70px;
-            right: 10px;
-            z-index: 1000;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-            width: 420px;
-            max-height: 420px;
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .milestone-panel-header {
-            background: #3f51b5;
-            color: white;
-            padding: 10px 14px;
-            font-weight: bold;
-            font-size: 13px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        .milestone-panel-body {
-            overflow-y: auto;
-            flex: 1;
-        }
-        .milestone-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-        .milestone-table th {
-            background: #e8eaf6;
-            color: #3f51b5;
-            padding: 6px 8px;
-            text-align: center;
-            border-bottom: 2px solid #c5cae9;
-            position: sticky;
-            top: 0;
-            z-index: 1;
-        }
-        .milestone-table td {
-            padding: 5px 8px;
-            border-bottom: 1px solid #f0f0f0;
-            text-align: center;
-            vertical-align: middle;
-        }
-        .milestone-table tr:hover td { background: #f5f5f5; }
-        .milestone-actual { color: #1976d2; font-weight: bold; }
-        .milestone-ahead { color: #27ae60; }
-        .milestone-behind { color: #e53935; }
-        .milestone-panel-footer {
-            padding: 8px 10px;
-            border-top: 1px solid #eee;
-            flex-shrink: 0;
-        }
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         /* 段落管理面板 */
         .segment-panel {
@@ -1132,7 +1066,7 @@ kbd {
         
         .tool-item.edit { color: #FF6B35; }
         .tool-item.gantt { color: #00695C; }
-        .tool-item.milestone { color: #3f51b5; }
+        
         
         .tool-item.disabled {
             opacity: 0.5;
@@ -1529,29 +1463,6 @@ kbd {
     </div>
 
     <!-- 施工里程碑 -->
-    <div id="milestoneBtn" class="milestone-btn" onclick="toggleMilestonePanel()">📅 施工里程碑</div>
-    <div id="milestonePanel" class="milestone-panel">
-        <div class="milestone-panel-header" style="padding:6px 10px;">
-            <span style="font-size:12px;">📅 施工里程碑</span>
-            <span style="cursor:pointer;font-size:14px;" onclick="toggleMilestonePanel()">✕</span>
-        </div>
-        <div class="milestone-panel-body">
-            <table class="milestone-table">
-                <thead>
-                    <tr>
-                        <th>目標日期</th>
-                        <th style="color:#e53935">埋設(m)</th>
-                        <th style="color:#1976d2">推進(m)</th>
-                        <th style="color:#388e3c">水管橋(m)</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="milestoneTableBody"></tbody>
-            </table>
-        </div>
-        <div class="milestone-panel-footer">
-            <button onclick="showAddMilestoneForm()" style="width:100%;padding:6px;background:#3f51b5;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">＋ 新增里程碑</button>
-        </div>
     </div>
     
     <!-- 段落管理面板 -->
@@ -3010,7 +2921,6 @@ kbd {
             loadPermitZones();
             
             // 隱藏獨立的工具按鈕（改用抽屜）
-            document.getElementById('milestoneBtn').style.display = 'none';
             document.getElementById('ganttBtn').style.display = 'none';
             document.getElementById('editPathBtn').style.display = 'none';
             
@@ -5876,17 +5786,16 @@ kbd {
             try {
                 // 平行抓取三個 API
                 const projName = currentProject ? (currentProject.name || '') : '';
-                const [result, milestoneResult, upResult] = await Promise.all([
+                const [result, upResult] = await Promise.all([
                     fetch(API_URL + '?action=getGanttItems&pipelineId=' + encodeURIComponent(currentPipeline.id)).then(r => r.json()),
-                    fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(currentPipeline.id)).then(r => r.json()),
                     fetch(API_URL + '?action=getUnitPrices&pipelineId=' + encodeURIComponent(currentPipeline.id) + '&projectName=' + encodeURIComponent(projName)).then(r => r.json())
                 ]);
                 
                 const items = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
-                const milestones = (milestoneResult.milestones || []).sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+                const milestones = [];
                 const unitPrices = upResult.prices || [];
                 
-                console.log('載入項目數:', items.length, '里程碑數:', milestones.length, '單價筆數:', unitPrices.length);
+                console.log('載入項目數:', items.length, '單價筆數:', unitPrices.length);
                 
                 // 資料備妥，產生完整 HTML 並替換視窗內容
                 const html = createGanttWindowHTML(items, currentPipeline, milestones, unitPrices);
@@ -5919,7 +5828,7 @@ kbd {
             const itemsJson = safeJson(items);
             const segmentsJson = safeJson(pipeline.segments || []);
             const pipelineJson = safeJson(pipeline);
-            const milestonesJson = safeJson(milestones || []);
+            const milestonesJson = "[]"; // 里程碑功能已移除
             const nameEscaped = (pipeline.name || '').replace(/'/g, "\\'").replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
             const unitPricesJson = safeJson(unitPrices || []);
             const apiUrl = API_URL;
@@ -5946,8 +5855,8 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; displ
 .gantt-bar { position: absolute; height: 100%; border-radius: 3px; display: flex; align-items: center; padding: 0 6px; font-size: 9px; color: white; font-weight: bold; }
 .gantt-progress { position: absolute; left: 100%; padding-left: 6px; font-size: 10px; color: #333; font-weight: 600; white-space: nowrap; display: flex; align-items: center; height: 100%; }
 .gantt-today { position: absolute; width: 2px; height: 100%; background: #e53935; z-index: 10; }
-.milestone-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; }
-.milestone-tooltip { font-size: 11px; }
+
+
 .edit-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, 95vw); background: white; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); padding: 16px; display: none; z-index: 200; max-height: 85vh; overflow-y: auto; }
 .edit-panel.show { display: block; }
 .edit-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 199; display: none; }
@@ -6026,18 +5935,17 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </style>
 </head>
 <body>
-<div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showAddForm()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">＋ 新增</button><button onclick="showMilestoneManager()" style="background:rgba(63,81,181,0.7);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📅 里程碑</button><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button><button onclick="exportToExcel()" style="background:rgba(76,175,80,0.8);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📥 匯出Excel</button></div></div>
+<div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showAddForm()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">＋ 新增</button><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button><button onclick="exportToExcel()" style="background:rgba(76,175,80,0.8);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📥 匯出Excel</button></div></div>
 <div style="background:#f5f5f5;border-bottom:1px solid #e0e0e0;padding:4px 12px;display:flex;align-items:center;gap:6px;font-size:12px;color:#555;">
     <span>🔍</span>
     <button onclick="adjustZoom(-1)" style="padding:1px 9px;border:1px solid #bbb;border-radius:3px;cursor:pointer;font-size:15px;font-weight:bold;background:white;line-height:1.4;">−</button>
-    <span id="zoomLabel" style="min-width:60px;text-align:center;font-size:11px;color:#666;">概覽</span>
+    <span id="zoomLabel" style="min-width:60px;text-align:center;font-size:11px;color:#666;">0.5 px/日</span>
     <button onclick="adjustZoom(1)" style="padding:1px 9px;border:1px solid #bbb;border-radius:3px;cursor:pointer;font-size:15px;font-weight:bold;background:white;line-height:1.4;">＋</button>
     <span style="color:#aaa;font-size:11px;margin-left:4px;">← 可水平捲動</span>
 </div>
 <div id="chartScrollOuter" class="chart-area" style="overflow-x:auto;overflow-y:auto;padding:10px;">
     <div id="chartScrollInner" style="min-width:100%;">
     <div class="container" id="chart"></div>
-    <div class="container milestone-section" id="milestones"></div>
     </div>
 </div>
 <div class="edit-backdrop" id="editBackdrop" onclick="closePanel()"></div>
@@ -6049,35 +5957,32 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 <div id="panelBody"></div>
 </div>
 <button class="add-btn" onclick="showAddForm()" title="新增甘特圖項目" style="display:none;">＋</button>
-<button class="add-btn" onclick="showMilestoneManager()" title="里程碑管理" style="display:none;background:#3f51b5;font-size:16px;">📅</button>
 <script>
 const items = ${itemsJson};
 const segments = ${segmentsJson};
 const pipeline = ${pipelineJson};
-let milestones = ${milestonesJson};
+let milestones = [];
 let unitPrices = ${unitPricesJson};
 const API_URL = '${apiUrl}';
 let editingItem = null;
-let pxPerDay = 2;  // 縮放：每天幾像素（概覽模式）
-const ZOOM_LEVELS = [1, 2, 4, 8, 16, 32];
-const ZOOM_LABELS = ['極小', '概覽', '正常', '詳細', '精細', '放大'];
-let zoomIdx = 1;  // 預設概覽(2px)
+let pxPerDay = 0.5;  // 縮放：每天幾像素
+const ZOOM_LEVELS = [0.2, 0.3, 0.5, 0.7, 1.0];
+const ZOOM_LABELS = ['0.2', '0.3', '0.5', '0.7', '1.0'];
+let zoomIdx = 2;  // 預設 0.5px/日
 
 function adjustZoom(delta) {
     zoomIdx = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, zoomIdx + delta));
     pxPerDay = ZOOM_LEVELS[zoomIdx];
     var lbl = document.getElementById('zoomLabel');
-    if (lbl) lbl.textContent = ZOOM_LABELS[zoomIdx] + ' (' + pxPerDay + 'px/日)';
+    if (lbl) lbl.textContent = ZOOM_LABELS[zoomIdx] + ' px/日';
     renderChart();
-    renderMilestones();
 }
 
 function setZoom(px) {
     zoomIdx = ZOOM_LEVELS.indexOf(px);
-    if (zoomIdx < 0) zoomIdx = 1;
+    if (zoomIdx < 0) zoomIdx = 2;
     pxPerDay = px;
     renderChart();
-    renderMilestones();
 }
 
 function exportToExcel() {
@@ -6239,18 +6144,6 @@ function showConfirm({ title='確認', message='', okText='確定', cancelText='
 // ============================================
 
 // 確保 methodData 是物件而不是字串
-milestones = milestones.map(m => {
-    if (typeof m.methodData === 'string') {
-        try {
-            m.methodData = JSON.parse(m.methodData);
-        } catch(e) {
-            console.error('解析 methodData 失敗:', e);
-            m.methodData = {};
-        }
-    }
-    return m;
-});
-
 function getItemProgress(item) {
     const label = item.label || '';
     const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
@@ -6562,17 +6455,14 @@ async function deleteItem() {
 // 重新載入甘特圖資料（不關視窗）
 async function reloadGanttData() {
     try {
-        const [r1, r2, r3] = await Promise.all([
+        const [r1, r3] = await Promise.all([
             fetch(API_URL + '?action=getGanttItems&pipelineId=' + pipeline.id).then(r => r.json()),
-            fetch(API_URL + '?action=getMilestones&pipelineId=' + pipeline.id).then(r => r.json()),
             fetch(API_URL + '?action=getUnitPrices&pipelineId=' + encodeURIComponent(pipeline.id)).then(r => r.json())
         ]);
         items.length = 0;
         (r1.items || []).sort((a,b) => new Date(a.startDate)-new Date(b.startDate)).forEach(i => items.push(i));
-        milestones = (r2.milestones || []).sort((a,b) => new Date(a.endDate)-new Date(b.endDate));
         unitPrices = r3.prices || [];
         renderChart();
-        renderMilestones();
     } catch(e) { showToast('重新載入失敗：' + e.message, 'error'); }
 }
 
@@ -6878,508 +6768,13 @@ function showUnitPriceMgr() {
 }
 
 // 里程碑管理面板（表格式）
-function getMilestoneMethodKeys() {
-    // 只從 segments 產生完整 methodKey（管徑+管材+工法），避免舊資料的簡稱混入
-    const keys = new Set();
-    segments.forEach(seg => {
-        const k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
-        if (k) keys.add(k);
-    });
-    return [...keys].sort();
-}
+function showMilestoneManager() { /* 里程碑功能已移除 */ }
 
-async function showMilestoneManager() {
-    document.getElementById('panelTitle').textContent = '📅 里程碑管理';
-    renderMilestoneManagerList();
-    document.getElementById('editPanel').classList.add('show');
-    document.getElementById('editBackdrop').classList.add('show');
-}
-
-function renderMilestoneManagerList() {
-    const methodKeys = getMilestoneMethodKeys();
-    const today = new Date();
-    
-    let html = '<div style="overflow-x:auto;font-size:11px;">';
-    html += '<table style="width:100%;border-collapse:collapse;min-width:300px;">';
-    // 表頭
-    html += '<thead><tr style="background:#3f51b5;color:white;">';
-    html += '<th style="padding:6px 8px;white-space:nowrap;text-align:left;">目標日期</th>';
-    methodKeys.forEach(k => {
-        html += '<th style="padding:6px 4px;white-space:nowrap;text-align:center;">' + k + '(m)</th>';
-    });
-    html += '<th style="padding:6px 4px;text-align:center;">操作</th>';
-    html += '</tr></thead><tbody>';
-    
-    if (!milestones || milestones.length === 0) {
-        html += '<tr><td colspan="' + (methodKeys.length + 2) + '" style="text-align:center;padding:20px;color:#999;">尚無里程碑</td></tr>';
-    } else {
-        milestones.forEach((ms, idx) => {
-            const isThisWeek = new Date(ms.endDate) >= today && (idx === 0 || new Date(milestones[idx-1].endDate) < today);
-            const rowBg = isThisWeek ? 'background:#fff9e6;font-weight:bold;' : (idx % 2 === 0 ? 'background:#fafafa;' : '');
-            html += '<tr style="' + rowBg + 'border-bottom:1px solid #eee;">';
-            html += '<td style="padding:5px 8px;white-space:nowrap;color:#3f51b5;font-weight:bold;">' + (isThisWeek ? '🔸 ' : '') + ms.endDate + '</td>';
-            methodKeys.forEach(k => {
-                const val = (ms.methodData && ms.methodData[k]) ? Math.round(Number(ms.methodData[k])) + 'm' : '0m';
-                html += '<td style="padding:5px 4px;text-align:center;">' + val + '</td>';
-            });
-            html += '<td style="padding:5px 4px;text-align:center;white-space:nowrap;">';
-            html += '<span style="cursor:pointer;color:#1976d2;margin-right:6px;" onclick="showEditMilestoneForm(' + idx + ')">✏️</span>';
-            html += '<span style="cursor:pointer;color:#e53935;" onclick="deleteMilestoneItem(' + idx + ')">🗑️</span>';
-            html += '</td></tr>';
-        });
-    }
-    html += '</tbody></table></div>';
-    html += '<button class="btn-primary" onclick="showAddMilestoneForm()" style="margin-top:10px;width:100%;">＋ 新增里程碑</button>';
-    document.getElementById('panelBody').innerHTML = html;
-}
-
-function showAddMilestoneForm() {
-    const methodKeys = getMilestoneMethodKeys();
-    document.getElementById('panelTitle').textContent = '＋ 新增里程碑';
-    let html = '<button onclick="showMilestoneManager()" style="background:none;border:none;color:#3f51b5;cursor:pointer;font-size:12px;margin-bottom:10px;">← 返回列表</button>';
-    html += '<label>目標日期</label><input id="msDate" type="date">';
-    methodKeys.forEach(k => {
-        html += '<label>' + k + ' 目標(m)</label><input id="ms_' + k.replace(/ /g,'_') + '" type="number" placeholder="0">';
-    });
-    html += '<button class="btn-primary" onclick="saveMilestoneItem(null)">💾 新增</button>';
-    document.getElementById('panelBody').innerHTML = html;
-}
-
-function showEditMilestoneForm(idx) {
-    const ms = milestones[idx];
-    const methodKeys = getMilestoneMethodKeys();
-    document.getElementById('panelTitle').textContent = '✏️ 編輯里程碑';
-    let html = '<button onclick="showMilestoneManager()" style="background:none;border:none;color:#3f51b5;cursor:pointer;font-size:12px;margin-bottom:10px;">← 返回列表</button>';
-    html += '<label>目標日期</label><input id="msDate" type="date" value="' + (ms.endDate || '') + '">';
-    methodKeys.forEach(k => {
-        const val = (ms.methodData && ms.methodData[k]) ? ms.methodData[k] : '';
-        html += '<label>' + k + ' 目標(m)</label><input id="ms_' + k.replace(/ /g,'_') + '" type="number" placeholder="0" value="' + val + '">';
-    });
-    html += '<button class="btn-primary" onclick="saveMilestoneItem(' + idx + ')">💾 儲存</button>';
-    document.getElementById('panelBody').innerHTML = html;
-}
-
-async function saveMilestoneItem(idx) {
-    const date = document.getElementById('msDate').value;
-    if (!date) { showToast('請填寫目標日期', 'warning'); return; }
-    const methodKeys = getMilestoneMethodKeys();
-    const methodData = {};
-    methodKeys.forEach(k => {
-        const el = document.getElementById('ms_' + k.replace(/ /g,'_'));
-        if (el && el.value) methodData[k] = Number(el.value);
-    });
-    
-    const isEdit = idx !== null;
-    const ms = isEdit ? milestones[idx] : null;
-    // Apps Script 需要 week, startDate, endDate, methodData
-    const weekNum = isEdit ? (ms.week || '') : ('W' + (milestones.length + 1));
-    const params = new URLSearchParams({
-        action: isEdit ? 'updateMilestone' : 'addMilestone',
-        pipelineId: pipeline.id,
-        week: weekNum,
-        startDate: date,
-        endDate: date,
-        methodData: JSON.stringify(methodData),
-        notes: ''
-    });
-    if (isEdit && ms && ms.id) params.append('milestoneId', ms.id);
-    
-    try {
-        const res = await fetch(API_URL + '?' + params.toString());
-        const result = await res.json();
-        if (result.success) {
-            showToast(isEdit ? '里程碑已更新' : '里程碑已新增', 'success');
-            if (window.opener) window.opener.postMessage({ type: 'milestoneChanged' }, '*');
-            await reloadGanttData();
-            showMilestoneManager();
-        } else { showToast('失敗：' + (result.error || ''), 'error'); }
-    } catch(e) { showToast('失敗：' + e.message, 'error'); }
-}
-
-async function deleteMilestoneItem(idx) {
-    const ms = milestones[idx];
-    if (!await showConfirm({ title: '刪除里程碑', message: ms.endDate, okText: '刪除', danger: true })) return;
-    try {
-        const res = await fetch(API_URL + '?action=deleteMilestone&milestoneId=' + ms.id);
-        const result = await res.json();
-        if (result.success) {
-            showToast('里程碑已刪除', 'success');
-            if (window.opener) window.opener.postMessage({ type: 'milestoneChanged' }, '*');
-            await reloadGanttData();
-            showMilestoneManager();
-        } else { showToast('失敗：' + (result.error || ''), 'error'); }
-    } catch(e) { showToast('失敗：' + e.message, 'error'); }
-}
 
 // 渲染里程碑區域
-function renderMilestones() {
-    const container = document.getElementById('milestones');
-    if (!container || !milestones || milestones.length === 0) {
-        if (container) container.style.display = 'none';
-        return;
-    }
-    
-    const today = new Date();
-    const dates = items.flatMap(item => [new Date(item.startDate), new Date(item.endDate)]);
-    let minDate = new Date(Math.min(...dates));
-    let maxDate = new Date(Math.max(...dates));
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 7);
-    
-    // 過濾出在時間範圍內的里程碑
-    const visibleMilestones = milestones.filter(m => {
-        const mDate = new Date(m.endDate);
-        return mDate >= minDate && mDate <= maxDate;
-    });
-    
-    if (visibleMilestones.length === 0) {
-        container.style.display = 'none';
-        return;
-    }
-    
-    // 計算各施工方式的實際完工長度
-    function getActualLength() {
-        const actual = {};
-        segments.forEach(seg => {
-            const methodKey = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
-            if (!methodKey) return;
-            if (!actual[methodKey]) actual[methodKey] = 0;
-            const start = Number(seg.startDistance);
-            const end = Number(seg.endDistance);
-            const numSmall = Math.ceil((end - start) / 10);
-            const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
-            for (let i = 0; i < numSmall; i++) {
-                if (statusArr[i] && statusArr[i] !== '0' && statusArr[i].trim() !== '') {
-                    actual[methodKey] += Math.min(start + (i+1)*10, end) - (start + i*10);
-                }
-            }
-        });
-        return actual;
-    }
-    
-    // 計算各施工方式的預定長度（從甘特圖項目累加，含進行中項目的比例）
-    function getPlannedLength(milestone) {
-        const planned = {};
-        const milestoneDate = new Date(milestone.endDate);
-        
-        items.forEach(item => {
-            const itemStart = new Date(item.startDate);
-            const itemEnd = new Date(item.endDate);
-            
-            // 如果里程碑日期在項目開始前，不計算
-            if (milestoneDate < itemStart) return;
-            
-            const label = item.label || '';
-            const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
-            const rangeMatch = label.match(/#(\\d+)～?~?#(\\d+)/);
-            
-            if (segMatch && rangeMatch) {
-                const segNum = parseInt(segMatch[1]);
-                const seg = segments.find(s => s.segmentNumber === segNum);
-                if (seg) {
-                    const method = seg.method || '';
-                    if (!method) return;
-                    if (!planned[method]) planned[method] = 0;
-                    
-                    const from = parseInt(rangeMatch[1]) - 1;
-                    const to = parseInt(rangeMatch[2]) - 1;
-                    const start = Number(seg.startDistance);
-                    const end = Number(seg.endDistance);
-                    const segLen = end - start;
-                    const numSmall = Math.ceil(segLen / 10);
-                    
-                    // 計算此項目的總長度
-                    let totalLength = 0;
-                    for (let i = from; i <= to && i < numSmall; i++) {
-                        const smallStart = start + i * 10;
-                        const smallEnd = Math.min(start + (i + 1) * 10, end);
-                        totalLength += smallEnd - smallStart;
-                    }
-                    
-                    // 判斷項目狀態並計算應完成長度
-                    if (milestoneDate >= itemEnd) {
-                        // 里程碑在項目結束後：100% 完成
-                        planned[method] += totalLength;
-                    } else {
-                        // 里程碑在項目進行中：按時間比例計算
-                        const totalDays = (itemEnd - itemStart) / (1000 * 60 * 60 * 24);
-                        const elapsedDays = (milestoneDate - itemStart) / (1000 * 60 * 60 * 24);
-                        const progressRatio = elapsedDays / totalDays;
-                        planned[method] += totalLength * progressRatio;
-                    }
-                }
-            }
-        });
-        
-        return planned;
-    }
-    
-    const actualLength = getActualLength();
-    const methods = ['埋設', '推進', '水管橋', '潛鑽', '潛遁', '隧道'];
-    const methodColors = {
-        '埋設': '#e53935',
-        '推進': '#1976d2',
-        '水管橋': '#388e3c',
-        '潛鑽': '#f57c00',
-        '潛遁': '#7b1fa2',
-        '隧道': '#ff5722'
-    };
-    
-    // 建立里程碑時間軸容器（簡化版）
-    let html = '<div style="display:flex;margin-top:20px;border-top:1px solid #ddd;padding-top:10px;">';
-    html += '<div style="width:180px;font-size:11px;font-weight:bold;color:#3f51b5;padding:8px;position:sticky;left:0;background:white;z-index:2;flex-shrink:0;">🎯 里程碑</div>';
-    html += '<div style="flex:1;position:relative;height:60px;padding-right:80px;">';
-    
-    const totalRange = maxDate.getTime() - minDate.getTime();
-    
-    visibleMilestones.forEach((milestone, idx) => {
-        const plannedLength = getPlannedLength(milestone);
-        const milestoneDate = new Date(milestone.endDate);
-        const dateStr = milestoneDate.toLocaleDateString('zh-TW');
-        
-        // 計算里程碑在時間軸上的位置（使用毫秒數計算）
-        const milestoneOffset = milestoneDate.getTime() - minDate.getTime();
-        const milestonePct = (milestoneOffset / totalRange) * 100;
-        
-        // 建立 tooltip 內容（橫向簡化版）
-        let tooltipHtml = '<div style="min-width:300px;max-width:500px;">';
-        tooltipHtml += '<div style="font-weight:bold;margin-bottom:10px;color:#3f51b5;border-bottom:2px solid #ddd;padding-bottom:6px;font-size:12px;">' + dateStr + '</div>';
-        
-        // 收集所有有資料的 methodKey（從 methodData + actualLength 聯集）
-        const allMethodKeys = new Set([
-            ...Object.keys(milestone.methodData || {}),
-            ...Object.keys(actualLength)
-        ]);
-        
-        let hasData = false;
-        allMethodKeys.forEach(key => {
-            const target = Math.round(Number((milestone.methodData || {})[key] || 0));
-            const actual = Math.round(actualLength[key] || 0);
-            if (target > 0 || actual > 0) hasData = true;
-        });
-        
-        if (hasData) {
-            // 排序：先依工法類型（埋設/推進/水管橋...）再依管徑
-            const sortedKeys = [...allMethodKeys].filter(key => {
-                const target = Math.round(Number((milestone.methodData || {})[key] || 0));
-                const actual = Math.round(actualLength[key] || 0);
-                return target > 0 || actual > 0;
-            }).sort();
-            
-            sortedKeys.forEach(key => {
-                const target = Math.round(Number((milestone.methodData || {})[key] || 0));
-                const actual = Math.round(actualLength[key] || 0);
-                // 顏色：從 key 中判斷施工方式
-                const baseMethod = methods.find(m => key.includes(m)) || '';
-                const color = methodColors[baseMethod] || '#666';
-                tooltipHtml += '<div style="margin-bottom:6px;font-size:10px;">';
-                tooltipHtml += '<span style="font-weight:bold;color:' + color + ';">' + key + '</span>: ';
-                tooltipHtml += '<span style="color:#4CAF50;">完工 ' + actual + 'm</span> / ';
-                tooltipHtml += '<span style="color:#3f51b5;">目標 ' + target + 'm</span>';
-                tooltipHtml += '</div>';
-            });
-        } else {
-            tooltipHtml += '<div style="color:#999;font-size:10px;text-align:center;padding:10px;">尚無資料</div>';
-        }
-        tooltipHtml += '</div>';
-        
-        // 里程碑標記（菱形旗幟樣式）
-        const isPast = milestoneDate < today;
-        const markerColor = isPast ? '#9e9e9e' : '#3f51b5';
-        const flagColor = isPast ? '#e0e0e0' : '#e8eaf6';
-        html += '<div class="milestone-marker-icon" style="position:absolute;left:' + milestonePct + '%;top:0;transform:translateX(-50%);cursor:pointer;display:flex;flex-direction:column;align-items:center;" data-tooltip-id="ms' + idx + '">';
-        // 垂直線
-        html += '<div style="width:1px;height:16px;background:' + markerColor + ';opacity:0.6;"></div>';
-        // 菱形標記
-        html += '<div style="width:10px;height:10px;background:' + markerColor + ';transform:rotate(45deg);border-radius:2px;margin:2px 0;"></div>';
-        // 日期標籤
-        html += '<div style="background:' + markerColor + ';color:white;font-size:9px;font-weight:bold;padding:2px 5px;border-radius:3px;white-space:nowrap;margin-top:2px;">' + (milestoneDate.getMonth() + 1) + '/' + milestoneDate.getDate() + '</div>';
-        html += '</div>';
-        
-        // tooltip（預設隱藏）
-        html += '<div id="ms' + idx + '" class="milestone-tooltip" style="display:none;position:absolute;left:' + milestonePct + '%;top:45px;transform:translateX(-50%);background:white;border:2px solid #3f51b5;border-radius:6px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,0.2);z-index:1000;white-space:nowrap;">';
-        html += tooltipHtml;
-        html += '</div>';
-    });
-    
-    html += '</div></div>';
-    
-    // ===== 累積預算金額 vs 時間 迷你圖 =====
-    var budgetRows = computeMonthlyCumulative();
-    if (budgetRows.length >= 1 && maxDate.getTime() > minDate.getTime()) {
-        var totalRange2 = maxDate.getTime() - minDate.getTime();
-        var maxCum2 = budgetRows[budgetRows.length-1].cumulative;
-        var actualDone2 = 0;
-        items.forEach(function(item) {
-            var prog = getItemProgress(item);
-            var up2 = getEffectiveUnitPrice(item);
-            if (prog && up2) actualDone2 += prog.done * up2;
-        });
+function renderMilestones() { /* 里程碑功能已移除 */ }
 
-        if (maxCum2 > 0) {
-            var yMax2 = maxCum2 * 1.1;
-
-            function dateToPct(d) {
-                return Math.max(0, Math.min(100, (d.getTime() - minDate.getTime()) / totalRange2 * 100));
-            }
-
-            // Build data points
-            var pts2 = budgetRows.map(function(r) {
-                var parts = r.month.split('-');
-                var midDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, 15);
-                return { pct: dateToPct(midDate), cum: r.cum || r.cumulative, month: r.month, midDate: midDate };
-            });
-
-            var svgPts = pts2.map(function(p) {
-                return (p.pct * 10).toFixed(1) + ',' + ((1 - p.cum/yMax2)*100).toFixed(1);
-            }).join(' ');
-            var svgArea = 'M0,100 ' + pts2.map(function(p) {
-                return 'L' + (p.pct*10).toFixed(1) + ',' + ((1-p.cum/yMax2)*100).toFixed(1);
-            }).join(' ') + ' L' + (pts2[pts2.length-1].pct*10).toFixed(1) + ',100 Z';
-
-            var todayPct = dateToPct(new Date());
-            var todayX = (todayPct * 10).toFixed(1);
-            var actY = ((1 - actualDone2/yMax2)*100).toFixed(1);
-
-            // Y labels
-            var yLabels = '';
-            [0, 0.33, 0.67, 1].forEach(function(frac) {
-                var v = yMax2 * frac;
-                var btm = (frac * 100).toFixed(0);
-                yLabels += '<div style="position:absolute;right:4px;bottom:' + btm + '%;transform:translateY(50%);font-size:8px;color:#aaa;white-space:nowrap;">' + fmtYen(v) + '</div>';
-            });
-
-            var msLines = '';  // 里程碑線已移除
-
-            // Hover tooltip overlay - invisible divs at each data point
-            var hoverDivs = '';
-            pts2.forEach(function(p, i) {
-                var nextPct = i < pts2.length - 1 ? pts2[i+1].pct : 100;
-                var w = (nextPct - p.pct).toFixed(2);
-                var dateStr = p.midDate.getFullYear() + '/' + (p.midDate.getMonth()+1);
-                hoverDivs += '<div class="budget-hover-zone" data-date="' + dateStr + '" data-cum="' + fmtYen(p.cum) + '" data-monthly="' + fmtYen(budgetRows[i].monthly || (budgetRows[i].cum - (i>0?budgetRows[i-1].cum:0))) + '" style="position:absolute;left:' + p.pct.toFixed(2) + '%;width:' + (Math.max(parseFloat(w), 2)).toFixed(2) + '%;top:0;bottom:20px;cursor:crosshair;"></div>';
-            });
-
-            html += '<div style="display:flex;margin-top:8px;">';
-            html += '<div style="width:180px;flex-shrink:0;font-size:10px;color:#7b1fa2;font-weight:bold;padding:8px 8px 20px 8px;position:sticky;left:0;background:white;z-index:2;">'; 
-            html += '💰 預算進度';
-            html += yLabels;
-            html += '</div>';
-            html += '<div style="flex:1;padding-right:80px;position:relative;height:120px;">';
-            html += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="100" style="display:block;position:absolute;top:0;left:0;right:0;">';
-            html += '<defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.2"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.02"/></linearGradient></defs>';
-            [0.33, 0.67, 1].forEach(function(frac) {
-                var gy = ((1-frac)*100).toFixed(1);
-                html += '<line x1="0" y1="' + gy + '" x2="1000" y2="' + gy + '" stroke="#eee" stroke-width="0.5"/>';
-            });
-            html += '<path d="' + svgArea + '" fill="url(#bg2)"/>';
-            html += '<polyline points="' + svgPts + '" fill="none" stroke="#7b1fa2" stroke-width="2" vector-effect="non-scaling-stroke"/>';
-            // 今日紅線已移除
-            // 綠色虛線和實際點已移除（從 hover 查看）
-            // Data point dots (small, for hover targets)
-            pts2.forEach(function(p) {
-                html += '<circle cx="' + (p.pct*10).toFixed(1) + '" cy="' + ((1-p.cum/yMax2)*100).toFixed(1) + '" r="2.5" fill="#7b1fa2" stroke="white" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0.7"/>';
-            });
-            html += '</svg>';
-            html += '<div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:#ddd;"></div>';
-            // msLines 已清空
-            // Hover zones (on top of SVG)
-            html += hoverDivs;
-            // Tooltip div
-            html += '<div id="budgetTooltip" style="display:none;position:absolute;background:rgba(0,0,0,0.75);color:white;font-size:11px;padding:6px 10px;border-radius:6px;pointer-events:none;z-index:100;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>';
-            html += '</div>';
-            html += '</div>';
-        }
-    }
-    
-    container.innerHTML = html;
-    
-    // 綁定 hover 事件
-    document.querySelectorAll('.milestone-marker-icon').forEach(marker => {
-        const tooltipId = marker.getAttribute('data-tooltip-id');
-        const tooltip = document.getElementById(tooltipId);
-        
-        marker.addEventListener('mouseenter', function() {
-            tooltip.style.display = 'block';
-        });
-        
-        marker.addEventListener('mouseleave', function() {
-            tooltip.style.display = 'none';
-        });
-    });
-
-    // 預算圖 hover tooltip
-    const budgetTip = document.getElementById('budgetTooltip');
-    if (budgetTip) {
-        document.querySelectorAll('.budget-hover-zone').forEach(function(zone) {
-            zone.addEventListener('mouseenter', function(e) {
-                const dateStr = zone.dataset.date;
-                const cum = zone.dataset.cum;
-                const mon = zone.dataset.monthly;
-                budgetTip.innerHTML = '<div style="font-weight:bold;margin-bottom:3px;">📅 ' + dateStr + '</div>' +
-                    '<div>當月：' + mon + ' 元</div>' +
-                    '<div>累積：<b>' + cum + ' 元</b></div>';
-                budgetTip.style.display = 'block';
-                // position relative to chart container
-                const rect = zone.parentElement.getBoundingClientRect();
-                const zoneRect = zone.getBoundingClientRect();
-                var left = zoneRect.left - rect.left + zoneRect.width / 2;
-                var top = zoneRect.top - rect.top - 10;
-                // flip if near right edge
-                if (left + 160 > rect.width) left = left - 160;
-                if (top < 40) top = zoneRect.bottom - rect.top + 4;
-                budgetTip.style.left = left + 'px';
-                budgetTip.style.top = top + 'px';
-                budgetTip.style.transform = 'translateY(-100%)';
-            });
-            zone.addEventListener('mouseleave', function() {
-                budgetTip.style.display = 'none';
-            });
-            zone.addEventListener('mousemove', function(e) {
-                const rect = zone.parentElement.getBoundingClientRect();
-                var left = e.clientX - rect.left + 12;
-                var top = e.clientY - rect.top - 10;
-                if (left + 160 > rect.width) left = e.clientX - rect.left - 160;
-                budgetTip.style.left = left + 'px';
-                budgetTip.style.top = top + 'px';
-                budgetTip.style.transform = '';
-            });
-        });
-    }
-}
-
-renderChart();
-renderMilestones();
-
-// 監聽來自主頁面的里程碑更新通知
-window.addEventListener('message', async function(event) {
-    if (event.data && event.data.type === 'milestoneChanged') {
-        console.log('收到里程碑變更通知，重新載入...');
-        try {
-            const res = await fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(pipeline.id));
-            const result = await res.json();
-            let newMilestones = (result.milestones || []).sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
-            
-            // 確保 methodData 是物件而不是字串
-            newMilestones = newMilestones.map(m => {
-                if (typeof m.methodData === 'string') {
-                    try {
-                        m.methodData = JSON.parse(m.methodData);
-                    } catch(e) {
-                        console.error('解析 methodData 失敗:', e);
-                        m.methodData = {};
-                    }
-                }
-                return m;
-            });
-            
-            window.milestones = newMilestones;
-            renderMilestones();
-        } catch(e) {
-            console.error('重新載入里程碑失敗:', e);
-        }
-    }
-});
+// 里程碑功能已移除
 </` + `script>
 
 <!-- 統計報表面板 -->
@@ -8216,237 +7611,7 @@ window.addEventListener('message', async function(event) {
         // ========== S 曲線功能結束 ==========
 
         // ========== 施工里程碑功能 ==========
-        let milestoneData = [];
-        let milestonePanelOpen = false;
-        
-        // 取得這個工程實際用到的工法（從統計面板）
-        function getPipelineMethods() {
-            return currentPipelineMethods.length > 0 ? currentPipelineMethods : ['埋設'];
-        }
-        
-        // 工法對應顏色
-        const METHOD_LABEL_COLORS = {
-            '埋設': '#e53935',
-            '推進': '#1976d2',
-            '水管橋': '#388e3c',
-            '潛鑽': '#f57c00',
-            '潛遁': '#7b1fa2',
-            '隧道': '#ff5722',
-        };
-        function getMethodColor(m) { return METHOD_LABEL_COLORS[m] || '#555'; }
-        
-        window.toggleMilestonePanel = function() {
-            milestonePanelOpen = !milestonePanelOpen;
-            const panel = document.getElementById('milestonePanel');
-            panel.style.display = milestonePanelOpen ? 'flex' : 'none';
-            if (milestonePanelOpen) loadMilestones();
-        };
-        
-        async function loadMilestones() {
-            try {
-                const res = await fetch(API_URL + '?action=getMilestones&pipelineId=' + encodeURIComponent(currentPipeline.id));
-                const result = await res.json();
-                milestoneData = (result.milestones || []).sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
-                renderMilestoneTable();
-            } catch(e) { console.error('載入里程碑失敗', e); }
-        }
-        
-        function getActualProgress() {
-            const actual = {};
-            if (!currentPipeline || !currentPipeline.segments) return actual;
-            currentPipeline.segments.forEach(seg => {
-                const method = seg.method || '';
-                if (!method) return;
-                if (!actual[method]) actual[method] = 0;
-                const start = Number(seg.startDistance);
-                const end = Number(seg.endDistance);
-                const numSmall = Math.ceil((end - start) / 10);
-                const statusArr = (seg.smallSegments || '').split(',').map(s => s.trim());
-                for (let i = 0; i < numSmall; i++) {
-                    if (statusArr[i] && statusArr[i] !== '0' && statusArr[i].trim() !== '') {
-                        actual[method] += Math.min(start + (i+1)*10, end) - (start + i*10);
-                    }
-                }
-            });
-            return actual;
-        }
-        
-        function renderMilestoneTable() {
-            const tbody = document.getElementById('milestoneTableBody');
-            if (!tbody) return;
-            
-            const methods = getPipelineMethods();
-            const actual = getActualProgress();
-            
-            // 動態更新表頭
-            const thead = tbody.closest('table').querySelector('thead tr');
-            thead.innerHTML = '<th>目標日期</th>' +
-                methods.map(m => `<th style="color:${getMethodColor(m)}">${m}(m)</th>`).join('') +
-                '<th>操作</th>';
-            
-            if (milestoneData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="${methods.length + 3}" style="color:#aaa;padding:20px;text-align:center;">尚無資料，請新增週次</td></tr>`;
-                return;
-            }
-            
-            const today = new Date();
-            const cumPlan = {};
-            methods.forEach(m => cumPlan[m] = 0);
-            const pastRows = milestoneData.filter(x => new Date(x.endDate) < today);
-            
-            tbody.innerHTML = milestoneData.map((ms, idx) => {
-                const endDate = new Date(ms.endDate);
-                const isPast = endDate < today;
-                const isThisWeek = endDate >= today && (idx === 0 || new Date(milestoneData[idx-1].endDate) < today);
-                const rowBg = isThisWeek ? 'background:#fff9e6;font-weight:bold;' : '';
-                
-                const methodCells = methods.map(m => {
-                    const plan = Number(ms.methodData && ms.methodData[m] || 0);
-                    return `<td>${plan}m</td>`;
-                }).join('');
-                
-                return `<tr style="${rowBg}">
-                    <td style="font-size:12px;white-space:nowrap;">${isThisWeek ? '🔸 ' : ''}${ms.endDate || ''}</td>
-                    ${methodCells}
-                    <td style="white-space:nowrap;">
-                        <span style="cursor:pointer;color:#1976d2;margin-right:4px;" onclick="showEditMilestoneForm('${ms.id}')">✏️</span>
-                        <span style="cursor:pointer;color:#e53935;" onclick="deleteMilestone('${ms.id}')">🗑️</span>
-                    </td>
-                </tr>`;
-            }).join('');
-        }
-        
-        window.showAddMilestoneForm = function() {
-            const weekNum = milestoneData.length + 1;
-            showMilestoneForm({ week: 'W' + weekNum }, false);
-        };
-        
-        window.showEditMilestoneForm = function(id) {
-            const m = milestoneData.find(x => x.id === id);
-            if (m) showMilestoneForm(m, true);
-        };
-        
-        function showMilestoneForm(m, isEdit) {
-            const methods = getPipelineMethods();
-            const div = document.createElement('div');
-            div.style.cssText = 'min-width:220px;max-width:280px;';
-            
-            const methodInputs = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px;">' +
-                methods.map(method => {
-                    const val = (isEdit && m.methodData && m.methodData[method]) ? m.methodData[method] : '';
-                    const color = getMethodColor(method);
-                    return `<div style="flex:1;min-width:70px;">
-                        <div style="font-size:10px;color:${color};margin-bottom:2px;">${method}目標(m)</div>
-                        <input id="ms_method_${method}" type="number" placeholder="0" value="${val}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;">
-                    </div>`;
-                }).join('') + '</div>';
-            
-            div.innerHTML = [
-                '<div style="font-weight:bold;margin-bottom:8px;color:#3f51b5;font-size:13px;">📅 ' + (isEdit ? '編輯' : '新增') + '里程碑</div>',
 
-                '<div style="font-size:11px;color:#666;margin-bottom:3px;">目標日期</div>',
-                '<input id="ms_endDate" type="date" value="' + (m.endDate||'') + '" style="width:100%;padding:5px 7px;border:1px solid #ddd;border-radius:4px;margin-bottom:5px;box-sizing:border-box;font-size:12px;">',
-                methodInputs,
-                '<input id="ms_notes" placeholder="備註（選填）" value="' + (m.notes||'') + '" style="width:100%;padding:5px 7px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;">'
-            ].join('');
-            
-            const saveBtn = document.createElement('button');
-            saveBtn.textContent = '💾 ' + (isEdit ? '儲存' : '新增里程碑');
-            saveBtn.style.cssText = 'width:100%;margin-top:6px;padding:7px;background:#3f51b5;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;font-size:12px;';
-            saveBtn.onclick = isEdit ? function(){ saveMilestoneEdit(m.id); } : function(){ saveMilestoneNew(); };
-            
-            const cancelBtn = document.createElement('button');
-            cancelBtn.textContent = '取消';
-            cancelBtn.style.cssText = 'width:100%;margin-top:3px;padding:5px;background:#e0e0e0;color:#666;border:none;border-radius:5px;cursor:pointer;font-size:12px;';
-            cancelBtn.onclick = function() { map.closePopup(); };
-            
-            div.appendChild(saveBtn);
-            div.appendChild(cancelBtn);
-            
-            // 在地圖中心顯示 popup
-            const center = map.getCenter();
-            L.popup().setLatLng(center).setContent(div).openOn(map);
-        }
-        
-        function getMilestoneFormData() {
-            const methods = getPipelineMethods();
-            const methodData = {};
-            methods.forEach(m => {
-                const el = document.getElementById('ms_method_' + m);
-                methodData[m] = el ? (el.value || '0') : '0';
-            });
-            return {
-                week: '',
-                startDate: '',
-                endDate: document.getElementById('ms_endDate').value,
-                methodData: methodData,
-                notes: document.getElementById('ms_notes').value.trim()
-            };
-        }
-        
-        async function saveMilestoneNew() {
-            const data = getMilestoneFormData();
-
-            const qs = '?action=addMilestone&pipelineId=' + encodeURIComponent(currentPipeline.id) +
-                '&week=' + encodeURIComponent(data.week) +
-                '&startDate=' + encodeURIComponent(data.startDate) +
-                '&endDate=' + encodeURIComponent(data.endDate) +
-                '&methodData=' + encodeURIComponent(JSON.stringify(data.methodData)) +
-                '&notes=' + encodeURIComponent(data.notes);
-            try {
-                const res = await fetch(API_URL + qs);
-                const result = await res.json();
-                if (result.success) { 
-                    map.closePopup(); 
-                    await loadMilestones();
-                    // 通知甘特圖視窗更新
-                    if (window.ganttWindow && !window.ganttWindow.closed) {
-                        window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
-                    }
-                }
-                else showToast('儲存失敗：' + (result.error || '未知錯誤'), 'error');
-            } catch(e) { showToast(e.message, 'error'); }
-        }
-        
-        async function saveMilestoneEdit(id) {
-            const data = getMilestoneFormData();
-
-            const qs = '?action=updateMilestone&milestoneId=' + encodeURIComponent(id) +
-                '&week=' + encodeURIComponent(data.week) +
-                '&startDate=' + encodeURIComponent(data.startDate) +
-                '&endDate=' + encodeURIComponent(data.endDate) +
-                '&methodData=' + encodeURIComponent(JSON.stringify(data.methodData)) +
-                '&notes=' + encodeURIComponent(data.notes);
-            try {
-                const res = await fetch(API_URL + qs);
-                const result = await res.json();
-                if (result.success) { 
-                    map.closePopup(); 
-                    await loadMilestones();
-                    // 通知甘特圖視窗更新
-                    if (window.ganttWindow && !window.ganttWindow.closed) {
-                        window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
-                    }
-                }
-                else showToast('更新失敗：' + (result.error || '未知錯誤'), 'error');
-            } catch(e) { showToast(e.message, 'error'); }
-        }
-        
-        window.deleteMilestone = async function(id) {
-            if (!await showConfirm({ title: '刪除週次', message: '確定要刪除這個週次嗎？', okText: '刪除', danger: true })) return;
-            try {
-                const res = await fetch(API_URL + '?action=deleteMilestone&milestoneId=' + encodeURIComponent(id));
-                const result = await res.json();
-                if (result.success) {
-                    await loadMilestones();
-                    // 通知甘特圖視窗更新
-                    if (window.ganttWindow && !window.ganttWindow.closed) {
-                        window.ganttWindow.postMessage({ type: 'milestoneChanged' }, '*');
-                    }
-                }
-                else showToast('刪除失敗：' + (result.error || '未知錯誤'), 'error');
-            } catch(e) { showToast(e.message, 'error'); }
-        };
         // ========== 施工里程碑功能結束 ==========
         
         // 編輯段落
@@ -9163,10 +8328,6 @@ window.addEventListener('message', async function(event) {
             if (resetMarkerVisibility) {
                 allMarkersVisible = true;
                 document.getElementById('permitZoneButton').classList.remove('hidden-markers');
-                document.getElementById('milestoneBtn').style.display = 'none';
-                document.getElementById('milestonePanel').style.display = 'none';
-                milestonePanelOpen = false;
-                milestoneData = [];
                 document.getElementById('ganttBtn').style.display = 'none';
                 document.getElementById('ganttPanel').style.display = 'none';
                 ganttPanelOpen = false;
@@ -11454,9 +10615,6 @@ window.addEventListener('message', async function(event) {
                     break;
                 case 'gantt':
                     toggleGanttPanel();
-                    break;
-                case 'milestone':
-                    toggleMilestonePanel();
                     break;
                 case 'editPipeline':
                     // 編輯工程
