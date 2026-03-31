@@ -832,7 +832,7 @@ kbd {
 #map-compass {
     position: absolute;
     bottom: 80px;
-    right: 16px;
+    left: 16px;
     z-index: 1000;
     background: rgba(255,255,255,0.95);
     border-radius: 12px;
@@ -8372,21 +8372,41 @@ renderBudgetChart();
 
             // ===== 羅盤旋轉控制 =====
             (function() {
-                var mapRotation = 0; // 目前旋轉角度（度）
+                var mapRotation = 0;
 
-                function applyRotation(deg) {
-                    mapRotation = ((deg % 360) + 360) % 360;
-                    // 旋轉 map pane（地圖內容）
+                function patchPaneRotation() {
                     var pane = map.getPanes().mapPane;
+                    // 取得 Leaflet 目前設定的 pane 位置（translate3d 的 x,y）
+                    var pos = L.DomUtil.getPosition(pane);
                     var size = map.getSize();
-                    pane.style.transformOrigin = (size.x / 2) + 'px ' + (size.y / 2) + 'px';
-                    pane.style.transform = 'rotate(' + mapRotation + 'deg)';
-                    // 更新羅盤針（針指向北方，所以反向旋轉）
-                    document.getElementById('compassNeedle').style.transform = 'rotate(' + mapRotation + 'deg)';
-                    document.getElementById('compassDeg').textContent = Math.round(mapRotation) + '°';
+                    // transformOrigin：viewport 中心相對於 pane 的位置
+                    var ox = size.x / 2 - pos.x;
+                    var oy = size.y / 2 - pos.y;
+                    pane.style.transformOrigin = ox + 'px ' + oy + 'px';
+                    // 重寫 transform：保留 Leaflet 的 translate，附加 rotate
+                    pane.style.transform = 'translate3d(' + pos.x + 'px,' + pos.y + 'px,0) rotate(' + mapRotation + 'deg)';
                 }
 
-                // 按鈕：每次 1° 微調
+                function updateCompassUI() {
+                    document.getElementById('compassNeedle').style.transform = 'rotate(' + mapRotation + 'deg)';
+                    document.getElementById('compassDeg').textContent = Math.round(((mapRotation % 360) + 360) % 360) + '°';
+                }
+
+                function applyRotation(deg) {
+                    mapRotation = deg;
+                    patchPaneRotation();
+                    updateCompassUI();
+                }
+
+                // 每次 Leaflet move/zoom 後重新注入 rotate
+                map.on('move zoom moveend zoomend', function() {
+                    if (mapRotation !== 0) patchPaneRotation();
+                });
+                map.on('resize', function() {
+                    if (mapRotation !== 0) patchPaneRotation();
+                });
+
+                // 按鈕微調 1°
                 document.getElementById('compassLeft').addEventListener('click', function() {
                     applyRotation(mapRotation - 1);
                 });
@@ -8395,9 +8415,14 @@ renderBudgetChart();
                 });
                 document.getElementById('compassReset').addEventListener('click', function() {
                     applyRotation(0);
+                    // 完全清除 transform，讓 Leaflet 接管
+                    var pane = map.getPanes().mapPane;
+                    pane.style.transform = '';
+                    pane.style.transformOrigin = '';
+                    map.invalidateSize();
                 });
 
-                // 長按加速（按住不放每 80ms 增加 1°）
+                // 長按加速
                 var pressTimer = null;
                 function startPress(dir) {
                     applyRotation(mapRotation + dir);
@@ -8415,10 +8440,7 @@ renderBudgetChart();
                 // 拖拉羅盤環旋轉
                 var ring = document.getElementById('compassRing');
                 var dragging = false;
-                ring.addEventListener('mousedown', function(e) {
-                    dragging = true;
-                    e.preventDefault();
-                });
+                ring.addEventListener('mousedown', function(e) { dragging = true; e.preventDefault(); });
                 window.addEventListener('mousemove', function(e) {
                     if (!dragging) return;
                     var rect = ring.getBoundingClientRect();
@@ -8428,11 +8450,6 @@ renderBudgetChart();
                     applyRotation(angle);
                 });
                 window.addEventListener('mouseup', function() { dragging = false; });
-
-                // 重新定位 pane 原點（resize 時更新）
-                map.on('resize', function() {
-                    if (mapRotation !== 0) applyRotation(mapRotation);
-                });
             })();
             
             // 定義多種底圖圖層
