@@ -53,6 +53,8 @@
         .toast.warning { background: #e65100; }
         .toast.info    { background: #1565c0; }
         .toast.hiding  { animation: toastOut 0.3s ease forwards; }
+        .node-label { display:none; position:absolute; left:10px; top:-5px; white-space:nowrap; font-size:10px; font-weight:bold; background:rgba(255,255,255,0.9); padding:0 3px; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.12); }
+        .map-zoom-in .node-label { display:block; }
         @keyframes toastIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes toastOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(12px); } }
         @media (max-width: 768px) {
@@ -2776,28 +2778,18 @@ kbd {
                     if (segment.nodeRange && segment.nodeRange.trim()) {
                         const nodeLatLng = getPositionAtDistance(coords, startDist);
                         if (nodeLatLng) {
-                            function buildNodeIcon() {
-                                var z = map.getZoom();
-                                var label = z >= 15
-                                    ? '<div style="position:absolute;left:10px;top:-5px;white-space:nowrap;font-size:10px;font-weight:bold;color:' + color + ';background:rgba(255,255,255,0.9);padding:0 3px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.12);">' + segment.nodeRange + '</div>'
-                                    : '';
-                                return L.divIcon({
+                            const nodeMarker = L.marker(nodeLatLng, {
+                                icon: L.divIcon({
                                     className: '',
-                                    html: '<div style="position:relative;width:8px;height:8px;cursor:pointer;" title="' + segment.nodeRange + '">' +
+                                    html: '<div style="position:relative;width:8px;height:8px;cursor:pointer;">' +
                                         '<div style="width:8px;height:8px;background:white;border:2px solid ' + color + ';border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>' +
-                                        label +
+                                        '<div class="node-label" style="color:' + color + ';">' + segment.nodeRange + '</div>' +
                                     '</div>',
                                     iconSize: [8, 8],
                                     iconAnchor: [4, 4]
-                                });
-                            }
-                            const nodeMarker = L.marker(nodeLatLng, {
-                                icon: buildNodeIcon(),
+                                }),
                                 zIndexOffset: 600
                             }).addTo(map);
-                            map.on('zoomend', function() {
-                                nodeMarker.setIcon(buildNodeIcon());
-                            });
                             // 點擊節點圓圈可編輯名稱
                             nodeMarker.on('click', async function() {
                                 const newName = prompt('修改節點名稱：', segment.nodeRange || '');
@@ -8247,6 +8239,14 @@ renderBudgetChart();
                 zoomControl: false,  // 完全不顯示縮放控制（所有裝置）
                 preferCanvas: true   // 🚀 效能優化：使用 Canvas 渲染,大幅提升數百個小段的繪製效能
             }).setView([24.15, 120.65], 11);
+
+            // 全域單一 zoomend：zoom>=15 時地圖容器加 map-zoom-in class，讓節點標籤顯示
+            function updateNodeLabelVisibility() {
+                var el = document.getElementById('map');
+                if (el) el.classList.toggle('map-zoom-in', map.getZoom() >= 15);
+            }
+            map.on('zoomend', updateNodeLabelVisibility);
+            updateNodeLabelVisibility();
             
             // 定義多種底圖圖層
             const baseMaps = {
