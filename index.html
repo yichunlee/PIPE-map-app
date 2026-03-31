@@ -2776,36 +2776,19 @@ kbd {
                     if (segment.nodeRange && segment.nodeRange.trim()) {
                         const nodeLatLng = getPositionAtDistance(coords, startDist);
                         if (nodeLatLng) {
-                            // 字體大小隨縮放：zoom>=17→11px, 16→9px, 15→7px, <15→隱藏標籤
-                            function getNodeFontPx() {
-                                var z = map.getZoom();
-                                if (z >= 17) return 11;
-                                if (z >= 16) return 9;
-                                if (z >= 15) return 7;
-                                return 0; // 太小就不顯示文字
-                            }
-                            function buildNodeIcon() {
-                                var fs = getNodeFontPx();
-                                var label = fs > 0
-                                    ? '<div style="position:absolute;left:10px;top:-' + Math.round(fs*0.5) + 'px;white-space:nowrap;font-size:' + fs + 'px;font-weight:bold;color:' + color + ';background:rgba(255,255,255,0.85);padding:0 3px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.12);">' + segment.nodeRange + '</div>'
-                                    : '';
-                                return L.divIcon({
-                                    className: '',
-                                    html: '<div style="position:relative;width:8px;height:8px;cursor:pointer;" title="' + segment.nodeRange + '">' +
-                                        '<div style="width:8px;height:8px;background:white;border:2px solid ' + color + ';border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>' +
-                                        label +
-                                    '</div>',
-                                    iconSize: [8, 8],
-                                    iconAnchor: [4, 4]
-                                });
-                            }
+                            const nodeIcon = L.divIcon({
+                                className: '',
+                                html: '<div style="position:relative;width:8px;height:8px;cursor:pointer;" title="' + segment.nodeRange + '">' +
+                                    '<div style="width:8px;height:8px;background:white;border:2px solid ' + color + ';border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>' +
+                                    '<div style="position:absolute;left:10px;top:-5px;white-space:nowrap;font-size:10px;font-weight:bold;color:' + color + ';background:rgba(255,255,255,0.9);padding:0 3px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.12);">' + segment.nodeRange + '</div>' +
+                                '</div>',
+                                iconSize: [8, 8],
+                                iconAnchor: [4, 4]
+                            });
                             const nodeMarker = L.marker(nodeLatLng, {
-                                icon: buildNodeIcon(),
+                                icon: nodeIcon,
                                 zIndexOffset: 600
                             }).addTo(map);
-                            map.on('zoomend', function() {
-                                nodeMarker.setIcon(buildNodeIcon());
-                            });
                             // 點擊節點圓圈可編輯名稱
                             nodeMarker.on('click', async function() {
                                 const newName = prompt('修改節點名稱：', segment.nodeRange || '');
