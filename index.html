@@ -6801,10 +6801,12 @@ function renderBudgetChart() {
     function dateToPct(d) {
         return Math.max(0, Math.min(100, (d.getTime() - minDate.getTime()) / totalRange * 100));
     }
+    // 取整到百位（萬為單位時取整到小數1位）
     function fmtY(v) {
-        if (v >= 1e8) return (v/1e8).toFixed(2) + '億';
-        if (v >= 1e4) return (v/1e4).toFixed(1) + '萬';
-        return Math.round(v).toLocaleString();
+        if (v === 0) return '0';
+        if (v >= 1e8) return (Math.round(v/1e6)/100).toFixed(2) + '億';
+        if (v >= 1e4) return (Math.round(v/1e3)/10).toFixed(1) + '萬';
+        return Math.round(v/100)*100 > 0 ? (Math.round(v/100)*100).toLocaleString() : Math.round(v).toLocaleString();
     }
 
     // Build SVG points (% of time range → x axis)
@@ -6825,11 +6827,9 @@ function renderBudgetChart() {
     var todayX = (todayPct * 10).toFixed(1);
     var actY = ((1 - actualDone/yMax)*100).toFixed(1);
 
-    // Y labels
-    var yLabels = '';
-    [0, 0.33, 0.67, 1].forEach(function(frac) {
-        var v = yMax * frac;
-        yLabels += '<div style="position:absolute;right:4px;bottom:' + (frac*100).toFixed(0) + '%;transform:translateY(50%);font-size:8px;color:#aaa;white-space:nowrap;">' + fmtY(v) + '</div>';
+    // Y labels — 放在獨立絕對定位層，讓 sticky 左欄只需固定寬度
+    var yLabelItems = [0, 0.33, 0.67, 1].map(function(frac) {
+        return { frac: frac, label: fmtY(yMax * frac) };
     });
 
     // Hover zones
@@ -6841,28 +6841,54 @@ function renderBudgetChart() {
         hoverDivs += '<div class="budget-hover-zone" data-date="' + p.month + '" data-cum="' + fmtY(p.cum) + '" data-monthly="' + fmtY(mon) + '" style="position:absolute;left:' + p.pct.toFixed(2) + '%;width:' + w + '%;top:0;bottom:20px;cursor:crosshair;"></div>';
     });
 
-    var html = '<div style="display:flex;">';
-    // Left Y-axis label
-    html += '<div style="width:180px;flex-shrink:0;font-size:10px;color:#7b1fa2;font-weight:bold;padding:8px 8px 20px 8px;position:sticky;left:0;background:white;z-index:2;position:relative;">';
-    html += '💰 預算進度';
-    html += yLabels;
+    // X axis ticks（與甘特圖相同邏輯）
+    var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var totalMonthsRange = (maxDate.getFullYear()-minDate.getFullYear())*12 + (maxDate.getMonth()-minDate.getMonth());
+    var xStep = totalMonthsRange < 7 ? 1 : totalMonthsRange < 19 ? 2 : 3;
+    var xAxisHtml = '';
+    var xCur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    while (xCur <= maxDate) {
+        if (xCur >= minDate) {
+            var xPct = ((xCur - minDate) / totalRange * 100).toFixed(2);
+            xAxisHtml += '<div style="position:absolute;left:' + xPct + '%;transform:translateX(-50%);font-size:9px;color:#555;white-space:nowrap;">' + MONTHS_SHORT[xCur.getMonth()] + '</div>';
+        }
+        xCur.setMonth(xCur.getMonth() + xStep);
+    }
+
+    // 整體佈局：左欄（sticky，僅含標題）+ 右欄（chart + Y labels + X axis）
+    // Y labels 用絕對定位疊在 chart area 左側
+    var CHART_H = 120; // px，SVG 高度
+    var X_AXIS_H = 20; // px，X 軸高度
+    var TOTAL_H = CHART_H + X_AXIS_H;
+
+    var html = '<div style="display:flex;align-items:stretch;">';
+
+    // ── 左欄：sticky，含標題 + Y軸文字 ──
+    html += '<div style="width:180px;flex-shrink:0;position:sticky;left:0;background:white;z-index:2;box-sizing:border-box;padding:8px 8px 0 8px;display:flex;flex-direction:column;justify-content:flex-start;">';
+    html += '<div style="font-size:10px;color:#7b1fa2;font-weight:bold;margin-bottom:4px;">預估金額</div>';
+    // Y 軸標籤放在標題下方，用 relative 容器模擬
+    html += '<div style="position:relative;flex:1;min-height:' + CHART_H + 'px;">';
+    yLabelItems.forEach(function(item) {
+        html += '<div style="position:absolute;right:0;bottom:' + (item.frac*100).toFixed(0) + '%;transform:translateY(50%);font-size:8px;color:#999;white-space:nowrap;text-align:right;">' + item.label + '</div>';
+    });
     html += '</div>';
-    // Chart area
-    html += '<div style="flex:1;padding-right:80px;position:relative;height:120px;">';
-    html += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="100" style="display:block;position:absolute;top:0;left:0;right:0;">';
+    html += '</div>';
+
+    // ── 右欄：chart area + X axis ──
+    html += '<div style="flex:1;padding-right:80px;position:relative;">';
+    // SVG 圖表
+    html += '<div style="position:relative;height:' + CHART_H + 'px;">';
+    html += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="' + CHART_H + '" style="display:block;position:absolute;top:0;left:0;right:0;">';
     html += '<defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.2"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.02"/></linearGradient></defs>';
     [0.33, 0.67, 1].forEach(function(f) {
         html += '<line x1="0" y1="' + ((1-f)*100).toFixed(1) + '" x2="1000" y2="' + ((1-f)*100).toFixed(1) + '" stroke="#eee" stroke-width="0.5"/>';
     });
     html += '<path d="' + areaPath + '" fill="url(#bg2)"/>';
     html += '<polyline points="' + svgPts + '" fill="none" stroke="#7b1fa2" stroke-width="2" vector-effect="non-scaling-stroke"/>';
-    // Data dots
     pts.forEach(function(p) {
         html += '<circle cx="' + (p.pct*10).toFixed(1) + '" cy="' + ((1-p.cum/yMax)*100).toFixed(1) + '" r="2.5" fill="#7b1fa2" stroke="white" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0.7"/>';
     });
-    // Today line
     html += '<line x1="' + todayX + '" y1="0" x2="' + todayX + '" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
-    // Actual dot
     if (actualDone > 0) {
         html += '<circle cx="' + todayX + '" cy="' + actY + '" r="4" fill="#388e3c" stroke="white" stroke-width="1.5" vector-effect="non-scaling-stroke"><title>實際完成：' + fmtY(actualDone) + '元</title></circle>';
     }
@@ -6870,7 +6896,12 @@ function renderBudgetChart() {
     html += '<div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:#ddd;"></div>';
     html += hoverDivs;
     html += '<div id="budgetTooltip" style="display:none;position:absolute;background:rgba(0,0,0,0.75);color:white;font-size:11px;padding:6px 10px;border-radius:6px;pointer-events:none;z-index:100;white-space:nowrap;"></div>';
-    html += '</div></div>';
+    html += '</div>';
+    // X 軸
+    html += '<div style="position:relative;height:' + X_AXIS_H + 'px;border-top:1px solid #ddd;">' + xAxisHtml + '</div>';
+    html += '</div>';
+
+    html += '</div>';
 
     container.innerHTML = html;
 
