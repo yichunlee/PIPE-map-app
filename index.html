@@ -7313,7 +7313,7 @@ function renderBudgetChart() {
 
     // ── 左欄：sticky，含標題 + Y軸文字（對應 gantt-label width:180px）──
     html += '<div style="width:180px;flex-shrink:0;position:sticky;left:0;background:white;z-index:2;box-sizing:border-box;padding:8px 8px 0 8px;display:flex;flex-direction:column;justify-content:flex-start;">';
-    html += '<div style="font-size:10px;color:#7b1fa2;font-weight:bold;margin-bottom:4px;">預估金額</div>';
+    // 預估金額標題已移除
     html += '<div style="position:relative;flex:1;min-height:' + CHART_H + 'px;">';
     yLabelItems.forEach(function(item) {
         html += '<div style="position:absolute;right:0;bottom:' + (item.frac*100).toFixed(0) + '%;transform:translateY(50%);font-size:8px;color:#999;white-space:nowrap;text-align:right;">' + item.label + '</div>';
@@ -7333,14 +7333,21 @@ function renderBudgetChart() {
     });
     html += '<path d="' + areaPath + '" fill="url(#bg2)"/>';
     html += '<polyline points="' + svgPts + '" fill="none" stroke="#7b1fa2" stroke-width="2" vector-effect="non-scaling-stroke"/>';
-    pts.forEach(function(p) {
-        html += '<circle cx="' + (p.pct*10).toFixed(1) + '" cy="' + ((1-p.cum/yMax)*100).toFixed(1) + '" r="2.5" fill="#7b1fa2" stroke="white" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0.7"/>';
-    });
     html += '<line x1="' + todayX + '" y1="0" x2="' + todayX + '" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
-    if (actualDone > 0) {
-        html += '<circle cx="' + todayX + '" cy="' + actY + '" r="4" fill="#388e3c" stroke="white" stroke-width="1.5" vector-effect="non-scaling-stroke"><title>實際完成：' + fmtY(actualDone) + '元</title></circle>';
-    }
     html += '</svg>';
+    // 圓點用 HTML div，避免 preserveAspectRatio="none" 造成橢圓
+    var dotHtml = '';
+    pts.forEach(function(p) {
+        var left = p.pct.toFixed(2);
+        var bottom = (p.cum / yMax * 100).toFixed(2);
+        dotHtml += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:6px;height:6px;border-radius:50%;background:#7b1fa2;border:1.5px solid white;transform:translate(-50%,50%);pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,0.2);"></div>';
+    });
+    if (actualDone > 0) {
+        var actLeft = (todayPct).toFixed(2);
+        var actBottom = (actualDone / yMax * 100).toFixed(2);
+        dotHtml += '<div style="position:absolute;left:' + actLeft + '%;bottom:' + actBottom + '%;width:9px;height:9px;border-radius:50%;background:#388e3c;border:2px solid white;transform:translate(-50%,50%);pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,0.3);" title="實際完成：' + fmtY(actualDone) + '元"></div>';
+    }
+    html += dotHtml;
     html += '<div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:#ddd;"></div>';
     html += hoverDivs;
     html += '<div id="budgetTooltip" style="display:none;position:absolute;background:rgba(0,0,0,0.75);color:white;font-size:11px;padding:6px 10px;border-radius:6px;pointer-events:none;z-index:100;white-space:nowrap;"></div>';
