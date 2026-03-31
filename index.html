@@ -53,8 +53,7 @@
         .toast.warning { background: #e65100; }
         .toast.info    { background: #1565c0; }
         .toast.hiding  { animation: toastOut 0.3s ease forwards; }
-        .node-label { display:none; position:absolute; left:10px; top:-5px; white-space:nowrap; font-size:10px; font-weight:bold; background:rgba(255,255,255,0.9); padding:0 3px; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.12); }
-        .map-zoom-in .node-label { display:block; }
+        .node-label { position:absolute; left:10px; top:-5px; white-space:nowrap; font-size:10px; font-weight:bold; background:rgba(255,255,255,0.9); padding:0 3px; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.12); }
         @keyframes toastIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes toastOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(12px); } }
         @media (max-width: 768px) {
@@ -8242,8 +8241,10 @@ renderBudgetChart();
 
             // 全域單一 zoomend：zoom>=15 時地圖容器加 map-zoom-in class，讓節點標籤顯示
             function updateNodeLabelVisibility() {
-                var el = document.getElementById('map');
-                if (el) el.classList.toggle('map-zoom-in', map.getZoom() >= 15);
+                var show = map.getZoom() >= 15;
+                document.querySelectorAll('.node-label').forEach(function(el) {
+                    el.style.display = show ? 'block' : 'none';
+                });
             }
             map.on('zoomend', updateNodeLabelVisibility);
             updateNodeLabelVisibility();
