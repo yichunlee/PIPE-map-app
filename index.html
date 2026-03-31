@@ -6366,7 +6366,7 @@ function editItem(idx) {
     html += '<div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
     html += '</div>';
     html += '<div id="customFields"' + (!isCustom?' style="display:none;"':'') + '>';
-    html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="' + customRate + '" style="flex:1;" oninput="document.getElementById('customRateNum').value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="' + customRate + '" style="width:56px;" oninput="document.getElementById('customRate').value=this.value"></div>';
+    html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="' + customRate + '" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="' + customRate + '" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
     html += '</div>';
     html += '<label>項目名稱</label><input id="itemLabel" value="' + (item.label || '') + '">';
     html += '<label>開始日期</label><input id="startDate" type="date" value="' + (item.startDate || '') + '">';
@@ -6392,7 +6392,12 @@ function editItem(idx) {
 
 function showAddForm() {
     editingItem = null;
-    let html = '<label>段落</label><select id="segSelect" onchange="handleSegChange()"><option value="">手動輸入</option>';
+    let html = '<label>項目類型</label><div style="display:flex;gap:8px;margin-bottom:8px;">';
+    html += '<label style="display:flex;align-items:center;gap:4px;font-weight:normal;cursor:pointer;"><input type="radio" name="itemType" value="pipeline" checked onchange="toggleItemType()"> 管線</label>';
+    html += '<label style="display:flex;align-items:center;gap:4px;font-weight:normal;cursor:pointer;"><input type="radio" name="itemType" value="custom" onchange="toggleItemType()"> 自訂（配電盤/工作井等）</label>';
+    html += '</div>';
+    html += '<div id="pipelineFields">';
+    html += '<label>段落</label><select id="segSelect" onchange="handleSegChange()"><option value="">手動輸入</option>';
     segments.forEach(function(seg) {
         var numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
         var lbl = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber;
@@ -6400,11 +6405,15 @@ function showAddForm() {
     });
     html += '</select>';
     html += '<div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
+    html += '</div>';
+    html += '<div id="customFields" style="display:none;">';
+    html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="0" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="0" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
+    html += '</div>';
     html += '<label>項目名稱</label><input id="itemLabel">';
     html += '<label>開始日期</label><input id="startDate" type="date">';
     html += '<label>完成日期</label><input id="endDate" type="date">';
     html += '<label>備註</label><input id="notes">';
-    html += '<label style="display:flex;justify-content:space-between;">施工單價（元/m）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
+    html += '<label id="unitPriceLabel" style="display:flex;justify-content:space-between;">施工單價（元/m）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
     html += '<input id="unitPriceInput" type="number" placeholder="選段落自動帶入" style="margin-bottom:8px;">';
     html += '<button class="btn-primary" onclick="saveItem()">💾 新增</button>';
     document.getElementById('panelTitle').textContent = '＋ 新增項目';
