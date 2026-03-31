@@ -4942,20 +4942,30 @@ kbd {
             const lines = text.split(/\r?\n/).filter(l => l.trim());
             if (lines.length < 2) return [];
             const headers = parseCSVLine(lines[0]);
-            const x1i = headers.findIndex(h => h.includes('端點1') && h.includes('x'));
-            const y1i = headers.findIndex(h => h.includes('端點1') && h.includes('y'));
-            const x2i = headers.findIndex(h => h.includes('端點2') && h.includes('x'));
-            const y2i = headers.findIndex(h => h.includes('端點2') && h.includes('y'));
+            // 同時支援兩種格式：
+            // 格式A（舊）：端點1_x, 端點1_y, 端點2_x, 端點2_y
+            // 格式B（新）：座標x1, 座標y1, 座標x2, 座標y2
+            function findIdx(tests) {
+                for (const fn of tests) {
+                    const i = headers.findIndex(fn);
+                    if (i >= 0) return i;
+                }
+                return -1;
+            }
+            const fx1 = findIdx([h => h.includes('端點1') && h.toLowerCase().includes('x'), h => /座標x1/i.test(h)]);
+            const fy1 = findIdx([h => h.includes('端點1') && h.toLowerCase().includes('y'), h => /座標y1/i.test(h)]);
+            const fx2 = findIdx([h => h.includes('端點2') && h.toLowerCase().includes('x'), h => /座標x2/i.test(h)]);
+            const fy2 = findIdx([h => h.includes('端點2') && h.toLowerCase().includes('y'), h => /座標y2/i.test(h)]);
             const di  = headers.findIndex(h => h.includes('管徑寬度'));
             const mi  = headers.findIndex(h => h.includes('管種材料'));
             const li  = headers.findIndex(h => h.includes('管線長度'));
-            if (x1i<0||y1i<0||x2i<0||y2i<0) throw new Error('找不到 TWD97 座標欄位');
+            if (fx1<0||fy1<0||fx2<0||fy2<0) throw new Error('找不到 TWD97 座標欄位');
             const result = [];
             for (let i = 1; i < lines.length; i++) {
                 try {
                     const cols = parseCSVLine(lines[i]);
-                    const x1 = parseFloat(cols[x1i]), y1 = parseFloat(cols[y1i]);
-                    const x2 = parseFloat(cols[x2i]), y2 = parseFloat(cols[y2i]);
+                    const x1 = parseFloat(cols[fx1]), y1 = parseFloat(cols[fy1]);
+                    const x2 = parseFloat(cols[fx2]), y2 = parseFloat(cols[fy2]);
                     if (isNaN(x1)||isNaN(y1)||isNaN(x2)||isNaN(y2)) continue;
                     const [lat1,lon1] = twd97ToWgs84(x1, y1);
                     const [lat2,lon2] = twd97ToWgs84(x2, y2);
