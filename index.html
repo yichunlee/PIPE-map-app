@@ -2224,8 +2224,13 @@ kbd {
             const listDiv = document.createElement('div');
             listDiv.className = 'pipeline-list';
             listDiv.innerHTML = `
-                <div style="background:#FF9800;color:white;padding:12px 14px;margin:10px 10px 15px 10px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:13px;" onclick="toggleStatsReport()">
-                    每月施工統計
+                <div style="display:flex;gap:6px;margin:10px 10px 15px 10px;">
+                    <div style="flex:1;background:#FF9800;color:white;padding:10px 8px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:12px;" onclick="toggleStatsReport()">
+                        每月施工統計
+                    </div>
+                    <div style="flex:1;background:#7b1fa2;color:white;padding:10px 8px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:12px;" onclick="showProjectSCurve()">
+                        📈 計畫S曲線
+                    </div>
                 </div>
             `;
             
@@ -2490,16 +2495,12 @@ kbd {
             }, 0);
 
             const statsHtml =
-                '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">' +
-                '<div style="flex:1;min-width:140px;background:#f3e5f5;border-radius:8px;padding:12px;text-align:center;">' +
-                '<div style="font-size:11px;color:#7b1fa2;margin-bottom:4px;">計畫總預算</div>' +
-                '<div style="font-size:18px;font-weight:bold;color:#4a148c;">' + fmtY(grandTotal) + ' 元</div></div>' +
-                '<div style="flex:1;min-width:140px;background:#e3f2fd;border-radius:8px;padding:12px;text-align:center;">' +
-                '<div style="font-size:11px;color:#1976d2;margin-bottom:4px;">計畫累積至今</div>' +
-                '<div style="font-size:18px;font-weight:bold;color:#0d47a1;">' + fmtY(todayCum) + ' 元</div></div>' +
-                '<div style="flex:1;min-width:140px;background:#e8f5e9;border-radius:8px;padding:12px;text-align:center;">' +
-                '<div style="font-size:11px;color:#388e3c;margin-bottom:4px;">實際完成金額</div>' +
-                '<div style="font-size:18px;font-weight:bold;color:#1b5e20;">' + fmtY(actualDone) + ' 元</div></div>' +
+                '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;align-items:center;font-size:13px;">' +
+                '<span><span style="color:#7b1fa2;">計畫總預算：</span><strong style="color:#4a148c;">' + fmtY(grandTotal) + ' 元</strong></span>' +
+                '<span style="color:#ccc;">|</span>' +
+                '<span><span style="color:#1976d2;">計畫累積至今：</span><strong style="color:#0d47a1;">' + fmtY(todayCum) + ' 元</strong></span>' +
+                '<span style="color:#ccc;">|</span>' +
+                '<span><span style="color:#388e3c;">實際完成金額：</span><strong style="color:#1b5e20;">' + fmtY(actualDone) + ' 元</strong></span>' +
                 '</div>';
 
             // 圖例
@@ -2511,34 +2512,39 @@ kbd {
             '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;font-weight:bold;">' +
             '<span style="display:inline-block;width:20px;height:4px;background:#4a148c;border-radius:2px;"></span>計畫合計</span>';
 
-            // SVG layers
+            // SVG layers（只放面積、折線、格線、今日線 — 不放圓點，避免橢圓）
             const CHART_H = 260;
             let svgLayers = '';
             // 各工程面積（半透明）
             pipelineRows.forEach(pr => {
                 svgLayers += '<path d="' + buildArea(pr.rows) + '" fill="' + pr.color + '" opacity="0.07"/>';
                 svgLayers += '<polyline points="' + buildPolyline(pr.rows) + '" fill="none" stroke="' + pr.color + '" stroke-width="1.5" vector-effect="non-scaling-stroke" opacity="0.7"/>';
-                pr.rows.forEach(r => {
-                    const cx = (dateToPct(midDate(r.month)) * 10).toFixed(1);
-                    const cy = ((1 - r.cumulative / yMax) * 100).toFixed(1);
-                    svgLayers += '<circle cx="' + cx + '" cy="' + cy + '" r="2" fill="' + pr.color + '" vector-effect="non-scaling-stroke" opacity="0.6"/>';
-                });
             });
             // 合計粗線
             svgLayers += '<path d="' + buildArea(totalRows) + '" fill="#7b1fa2" opacity="0.12"/>';
             svgLayers += '<polyline points="' + buildPolyline(totalRows) + '" fill="none" stroke="#4a148c" stroke-width="3" vector-effect="non-scaling-stroke"/>';
-            totalRows.forEach(r => {
-                const cx = (dateToPct(midDate(r.month)) * 10).toFixed(1);
-                const cy = ((1 - r.cumulative / yMax) * 100).toFixed(1);
-                svgLayers += '<circle cx="' + cx + '" cy="' + cy + '" r="3" fill="#4a148c" stroke="white" stroke-width="1" vector-effect="non-scaling-stroke"/>';
-            });
             // 今日線
             const todayX = (todayPct * 10).toFixed(1);
             svgLayers += '<line x1="' + todayX + '" y1="0" x2="' + todayX + '" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
-            // 水平格線 + Y標籤（放在SVG裡）
+            // 水平格線
             yTickFracs.forEach(f => {
                 const y = ((1 - f) * 100).toFixed(1);
                 svgLayers += '<line x1="0" y1="' + y + '" x2="1000" y2="' + y + '" stroke="#eee" stroke-width="0.5"/>';
+            });
+
+            // 圓點：用 HTML div 絕對定位，避免 preserveAspectRatio="none" 造成橢圓
+            let dotDivs = '';
+            pipelineRows.forEach(pr => {
+                pr.rows.forEach(r => {
+                    const left = dateToPct(midDate(r.month)).toFixed(2);
+                    const bottom = (r.cumulative / yMax * 100).toFixed(2);
+                    dotDivs += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:5px;height:5px;border-radius:50%;background:' + pr.color + ';transform:translate(-50%,50%);opacity:0.7;pointer-events:none;"></div>';
+                });
+            });
+            totalRows.forEach(r => {
+                const left = dateToPct(midDate(r.month)).toFixed(2);
+                const bottom = (r.cumulative / yMax * 100).toFixed(2);
+                dotDivs += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:7px;height:7px;border-radius:50%;background:#4a148c;border:1.5px solid white;transform:translate(-50%,50%);pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>';
             });
 
             // Y 軸標籤 HTML（放在左欄）
@@ -2581,6 +2587,7 @@ kbd {
                 '<div style="flex:1;position:relative;">' +
                 '<div style="position:relative;height:' + CHART_H + 'px;">' +
                 '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="' + CHART_H + '" style="display:block;">' + svgLayers + '</svg>' +
+                dotDivs +
                 '<div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:#ccc;"></div>' +
                 hoverDivs +
                 '</div>' +
