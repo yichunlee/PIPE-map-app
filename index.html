@@ -7264,7 +7264,8 @@ function renderBudgetChart() {
         var nextPct = i < pts.length-1 ? pts[i+1].pct : 100;
         var w = Math.max(nextPct - p.pct, 2).toFixed(2);
         var mon = budgetRows[i].monthly || (budgetRows[i].cumulative - (i > 0 ? budgetRows[i-1].cumulative : 0));
-        hoverDivs += '<div class="budget-hover-zone" data-date="' + p.month + '" data-cum="' + fmtY(p.cum) + '" data-monthly="' + fmtY(mon) + '" style="position:absolute;left:' + p.pct.toFixed(2) + '%;width:' + w + '%;top:0;bottom:20px;cursor:crosshair;"></div>';
+        var pct = maxCum > 0 ? (p.cum / maxCum * 100).toFixed(1) : '0';
+        hoverDivs += '<div class="budget-hover-zone" data-date="' + p.month + '" data-cum="' + fmtY(p.cum) + '" data-monthly="' + fmtY(mon) + '" data-pct="' + pct + '" style="position:absolute;left:' + p.pct.toFixed(2) + '%;width:' + w + '%;top:0;bottom:20px;cursor:crosshair;"></div>';
     });
 
     // X axis ticks — 年份色塊 + 月份刻度，與甘特圖完全相同邏輯
@@ -7365,7 +7366,7 @@ function renderBudgetChart() {
     var tip = document.getElementById('budgetTooltip');
     document.querySelectorAll('.budget-hover-zone').forEach(function(zone) {
         zone.addEventListener('mouseenter', function() {
-            tip.innerHTML = '<div style="font-weight:bold;margin-bottom:3px;">📅 ' + zone.dataset.date + '</div><div>當月：' + zone.dataset.monthly + ' 元</div><div>累積：<b>' + zone.dataset.cum + ' 元</b></div>';
+            tip.innerHTML = '<div style="font-weight:bold;margin-bottom:3px;">📅 ' + zone.dataset.date + '</div><div>當月：' + zone.dataset.monthly + ' 元</div><div>累積：<b>' + zone.dataset.cum + ' 元</b>　<span style="color:#a5d6a7;">(' + zone.dataset.pct + '%)</span></div>';
             tip.style.display = 'block';
         });
         zone.addEventListener('mouseleave', function() { tip.style.display = 'none'; });
