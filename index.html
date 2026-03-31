@@ -1378,7 +1378,6 @@ kbd {
     
     <!-- 工程列表切換按鈕 -->
     <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
-    <button id="projectSCurveBtn" class="project-scurve-btn" onclick="showProjectSCurve()">📈 計畫S曲線</button>
     
     <div id="measureButton" class="measure-button" title="測量距離" style="display:none;">📏</div>
     <div id="layerSwitchButton" class="layer-switch-button" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
@@ -2426,8 +2425,8 @@ kbd {
             function fmtY(v) {
                 if (v === 0) return '0';
                 if (v >= 1e8) return (Math.round(v/1e6)/100).toFixed(2) + '億';
-                if (v >= 1e4) return (Math.round(v/1e3)/10).toFixed(1) + '萬';
-                return (Math.round(v/100)*100).toLocaleString();
+                if (v >= 1e4) return Math.round(v/1e4) + '萬';
+                return Math.round(v/100)*100 > 0 ? (Math.round(v/100)*100).toLocaleString() : Math.round(v).toLocaleString();
             }
 
             // 建立 blob 視窗 HTML
@@ -2549,7 +2548,7 @@ kbd {
 
             // Y 軸標籤 HTML（放在左欄）
             const yLabelsHtml = yTickFracs.map(f =>
-                '<div style="position:absolute;right:4px;bottom:' + (f*100).toFixed(0) + '%;transform:translateY(50%);font-size:8px;color:#888;white-space:nowrap;text-align:right;">' + fmtY(yMax * f) + '</div>'
+                '<div style="position:absolute;right:4px;bottom:' + (f*100).toFixed(0) + '%;transform:translateY(50%);font-size:11px;color:#666;white-space:nowrap;text-align:right;font-weight:500;">' + fmtY(yMax * f) + '</div>'
             ).join('');
 
             // Tooltip hover divs
@@ -2577,12 +2576,12 @@ kbd {
                 '.body{padding:16px;}.legend{margin-bottom:8px;line-height:2;}' +
                 '#tip{display:none;position:fixed;background:rgba(0,0,0,0.8);color:white;font-size:11px;padding:8px 12px;border-radius:6px;pointer-events:none;z-index:999;white-space:pre-line;max-width:260px;line-height:1.6;}' +
                 '</style></head><body>' +
-                '<div class="hdr">📈 計畫S曲線 — ' + currentProject.name + '</div>' +
+                '<div class="hdr" style="display:flex;justify-content:space-between;align-items:center;"><span>📈 計畫S曲線 — ' + currentProject.name + '</span><button id="exportBtn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📥 匯出Excel</button></div>' +
                 '<div class="body">' + statsHtml +
                 '<div class="legend">' + legendHtml + '</div>' +
                 '<div style="display:flex;">' +
                 // Y軸左欄
-                '<div style="width:60px;flex-shrink:0;position:relative;height:' + CHART_H + 'px;">' + yLabelsHtml + '</div>' +
+                '<div style="width:80px;flex-shrink:0;position:relative;height:' + CHART_H + 'px;">' + yLabelsHtml + '</div>' +
                 // 圖表區
                 '<div style="flex:1;position:relative;">' +
                 '<div style="position:relative;height:' + CHART_H + 'px;">' +
@@ -2603,8 +2602,20 @@ kbd {
                 'tip.textContent="📅 "+z.dataset.month+"\\n當月："+z.dataset.monthly+" 元\\n累積："+z.dataset.cum+" 元"+(bd?"\\n\\n各工程當月：\\n"+bd:"");' +
                 'tip.style.display="block";});' +
                 'z.addEventListener("mouseleave",function(){tip.style.display="none";});' +
-                'z.addEventListener("mousemove",function(e){tip.style.left=(e.clientX+14)+"px";tip.style.top=(e.clientY-20)+"px";});' +
+                'z.addEventListener("mousemove",function(e){var tx=e.clientX+14;if(tx+270>window.innerWidth)tx=e.clientX-280;tip.style.left=tx+"px";tip.style.top=Math.max(10,e.clientY-20)+"px";});' +
                 '});' +
+                'document.getElementById("exportBtn").onclick=function(){' +
+                'var script=document.createElement("script");script.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";' +
+                'script.onload=function(){' +
+                'var wb=XLSX.utils.book_new();' +
+                'var totalData=' + JSON.stringify(totalRows.map(r=>({月份:r.month,當月金額:Math.round(r.monthly),累積金額:Math.round(r.cumulative)}))) + ';' +
+                'XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(totalData),"計畫合計");' +
+                JSON.stringify(pipelineRows.map(pr=>pr.name)).replace(/^\[|\]$/g,'').split(',').map((name,i)=>{return '';}).join('') +
+                '' +
+                'var plData=' + JSON.stringify(pipelineRows.map(pr=>({name:pr.name,rows:pr.rows.map(r=>({月份:r.month,當月金額:Math.round(r.monthly),累積金額:Math.round(r.cumulative)}))}))).replace(/`/g,'\u0060') + ';' +
+                'plData.forEach(function(pl){XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(pl.rows),pl.name.slice(0,31));});' +
+                'XLSX.writeFile(wb,"計畫S曲線_' + currentProject.name.replace(/[\/\\?*\[\]]/g,'_') + '.xlsx");' +
+                '};document.head.appendChild(script);};' +
                 '<\/script></body></html>');
             win.document.close();
         }
@@ -6714,8 +6725,8 @@ function editItem(idx) {
     html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="' + customRate + '" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="' + customRate + '" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
     html += '</div>';
     html += '<label>項目名稱</label><input id="itemLabel" value="' + (item.label || '') + '">';
-    html += '<label>開始日期</label><input id="startDate" type="date" value="' + (item.startDate || '') + '">';
-    html += '<label>完成日期</label><input id="endDate" type="date" value="' + (item.endDate || '') + '">';
+    html += '<label>開始日期</label><input id="startDate" type="date" value="' + (item.startDate || '') + '" onchange="var e=document.getElementById(\'endDate\');if(e){e.min=this.value;}">';
+    html += '<label>完成日期</label><input id="endDate" type="date" value="' + (item.endDate || '') + '" min="' + (item.startDate || '') + '">';
     html += '<label>備註</label><input id="notes" value="' + (item.notes || '') + '">';
     html += '<label id="unitPriceLabel" style="display:flex;justify-content:space-between;">' + (isCustom ? '施工單價（元/式）' : '施工單價（元/m）') + '<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
     html += '<input id="unitPriceInput" type="number" placeholder="輸入或自動帶入" value="' + (item.unitPrice || '') + '" style="margin-bottom:8px;">';
@@ -6755,7 +6766,7 @@ function showAddForm() {
     html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="0" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="0" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
     html += '</div>';
     html += '<label>項目名稱</label><input id="itemLabel">';
-    html += '<label>開始日期</label><input id="startDate" type="date">';
+    html += '<label>開始日期</label><input id="startDate" type="date" onchange="var e=document.getElementById(\'endDate\');if(e&&!e.value){e.min=this.value;e.value=this.value;}else if(e){e.min=this.value;}">';
     html += '<label>完成日期</label><input id="endDate" type="date">';
     html += '<label>備註</label><input id="notes">';
     html += '<label id="unitPriceLabel" style="display:flex;justify-content:space-between;">施工單價（元/m）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
