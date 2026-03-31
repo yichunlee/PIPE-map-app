@@ -2777,18 +2777,34 @@ kbd {
                         // 用 getPositionAtDistance 直接取起點座標，比 getSegmentCoords 更可靠
                         const nodeLatLng = getPositionAtDistance(coords, startDist);
                         if (nodeLatLng) {
-                            const nodeMarker = L.marker(nodeLatLng, {
-                                icon: L.divIcon({
+                            // 計算節點標籤字體大小：對應地圖約 20 公尺視覺寬度
+                            function getNodeFontPx() {
+                                var zoom = map.getZoom();
+                                // Leaflet metersPerPixel at given lat/zoom
+                                var mpp = 156543.03392 * Math.cos(nodeLatLng.lat * Math.PI / 180) / Math.pow(2, zoom);
+                                var px = Math.round(20 / mpp);
+                                return Math.max(8, Math.min(px, 60));
+                            }
+                            function buildNodeIcon() {
+                                var fs = getNodeFontPx();
+                                return L.divIcon({
                                     className: '',
-                                    html: `<div style="position:relative;width:12px;height:12px;cursor:pointer;" title="點擊修改節點名稱">
-                                        <div style="width:12px;height:12px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-                                        <div style="position:absolute;left:14px;top:-3px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:1px 4px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">${segment.nodeRange}</div>
-                                    </div>`,
-                                    iconSize: [12, 12],
-                                    iconAnchor: [6, 6]
-                                }),
+                                    html: '<div style="position:relative;width:10px;height:10px;cursor:pointer;" title="點擊修改節點名稱">' +
+                                        '<div style="width:10px;height:10px;background:white;border:2px solid ' + color + ';border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>' +
+                                        '<div style="position:absolute;left:12px;top:-' + Math.round(fs*0.4) + 'px;white-space:nowrap;font-size:' + fs + 'px;font-weight:bold;color:' + color + ';background:white;padding:1px 4px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">' + segment.nodeRange + '</div>' +
+                                    '</div>',
+                                    iconSize: [10, 10],
+                                    iconAnchor: [5, 5]
+                                });
+                            }
+                            const nodeMarker = L.marker(nodeLatLng, {
+                                icon: buildNodeIcon(),
                                 zIndexOffset: 600
                             }).addTo(map);
+                            // 縮放時更新字體大小
+                            map.on('zoomend', function() {
+                                nodeMarker.setIcon(buildNodeIcon());
+                            });
                             // 點擊節點圓圈可編輯名稱
                             nodeMarker.on('click', async function() {
                                 const newName = prompt('修改節點名稱：', segment.nodeRange || '');
@@ -6877,10 +6893,11 @@ function renderBudgetChart() {
                   + '<div style="position:relative;height:16px;">' + xAxisMonHtml + '</div>';
 
     // 整體佈局
-    // 關鍵：右欄不用 padding-right，改在右側加固定寬度 spacer，
-    // 讓 SVG 和 X 軸共用完全相同的寬度基準，才能對齊
+    // 關鍵：右欄用與甘特圖 header 完全相同的結構：
+    //   flex:1; position:relative; padding-right:80px
+    // SVG 用 position:absolute + left:0;right:0 撐滿，
+    // X 軸刻度用相同的 padding-right 容器，百分比基準完全一致
     var CHART_H = 120;
-    var RIGHT_PAD = 80; // 與甘特圖 padding-right:80px 相同
 
     var html = '<div style="display:flex;align-items:stretch;">';
 
@@ -6894,14 +6911,12 @@ function renderBudgetChart() {
     html += '</div>';
     html += '</div>';
 
-    // ── 右欄：flex row → [chart+xaxis area] + [right spacer] ──
-    html += '<div style="flex:1;display:flex;min-width:0;">';
+    // ── 右欄：與甘特圖 header 完全相同的結構（flex:1; padding-right:80px; position:relative）──
+    html += '<div style="flex:1;position:relative;padding-right:80px;">';
 
-    // chart + X軸 區域（無 padding，純內容寬度）
-    html += '<div style="flex:1;min-width:0;position:relative;">';
-    // SVG 圖表
+    // SVG 圖表（position:absolute 撐滿右欄，包含 padding 空間，與甘特圖 bar 寬度一致）
     html += '<div style="position:relative;height:' + CHART_H + 'px;">';
-    html += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="' + CHART_H + '" style="display:block;">';
+    html += '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;">';
     html += '<defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.2"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.02"/></linearGradient></defs>';
     [0.33, 0.67, 1].forEach(function(f) {
         html += '<line x1="0" y1="' + ((1-f)*100).toFixed(1) + '" x2="1000" y2="' + ((1-f)*100).toFixed(1) + '" stroke="#eee" stroke-width="0.5"/>';
@@ -6920,12 +6935,10 @@ function renderBudgetChart() {
     html += hoverDivs;
     html += '<div id="budgetTooltip" style="display:none;position:absolute;background:rgba(0,0,0,0.75);color:white;font-size:11px;padding:6px 10px;border-radius:6px;pointer-events:none;z-index:100;white-space:nowrap;"></div>';
     html += '</div>';
-    // X 軸（年份 + 月份，28px 總高）
-    html += '<div style="border-top:1px solid #ddd;">' + xAxisHtml + '</div>';
-    html += '</div>';
 
-    // 右側 spacer（對應甘特圖 padding-right:80px）
-    html += '<div style="width:' + RIGHT_PAD + 'px;flex-shrink:0;"></div>';
+    // X 軸（年份 + 月份）— 放在同一個含 padding-right:80px 的右欄內
+    // 刻度百分比與甘特圖月份百分比計算基準完全一致
+    html += '<div style="border-top:1px solid #ddd;">' + xAxisHtml + '</div>';
 
     html += '</div>'; // 右欄
     html += '</div>'; // 整體
