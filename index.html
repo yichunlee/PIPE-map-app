@@ -828,114 +828,12 @@ kbd {
     font-weight: 500 !important;
 }
 
-/* ===== 羅盤旋轉控制 ===== */
-#map-compass {
-    position: absolute;
-    bottom: 80px;
-    left: 16px;
-    z-index: 1000;
-    background: rgba(255,255,255,0.95);
-    border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    user-select: none;
-    width: 72px;
-}
-#map-compass .compass-ring {
-    width: 52px; height: 52px;
-    border-radius: 50%;
-    border: 2px solid #ddd;
-    background: #f8f8f8;
-    position: relative;
-    cursor: grab;
-    touch-action: none;
-}
-#map-compass .compass-ring:active { cursor: grabbing; }
-#map-compass .compass-needle {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 4px; height: 44px;
-    margin-left: -2px; margin-top: -22px;
-    transform-origin: center center;
-    pointer-events: none;
-}
-#map-compass .needle-n { position:absolute; top:0; left:0; right:0; height:50%; background:#e53935; border-radius:2px 2px 0 0; }
-#map-compass .needle-s { position:absolute; bottom:0; left:0; right:0; height:50%; background:#ccc; border-radius:0 0 2px 2px; }
-#map-compass .compass-n-label { position:absolute; top:2px; left:50%; transform:translateX(-50%); font-size:8px; font-weight:bold; color:#e53935; pointer-events:none; }
-#map-compass .compass-btns { display:flex; gap:4px; }
-#map-compass .compass-btn { width:26px; height:22px; border:1px solid #ddd; border-radius:4px; background:white; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#333; padding:0; }
-#map-compass .compass-btn:hover { background:#f0f0f0; }
-#map-compass .compass-reset { width:100%; height:20px; border:1px solid #ddd; border-radius:4px; background:white; font-size:9px; cursor:pointer; color:#555; }
-#map-compass .compass-reset:hover { background:#f0f0f0; }
-#map-compass .compass-deg { font-size:9px; color:#888; }
 </style>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, "Microsoft JhengHei", sans-serif; height: 100vh; display: flex; flex-direction: column; }
         #map { flex: 1; width: 100%; }
 
-        /* ===== 羅盤旋轉控制 ===== */
-        #compass-control {
-            position: absolute;
-            bottom: 30px;
-            right: 16px;
-            z-index: 9000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            user-select: none;
-        }
-        #compass-rose {
-            width: 72px;
-            height: 72px;
-            cursor: grab;
-            filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
-            transition: none;
-        }
-        #compass-rose:active { cursor: grabbing; }
-        #compass-btns {
-            display: flex;
-            gap: 3px;
-        }
-        .compass-btn {
-            width: 28px;
-            height: 22px;
-            font-size: 10px;
-            font-weight: bold;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background: rgba(255,255,255,0.92);
-            color: #333;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-        }
-        .compass-btn:hover { background: #e8f0fe; }
-        .compass-btn:active { background: #c5d8fd; }
-        #compass-reset {
-            font-size: 9px;
-            padding: 2px 8px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background: rgba(255,255,255,0.92);
-            color: #555;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-        }
-        #compass-reset:hover { background: #fce8e6; color: #c00; }
-        #compass-bearing {
-            font-size: 10px;
-            color: #333;
-            background: rgba(255,255,255,0.85);
-            padding: 1px 5px;
-            border-radius: 3px;
-            font-weight: bold;
-            letter-spacing: 0.5px;
-        }
 
         
         .loading-screen {
@@ -1460,22 +1358,6 @@ kbd {
     
     <div id="toast-container"></div>
     <div id="map"></div>
-    <!-- 羅盤旋轉控制 -->
-    <div id="map-compass">
-        <div class="compass-ring" id="compassRing">
-            <div class="compass-needle" id="compassNeedle">
-                <div class="needle-n"></div>
-                <div class="needle-s"></div>
-            </div>
-            <div class="compass-n-label">N</div>
-        </div>
-        <div class="compass-deg" id="compassDeg">0°</div>
-        <div class="compass-btns">
-            <button class="compass-btn" id="compassLeft" title="逆時針 1°">↺</button>
-            <button class="compass-btn" id="compassRight" title="順時針 1°">↻</button>
-        </div>
-        <button class="compass-reset" id="compassReset">重置北方</button>
-    </div>
     
     <!-- 工程列表切換按鈕 -->
     <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
@@ -8370,87 +8252,6 @@ renderBudgetChart();
             map.on('zoomend', updateNodeLabelVisibility);
             updateNodeLabelVisibility();
 
-            // ===== 羅盤旋轉控制 =====
-            (function() {
-                var mapRotation = 0;
-
-                function patchPaneRotation() {
-                    var pane = map.getPanes().mapPane;
-                    // 取得 Leaflet 目前設定的 pane 位置（translate3d 的 x,y）
-                    var pos = L.DomUtil.getPosition(pane);
-                    var size = map.getSize();
-                    // transformOrigin：viewport 中心相對於 pane 的位置
-                    var ox = size.x / 2 - pos.x;
-                    var oy = size.y / 2 - pos.y;
-                    pane.style.transformOrigin = ox + 'px ' + oy + 'px';
-                    // 重寫 transform：保留 Leaflet 的 translate，附加 rotate
-                    pane.style.transform = 'translate3d(' + pos.x + 'px,' + pos.y + 'px,0) rotate(' + mapRotation + 'deg)';
-                }
-
-                function updateCompassUI() {
-                    document.getElementById('compassNeedle').style.transform = 'rotate(' + mapRotation + 'deg)';
-                    document.getElementById('compassDeg').textContent = Math.round(((mapRotation % 360) + 360) % 360) + '°';
-                }
-
-                function applyRotation(deg) {
-                    mapRotation = deg;
-                    patchPaneRotation();
-                    updateCompassUI();
-                }
-
-                // 每次 Leaflet move/zoom 後重新注入 rotate
-                map.on('move zoom moveend zoomend', function() {
-                    if (mapRotation !== 0) patchPaneRotation();
-                });
-                map.on('resize', function() {
-                    if (mapRotation !== 0) patchPaneRotation();
-                });
-
-                // 按鈕微調 1°
-                document.getElementById('compassLeft').addEventListener('click', function() {
-                    applyRotation(mapRotation - 1);
-                });
-                document.getElementById('compassRight').addEventListener('click', function() {
-                    applyRotation(mapRotation + 1);
-                });
-                document.getElementById('compassReset').addEventListener('click', function() {
-                    applyRotation(0);
-                    // 完全清除 transform，讓 Leaflet 接管
-                    var pane = map.getPanes().mapPane;
-                    pane.style.transform = '';
-                    pane.style.transformOrigin = '';
-                    map.invalidateSize();
-                });
-
-                // 長按加速
-                var pressTimer = null;
-                function startPress(dir) {
-                    applyRotation(mapRotation + dir);
-                    pressTimer = setInterval(function() { applyRotation(mapRotation + dir); }, 80);
-                }
-                function stopPress() { clearInterval(pressTimer); pressTimer = null; }
-                ['compassLeft', 'compassRight'].forEach(function(id) {
-                    var dir = id === 'compassLeft' ? -1 : 1;
-                    var el = document.getElementById(id);
-                    el.addEventListener('mousedown', function() { startPress(dir); });
-                    el.addEventListener('mouseup', stopPress);
-                    el.addEventListener('mouseleave', stopPress);
-                });
-
-                // 拖拉羅盤環旋轉
-                var ring = document.getElementById('compassRing');
-                var dragging = false;
-                ring.addEventListener('mousedown', function(e) { dragging = true; e.preventDefault(); });
-                window.addEventListener('mousemove', function(e) {
-                    if (!dragging) return;
-                    var rect = ring.getBoundingClientRect();
-                    var cx = rect.left + rect.width / 2;
-                    var cy = rect.top + rect.height / 2;
-                    var angle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI + 90;
-                    applyRotation(angle);
-                });
-                window.addEventListener('mouseup', function() { dragging = false; });
-            })();
             
             // 定義多種底圖圖層
             const baseMaps = {
