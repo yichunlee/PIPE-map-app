@@ -800,7 +800,6 @@
     background: #f5f5f5;
 }
 
-
 /* 分支繪製模式樣式 */
 kbd {
     display: inline-block;
@@ -841,7 +840,6 @@ kbd {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, "Microsoft JhengHei", sans-serif; height: 100vh; display: flex; flex-direction: column; }
         #map { flex: 1; width: 100%; }
-
 
         
         .loading-screen {
@@ -1621,7 +1619,6 @@ kbd {
                 backdrop.addEventListener('click', e => { if (e.target === backdrop) close(false); });
             });
         }
-
 
         
         // 🔐 Google OAuth2 登入變數
@@ -2630,7 +2627,6 @@ kbd {
                 '<\/script></body></html>');
             win.document.close();
         }
-
 
         async function showPipelineDetail(pipelineId, keepView = false) {
             currentPipeline = allPipelines.find(p => p.id === pipelineId);
@@ -6240,7 +6236,6 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; displ
 .gantt-progress { position: absolute; left: 100%; padding-left: 6px; font-size: 10px; color: #333; font-weight: 600; white-space: nowrap; display: flex; align-items: center; height: 100%; }
 .gantt-today { position: absolute; width: 2px; height: 100%; background: #e53935; z-index: 10; }
 
-
 .edit-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, 95vw); background: white; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); padding: 16px; display: none; z-index: 200; max-height: 85vh; overflow-y: auto; }
 .edit-panel.show { display: block; }
 .edit-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 199; display: none; }
@@ -6709,7 +6704,6 @@ function renderChart() {
     initGanttDrag();
 }
 
-
 // ===== 甘特圖拖拉移動 / 調整長度 =====
 var _ganttDrag = null;
 
@@ -6816,7 +6810,6 @@ function ganttBarMouseDown(e, idx, typeNum) {
     e.currentTarget.style.cursor = 'grabbing';
 }
 
-
 function editItem(idx) {
     const item = items[idx];
     editingItem = item;
@@ -6892,24 +6885,23 @@ function showAddForm() {
         var numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
         var lbl = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber;
         var fullyCovered = isSegFullyCovered(seg.segmentNumber, numSmall, null);
-         var fullyCovered = isSegFullyCovered(seg.segmentNumber, numSmall, null);
-         var suffix = fullyCovered ? ' (已全部建立)' : '';
-         var disabledAttr = fullyCovered ? ' disabled' : '';
-         html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" data-diameter="' + (seg.diameter||'') + '" data-pipetype="' + (seg.pipeType||'') + '" data-method="' + (seg.method||'') + '" data-fully="' + (fullyCovered?'1':'0') + '"' + disabledAttr + '>' + lbl + suffix + '</option>';
+        var suffix = fullyCovered ? ' (已全部建立)' : '';
+        var disabledAttr = fullyCovered ? ' disabled' : '';
+        html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" data-diameter="' + (seg.diameter||'') + '" data-pipetype="' + (seg.pipeType||'') + '" data-method="' + (seg.method||'') + '" data-fully="' + (fullyCovered?'1':'0') + '"' + disabledAttr + '>' + lbl + suffix + '</option>';
+    });
     html += '</select>';
-     html += '</select>';
-     // 已建立段落摘要（在段落下拉下方）
-     var coveredList = [];
-     segments.forEach(function(seg2) {
-         var ns = Math.ceil((seg2.endDistance - seg2.startDistance) / 10);
-         if (isSegFullyCovered(seg2.segmentNumber, ns, null)) {
-             coveredList.push([seg2.diameter, seg2.pipeType, seg2.method].filter(Boolean).join(' ') + '-段落' + seg2.segmentNumber);
-         }
-     });
-     if (coveredList.length > 0) {
-         html += '<div style="font-size:10px;color:#e53935;margin-top:3px;margin-bottom:4px;">⚠️ 已全部建立（不可選）：' + coveredList.join('、') + '</div>';
-     }
-    html += '</div>';
+    var coveredSegs = [];
+    segments.forEach(function(seg2){
+        var ns = Math.ceil((seg2.endDistance - seg2.startDistance)/10);
+        if(isSegFullyCovered(seg2.segmentNumber, ns, null)){
+            coveredSegs.push([seg2.diameter,seg2.pipeType,seg2.method].filter(Boolean).join(' ')+'-段落'+seg2.segmentNumber);
+        }
+    });
+    if(coveredSegs.length>0){
+        html += '<div style="font-size:10px;color:#e53935;margin-top:3px;">⚠️ 已全部建立（不可選）：'+coveredSegs.join('、')+'</div>';
+    }
+    html += '<div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
+    html += '</div>'; // close pipelineFields
     html += '<div id="customFields" style="display:none;">';
     html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="0" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="0" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
     html += '</div>';
@@ -6927,7 +6919,6 @@ function showAddForm() {
 }
 
 function closePanel() { document.getElementById('editPanel').classList.remove('show'); document.getElementById('editBackdrop').classList.remove('show'); }
-
 
 // 計算某段落的已使用小段列表（回傳 Set of used small segment numbers）
 function getUsedSmallSegs(segNum, excludeItemId) {
@@ -6952,7 +6943,6 @@ function isSegFullyCovered(segNum, numSmall, excludeItemId) {
     return true;
 }
 
-
 // 計算某段落的已使用小段列表
 function getUsedSmallSegs(segNum, excludeItemId) {
     var used = new Set();
@@ -6968,9 +6958,9 @@ function getUsedSmallSegs(segNum, excludeItemId) {
 }
 
 function isSegFullyCovered(segNum, numSmall, excludeItemId) {
-    var used = getUsedSmallSegs(segNum, excludeItemId);
-    for (var i = 1; i <= numSmall; i++) { if (!used.has(i)) return false; }
-    return true;
+
+
+
 }
 
 function handleSegChange() {
@@ -7650,7 +7640,6 @@ function renderBudgetChart() {
         });
     });
 }
-
 
 // 初始化
 renderChart();
@@ -13677,7 +13666,6 @@ async function exportMonthlyReportToExcel() {
     }
 }
 
-
 // ==================== 分支編輯功能 ====================
 
 function toggleBranchEditMode() {
@@ -14231,7 +14219,6 @@ function cancelBranchEdit() {
     console.log('❌ 退出分支編輯模式');
 }
 
-
 // ==================== 新增工程功能 ====================
 
 // 帶密碼驗證的新增工程表單
@@ -14534,7 +14521,6 @@ function closeAddPipelineForm() {
     if (overlay) overlay.remove();
 }
 
-
 </script>
 
 <!-- 統計報表面板 -->
@@ -14554,7 +14540,6 @@ function closeAddPipelineForm() {
         <div style="text-align: center; padding: 50px; color: #999;">載入中...</div>
     </div>
 </div>
-
 
     <script>
         // 🔐 Google OAuth2 登入處理
