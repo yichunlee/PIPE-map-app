@@ -7314,6 +7314,8 @@ function showUnitPriceMgr() {
                 showToast('已儲存 ' + p.methodKey, 'success');
                 unitPrices[idx].unitPrice = unitPrice;
                 renderMgrContent();
+                renderChart();
+                renderBudgetChart();
             } else showToast(result.error || '儲存失敗', 'error');
         } catch(e) { showToast(e.message, 'error'); }
     };
@@ -7329,6 +7331,8 @@ function showUnitPriceMgr() {
                 showToast('已刪除', 'success');
                 unitPrices = unitPrices.filter(function(_, i){ return i !== idx; });
                 renderMgrContent();
+                renderChart();
+                renderBudgetChart();
             } else showToast(result.error || '刪除失敗', 'error');
         } catch(e) { showToast(e.message, 'error'); }
     };
@@ -7349,6 +7353,8 @@ function showUnitPriceMgr() {
                 if (existing >= 0) unitPrices[existing].unitPrice = unitPrice;
                 else unitPrices.push({ methodKey: methodKey, projectName: '', unitPrice: unitPrice, unit: 'm' });
                 renderMgrContent();
+                renderChart();
+                renderBudgetChart();
             } else showToast(result.error || '新增失敗', 'error');
         } catch(e) { showToast(e.message, 'error'); }
     };
@@ -7542,6 +7548,15 @@ function renderBudgetChart() {
 // 初始化
 renderChart();
 renderBudgetChart();
+
+// 監聽主頁面傳來的單價更新通知
+window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'unitPriceChanged' && event.data.unitPrices) {
+        unitPrices = event.data.unitPrices;
+        renderChart();
+        renderBudgetChart();
+    }
+});
 </` + `script>
 
 <!-- 統計報表面板 -->
@@ -8336,6 +8351,8 @@ renderBudgetChart();
                     const idx = unitPricesCache.findIndex(p => p.methodKey === methodKey && p.projectName === projectName);
                     if (idx >= 0) unitPricesCache[idx].unitPrice = unitPrice;
                     else unitPricesCache.push({ methodKey, projectName, unitPrice, unit: 'm', remark: '' });
+                    // 通知 blob 視窗即時刷新
+                    if (window.ganttWindow && !window.ganttWindow.closed) window.ganttWindow.postMessage({ type: 'unitPriceChanged', unitPrices: unitPricesCache }, '*');
                 } else showToast(result.error || '儲存失敗', 'error');
             } catch(e) { showToast(e.message, 'error'); }
         };
@@ -8350,6 +8367,7 @@ renderBudgetChart();
                     showToast('已刪除', 'success');
                     unitPricesCache = unitPricesCache.filter(p => !(p.methodKey === methodKey && p.projectName === projectName));
                     renderUnitPriceManager();
+                    if (window.ganttWindow && !window.ganttWindow.closed) window.ganttWindow.postMessage({ type: 'unitPriceChanged', unitPrices: unitPricesCache }, '*');
                 } else showToast(result.error || '刪除失敗', 'error');
             } catch(e) { showToast(e.message, 'error'); }
         };
@@ -9971,6 +9989,14 @@ renderBudgetChart();
         // 監聽來自甘特圖新視窗的訊息
         window.addEventListener('message', async function(event) {
             console.log('主頁面收到訊息:', event.data);
+
+            if (event.data && event.data.type === 'unitPriceChanged') {
+                // 即時刷新 blob 內的 unitPrices 並重繪圖表
+                if (event.data.unitPrices && window.ganttWindow && !window.ganttWindow.closed) {
+                    // This runs in main page - forward to blob via its own listener
+                }
+                return;
+            }
             
             if (event.data && event.data.type === 'ganttChanged') {
                 console.log('收到甘特圖變更通知，刷新日期標註...');
