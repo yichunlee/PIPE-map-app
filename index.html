@@ -6892,12 +6892,23 @@ function showAddForm() {
         var numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
         var lbl = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber;
         var fullyCovered = isSegFullyCovered(seg.segmentNumber, numSmall, null);
-        var suffix = fullyCovered ? ' ✓ (已全部建立)' : '';
-        var style = fullyCovered ? ' style="color:#aaa;"' : '';
-        html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" data-diameter="' + (seg.diameter||'') + '" data-pipetype="' + (seg.pipeType||'') + '" data-method="' + (seg.method||'') + '" data-fully="' + (fullyCovered?'1':'0') + '"' + style + '>' + lbl + suffix + '</option>';
-    });
+         var fullyCovered = isSegFullyCovered(seg.segmentNumber, numSmall, null);
+         var suffix = fullyCovered ? ' (已全部建立)' : '';
+         var disabledAttr = fullyCovered ? ' disabled' : '';
+         html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" data-diameter="' + (seg.diameter||'') + '" data-pipetype="' + (seg.pipeType||'') + '" data-method="' + (seg.method||'') + '" data-fully="' + (fullyCovered?'1':'0') + '"' + disabledAttr + '>' + lbl + suffix + '</option>';
     html += '</select>';
-    html += '<div id="rangeBox" style="display:none;"><label>小段範圍</label><div style="display:flex;gap:4px;"><select id="smallFrom" style="flex:1;" onchange="updateLabel()"></select><select id="smallTo" style="flex:1;" onchange="updateLabel()"></select></div></div>';
+     html += '</select>';
+     // 已建立段落摘要（在段落下拉下方）
+     var coveredList = [];
+     segments.forEach(function(seg2) {
+         var ns = Math.ceil((seg2.endDistance - seg2.startDistance) / 10);
+         if (isSegFullyCovered(seg2.segmentNumber, ns, null)) {
+             coveredList.push([seg2.diameter, seg2.pipeType, seg2.method].filter(Boolean).join(' ') + '-段落' + seg2.segmentNumber);
+         }
+     });
+     if (coveredList.length > 0) {
+         html += '<div style="font-size:10px;color:#e53935;margin-top:3px;margin-bottom:4px;">⚠️ 已全部建立（不可選）：' + coveredList.join('、') + '</div>';
+     }
     html += '</div>';
     html += '<div id="customFields" style="display:none;">';
     html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="0" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="0" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
@@ -6989,8 +7000,8 @@ function handleSegChange() {
     for (let i = 1; i <= numSmall; i++) {
         const used = isUsed(i);
         const label = '#' + i + (used ? ' ✓' : '');
-        opts += '<option value="' + i + '"' + (used ? ' style="color:#aaa;"' : '') + '>' + label + '</option>';
-        if (!used && firstFree < 0) firstFree = i;
+        const label = '#' + i + (used ? ' (已建立)' : '');
+        opts += '<option value="' + i + '"' + (used ? ' disabled' : '') + '>' + label + '</option>';
     }
     fromSel.innerHTML = opts;
     toSel.innerHTML = opts;
