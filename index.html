@@ -6693,11 +6693,10 @@ function renderChart() {
         }
         
         // Drag overlay（整條 bar 可拖移）+ resize handle（右端可拉長縮短）
-        html += '<div class="gantt-drag-overlay" data-idx="' + idx + '" data-left="' + left + '" data-width="' + barWidth + '" style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;z-index:10;cursor:grab;box-sizing:border-box;" title="拖拉移動 | 右端可調整長度">';
-        // Bar 標籤（在 overlay 內）
+        html += '<div class="gantt-drag-overlay" onmousedown="ganttBarMouseDown(event,' + idx + ',\'move\')" style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;z-index:10;cursor:grab;box-sizing:border-box;user-select:none;" title="拖拉移動">';
         html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:bold;text-shadow:0 1px 2px rgba(0,0,0,0.4);pointer-events:none;">' + barLabel + '</div>';
-        // Resize handle（右邊 8px）
-        html += '<div class="gantt-resize-handle" data-idx="' + idx + '" style="position:absolute;right:0;top:0;width:8px;height:100%;cursor:ew-resize;z-index:11;" title="拖拉調整結束日期"></div>';
+        // Resize handle（右邊 8px，蓋在 overlay 上面）
+        html += '<div class="gantt-resize-handle" onmousedown="ganttBarMouseDown(event,' + idx + ',\'resize\')" style="position:absolute;right:0;top:0;width:10px;height:100%;cursor:ew-resize;z-index:12;" title="拖拉調整結束日期"></div>';
         html += '</div>';
         html += '<div class="gantt-today" style="left:' + todayPct + '%;"></div>';
         html += '</div></div></div>';
@@ -6709,184 +6708,110 @@ function renderChart() {
 
 
 // ===== 甘特圖拖拉移動 / 調整長度 =====
-function initGanttDrag() {
-    const scrollOuter = document.getElementById('chartScrollOuter');
-    const scrollInner = document.getElementById('chartScrollInner');
-    if (!scrollOuter || !scrollInner) return;
+var _ganttDrag = null;
 
-    // 計算時間軸範圍（與 renderChart 相同邏輯）
-    const dates = items.flatMap(item => [new Date(item.startDate), new Date(item.endDate)]);
+function initGanttDrag() {
+    // 時間軸範圍（與 renderChart 相同）
+    const dates = items.flatMap(i => [new Date(i.startDate), new Date(i.endDate)]);
     let minDate = new Date(Math.min(...dates));
     let maxDate = new Date(Math.max(...dates));
     minDate.setDate(minDate.getDate() - 7);
     maxDate.setDate(maxDate.getDate() + 7);
-    const totalRange = maxDate - minDate;  // ms
+    const totalRangeMs = maxDate - minDate;
 
-    function pxToMs(px) {
-        const innerW = scrollInner.getBoundingClientRect().width || scrollInner.offsetWidth;
-        return px / innerW * totalRange;
+    function innerWidth() {
+        const el = document.getElementById('chartScrollInner');
+        return el ? el.getBoundingClientRect().width || el.offsetWidth : 1;
     }
-    function msToDateStr(ms) {
-        const d = new Date(ms);
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    }
-    function addDays(dateStr, days) {
+    function pxToDays(px) { return px / innerWidth() * totalRangeMs / 86400000; }
+    function shiftDate(dateStr, days) {
         const d = new Date(dateStr);
         d.setDate(d.getDate() + Math.round(days));
-        return msToDateStr(d.getTime());
+        return d.toISOString().slice(0,10);
     }
 
-    let dragState = null;
-
-    // Helper: find timeline container from event target
-    function getTimeline(el) {
-        let cur = el;
-        while (cur && !cur.classList.contains('gantt-timeline')) cur = cur.parentElement;
-        return cur;
+    // Floating tooltip
+    let tooltip = document.getElementById('ganttDragTip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'ganttDragTip';
+        tooltip.style.cssText = 'display:none;position:fixed;background:rgba(0,0,0,0.75);color:white;font-size:11px;padding:4px 10px;border-radius:5px;pointer-events:none;z-index:9999;white-space:nowrap;';
+        document.body.appendChild(tooltip);
     }
-
-    document.addEventListener('mousedown', function(e) {
-        const overlay = e.target.closest('.gantt-drag-overlay');
-        const handle = e.target.closest('.gantt-resize-handle');
-        if (!overlay && !handle) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        const el = handle || overlay;
-        const idx = parseInt(el.dataset.idx);
-        const item = items[idx];
-        if (!item) return;
-
-        const timeline = getTimeline(overlay || handle);
-        if (!timeline) return;
-        const timelineRect = timeline.getBoundingClientRect();
-
-        // Create ghost indicator
-        const ghost = document.createElement('div');
-        ghost.className = 'gantt-drag-ghost';
-        ghost.style.left = overlay ? overlay.style.left : overlay?.style.left || '0';
-        ghost.style.width = overlay ? overlay.style.width : overlay?.style.width || '0';
-        ghost.textContent = item.startDate + ' ～ ' + item.endDate;
-        timeline.appendChild(ghost);
-        // Match initial position
-        ghost.style.left = (handle || overlay).parentElement ? 
-            (overlay || handle.closest('.gantt-drag-overlay')).style.left : '0';
-        ghost.style.width = (overlay || handle.closest('.gantt-drag-overlay')).style.width;
-
-        dragState = {
-            type: handle ? 'resize' : 'move',
-            idx,
-            item,
-            startX: e.clientX,
-            ghost,
-            timeline,
-            timelineRect,
-            origStart: item.startDate,
-            origEnd: item.endDate,
-            origLeft: parseFloat((overlay || handle.closest('.gantt-drag-overlay')).style.left),
-            origWidth: parseFloat((overlay || handle.closest('.gantt-drag-overlay')).style.width),
-            overlay: overlay || handle.closest('.gantt-drag-overlay'),
-        };
-        (overlay || handle.closest('.gantt-drag-overlay')).classList.add('dragging');
-    });
 
     document.addEventListener('mousemove', function(e) {
-        if (!dragState) return;
-        const dx = e.clientX - dragState.startX;
-        const innerW = scrollInner.getBoundingClientRect().width || scrollInner.offsetWidth;
-        const dPct = dx / innerW * 100;
-        const dMs = pxToMs(dx);
-        const dDays = dMs / 86400000;
-
-        if (dragState.type === 'move') {
-            const newLeft = Math.max(0, dragState.origLeft + dPct);
-            dragState.ghost.style.left = newLeft + '%';
-            dragState.ghost.style.width = dragState.origWidth + '%';
-            const newStart = addDays(dragState.origStart, dDays);
-            const newEnd = addDays(dragState.origEnd, dDays);
-            dragState.ghost.textContent = newStart + ' ～ ' + newEnd;
+        if (!_ganttDrag) return;
+        const dx = e.clientX - _ganttDrag.startX;
+        const days = pxToDays(dx);
+        if (_ganttDrag.type === 'move') {
+            _ganttDrag.newStart = shiftDate(_ganttDrag.origStart, days);
+            _ganttDrag.newEnd   = shiftDate(_ganttDrag.origEnd,   days);
         } else {
-            const newWidth = Math.max(0.5, dragState.origWidth + dPct);
-            dragState.ghost.style.left = dragState.origLeft + '%';
-            dragState.ghost.style.width = newWidth + '%';
-            const newEnd = addDays(dragState.origEnd, dDays);
-            if (new Date(newEnd) > new Date(dragState.origStart)) {
-                dragState.ghost.textContent = dragState.origStart + ' ～ ' + newEnd;
-            }
+            _ganttDrag.newEnd = shiftDate(_ganttDrag.origEnd, days);
+            if (_ganttDrag.newEnd <= _ganttDrag.origStart) _ganttDrag.newEnd = shiftDate(_ganttDrag.origStart, 1);
+            _ganttDrag.newStart = _ganttDrag.origStart;
         }
-    });
+        tooltip.textContent = _ganttDrag.newStart + ' ～ ' + _ganttDrag.newEnd;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 14) + 'px';
+        tooltip.style.top  = (e.clientY - 10) + 'px';
+        _ganttDrag.moved = Math.abs(dx) > 4;
+    }, true);
 
     document.addEventListener('mouseup', async function(e) {
-        if (!dragState) return;
-        const state = dragState;
-        dragState = null;
+        if (!_ganttDrag) return;
+        const state = _ganttDrag;
+        _ganttDrag = null;
+        tooltip.style.display = 'none';
+        if (state.overlay) state.overlay.style.cursor = state.type === 'resize' ? 'ew-resize' : 'grab';
 
-        const dx = e.clientX - state.startX;
-        if (Math.abs(dx) < 4) {
-            // Too small a movement — treat as click → open edit panel
-            state.ghost.remove();
-            state.overlay.classList.remove('dragging');
-            editItem(state.idx);
-            return;
-        }
+        if (!state.moved) { editItem(state.idx); return; }
 
-        const innerW = scrollInner.getBoundingClientRect().width || scrollInner.offsetWidth;
-        const dDays = pxToMs(dx) / 86400000;
-
-        let newStart = state.origStart, newEnd = state.origEnd;
-        if (state.type === 'move') {
-            newStart = addDays(state.origStart, dDays);
-            newEnd = addDays(state.origEnd, dDays);
-        } else {
-            newEnd = addDays(state.origEnd, dDays);
-            if (new Date(newEnd) <= new Date(newStart)) newEnd = addDays(newStart, 1);
-        }
-
-        state.ghost.remove();
-        state.overlay.classList.remove('dragging');
-
-        // Optimistic update
-        state.item.startDate = newStart;
-        state.item.endDate = newEnd;
+        const item = items[state.idx];
+        item.startDate = state.newStart;
+        item.endDate   = state.newEnd;
         renderChart();
         renderBudgetChart();
 
-        // Save to backend
         try {
-            const params = new URLSearchParams({
-                action: 'updateGanttItem',
-                pipelineId: pipeline.id,
-                itemId: state.item.id,
-                label: state.item.label || '',
-                startDate: newStart,
-                endDate: newEnd,
-                status: state.item.status || '',
-                notes: state.item.notes || '',
-                unitPrice: state.item.unitPrice || ''
-            });
-            const res = await fetch(API_URL + '?' + params.toString());
-            const result = await res.json();
-            if (result.success) {
-                showToast('已更新日期', 'success');
-                if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
+            const p = new URLSearchParams({ action:'updateGanttItem', pipelineId:pipeline.id,
+                itemId:item.id, label:item.label||'', startDate:state.newStart, endDate:state.newEnd,
+                status:item.status||'', notes:item.notes||'', unitPrice:item.unitPrice||'' });
+            const r = await fetch(API_URL + '?' + p).then(r => r.json());
+            if (r.success) {
+                showToast('日期已更新', 'success');
+                if (window.opener) window.opener.postMessage({type:'ganttChanged'}, '*');
             } else {
-                // Rollback
-                state.item.startDate = state.origStart;
-                state.item.endDate = state.origEnd;
-                renderChart();
-                renderBudgetChart();
-                showToast('更新失敗：' + (result.error || ''), 'error');
+                item.startDate = state.origStart; item.endDate = state.origEnd;
+                renderChart(); renderBudgetChart();
+                showToast('更新失敗', 'error');
             }
         } catch(err) {
-            state.item.startDate = state.origStart;
-            state.item.endDate = state.origEnd;
-            renderChart();
-            renderBudgetChart();
+            item.startDate = state.origStart; item.endDate = state.origEnd;
+            renderChart(); renderBudgetChart();
             showToast('更新失敗', 'error');
         }
-    });
+    }, true);
 }
+
+function ganttBarMouseDown(e, idx, type) {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = items[idx];
+    if (!item) return;
+    _ganttDrag = {
+        type, idx,
+        startX: e.clientX,
+        origStart: item.startDate,
+        origEnd: item.endDate,
+        newStart: item.startDate,
+        newEnd: item.endDate,
+        moved: false,
+        overlay: e.currentTarget
+    };
+    e.currentTarget.style.cursor = 'grabbing';
+}
+
 
 function editItem(idx) {
     const item = items[idx];
