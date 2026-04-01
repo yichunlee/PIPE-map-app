@@ -6918,14 +6918,64 @@ function handleSegChange() {
     const sel = document.getElementById('segSelect');
     const opt = sel.options[sel.selectedIndex];
     if (!opt.value) { document.getElementById('rangeBox').style.display = 'none'; return; }
+    const segNum = opt.value;
     const numSmall = parseInt(opt.dataset.num || 1);
     const fromSel = document.getElementById('smallFrom');
     const toSel = document.getElementById('smallTo');
+
+    // 找出此段落已建立的甘特圖小段範圍（排除目前正在編輯的項目）
+    const usedRanges = [];
+    items.forEach(function(item) {
+        if (editingItem && item.id === editingItem.id) return; // 編輯中的自己跳過
+        const m = (item.label || '').match(/段落([\w\-]+)\s+#(\d+)～#(\d+)/);
+        if (m && String(m[1]) === String(segNum)) {
+            usedRanges.push({ from: parseInt(m[2]), to: parseInt(m[3]) });
+        }
+    });
+
+    // 計算每個小段是否已被覆蓋
+    function isUsed(n) {
+        return usedRanges.some(function(r) { return n >= r.from && n <= r.to; });
+    }
+
     let opts = '';
-    for (let i = 0; i < numSmall; i++) opts += '<option value="' + (i+1) + '">#' + (i+1) + '</option>';
+    let firstFree = -1;
+    for (let i = 1; i <= numSmall; i++) {
+        const used = isUsed(i);
+        const label = '#' + i + (used ? ' ✓' : '');
+        opts += '<option value="' + i + '"' + (used ? ' style="color:#aaa;"' : '') + '>' + label + '</option>';
+        if (!used && firstFree < 0) firstFree = i;
+    }
     fromSel.innerHTML = opts;
     toSel.innerHTML = opts;
-    toSel.value = numSmall;
+
+    // 預設選到第一個未使用的範圍
+    if (firstFree > 0) {
+        fromSel.value = firstFree;
+        // 找出連續未使用的最後一段
+        let lastFree = firstFree;
+        for (let i = firstFree + 1; i <= numSmall; i++) {
+            if (!isUsed(i)) lastFree = i; else break;
+        }
+        toSel.value = lastFree;
+    } else {
+        toSel.value = numSmall;
+    }
+
+    // 已用清單提示
+    var hintEl = document.getElementById('usedRangeHint');
+    if (!hintEl) {
+        hintEl = document.createElement('div');
+        hintEl.id = 'usedRangeHint';
+        hintEl.style.cssText = 'font-size:10px;color:#e53935;margin-top:4px;';
+        document.getElementById('rangeBox').appendChild(hintEl);
+    }
+    if (usedRanges.length > 0) {
+        hintEl.textContent = '已建立：' + usedRanges.map(function(r){ return '#' + r.from + '～#' + r.to; }).join('、');
+    } else {
+        hintEl.textContent = '';
+    }
+
     document.getElementById('rangeBox').style.display = 'block';
     updateLabel();
 }
