@@ -6794,7 +6794,8 @@ function initGanttDrag() {
     }, true);
 }
 
-function ganttBarMouseDown(e, idx, type) {
+function ganttBarMouseDown(e, idx, typeNum) {
+    var type = typeNum === 1 ? 'resize' : 'move';
     e.preventDefault();
     e.stopPropagation();
     const item = items[idx];
