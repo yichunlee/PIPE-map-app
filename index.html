@@ -6693,10 +6693,10 @@ function renderChart() {
         }
         
         // Drag overlay（整條 bar 可拖移）+ resize handle（右端可拉長縮短）
-        html += '<div class="gantt-drag-overlay" onmousedown="ganttBarMouseDown(event,' + idx + ',\'move\')" style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;z-index:10;cursor:grab;box-sizing:border-box;user-select:none;" title="拖拉移動">';
+        html += '<div class="gantt-drag-overlay" onmousedown="ganttBarMouseDown(event,' + idx + ',0)" style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;z-index:10;cursor:grab;box-sizing:border-box;user-select:none;" title="拖拉移動">';
         html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:bold;text-shadow:0 1px 2px rgba(0,0,0,0.4);pointer-events:none;">' + barLabel + '</div>';
         // Resize handle（右邊 8px，蓋在 overlay 上面）
-        html += '<div class="gantt-resize-handle" onmousedown="ganttBarMouseDown(event,' + idx + ',\'resize\')" style="position:absolute;right:0;top:0;width:10px;height:100%;cursor:ew-resize;z-index:12;" title="拖拉調整結束日期"></div>';
+        html += '<div class="gantt-resize-handle" onmousedown="ganttBarMouseDown(event,' + idx + ',1)" style="position:absolute;right:0;top:0;width:10px;height:100%;cursor:ew-resize;z-index:12;" title="拖拉調整結束日期"></div>';
         html += '</div>';
         html += '<div class="gantt-today" style="left:' + todayPct + '%;"></div>';
         html += '</div></div></div>';
