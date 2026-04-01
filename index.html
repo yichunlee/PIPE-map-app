@@ -2358,7 +2358,10 @@ kbd {
             }
 
             function getEffectiveUnitPriceLocal(item, unitPrices) {
-                if (item.unitPrice && item.unitPrice > 0) return +item.unitPrice;
+                // 自訂項目用 per-item 單價；管線項目用施工單價工作表
+                if (item.status && item.status.toString().startsWith('custom:')) {
+                    return (item.unitPrice && item.unitPrice > 0) ? +item.unitPrice : 0;
+                }
                 const label = item.label || '';
                 const match = unitPrices.find(p => label.indexOf(p.methodKey) >= 0);
                 return match ? +match.unitPrice : 0;
@@ -6853,8 +6856,14 @@ function editItem(idx) {
     html += '<label>開始日期</label><input id="startDate" type="date" value="' + (item.startDate || '') + '" onchange="var e=document.getElementById(&quot;endDate&quot;);if(e){e.min=this.value;}">';
     html += '<label>完成日期</label><input id="endDate" type="date" value="' + (item.endDate || '') + '" min="' + (item.startDate || '') + '">';
     html += '<label>備註</label><input id="notes" value="' + (item.notes || '') + '">';
-    html += '<label id="unitPriceLabel" style="display:flex;justify-content:space-between;">' + (isCustom ? '施工單價（元/式）' : '施工單價（元/m）') + '<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
-    html += '<input id="unitPriceInput" type="number" placeholder="輸入或自動帶入" value="' + (item.unitPrice || '') + '" style="margin-bottom:8px;">';
+    if (isCustom) {
+        html += '<label id="unitPriceLabel" style="display:flex;justify-content:space-between;">施工單價（元/式）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
+        html += '<input id="unitPriceInput" type="number" placeholder="輸入金額" value="' + (item.unitPrice || '') + '" style="margin-bottom:8px;">';
+    } else {
+        var cachedPrice = getEffectiveUnitPrice(item);
+        html += '<label style="display:flex;justify-content:space-between;color:#666;">施工單價（元/m）<span style="font-size:10px;color:#388e3c;">由施工單價工作表統一管理</span></label>';
+        html += '<div style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:8px 10px;font-size:13px;color:#555;margin-bottom:8px;">' + (cachedPrice ? cachedPrice.toLocaleString() + ' 元/m' : '（尚未設定，請至⚙️施工單價管理設定）') + '</div>';
+    }
     html += '<button class="btn-primary" onclick="saveItem()">💾 儲存</button><button class="btn-danger" onclick="deleteItem()">🗑️ 刪除</button>';
     document.getElementById('panelTitle').textContent = '✏️ 編輯項目';
     document.getElementById('panelBody').innerHTML = html;
@@ -6894,8 +6903,8 @@ function showAddForm() {
     html += '<label>開始日期</label><input id="startDate" type="date" onchange="var e=document.getElementById(&quot;endDate&quot;);if(e&&!e.value){e.min=this.value;e.value=this.value;}else if(e){e.min=this.value;}">';
     html += '<label>完成日期</label><input id="endDate" type="date">';
     html += '<label>備註</label><input id="notes">';
-    html += '<label id="unitPriceLabel" style="display:flex;justify-content:space-between;">施工單價（元/m）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
-    html += '<input id="unitPriceInput" type="number" placeholder="選段落自動帶入" style="margin-bottom:8px;">';
+    html += '<div id="unitPriceArea"></div>';
+    html += '<div id="unitPriceCustomArea" style="display:none;"><label>施工單價（元/式）</label><input id="unitPriceInput" type="number" placeholder="輸入金額" style="margin-bottom:8px;"></div>';
     html += '<button class="btn-primary" onclick="saveItem()">💾 新增</button>';
     document.getElementById('panelTitle').textContent = '＋ 新增項目';
     document.getElementById('panelBody').innerHTML = html;
@@ -6947,10 +6956,29 @@ function toggleItemType() {
     var isCustom = document.querySelector('input[name="itemType"]:checked')?.value === 'custom';
     var pf = document.getElementById('pipelineFields');
     var cf = document.getElementById('customFields');
-    var ul = document.getElementById('unitPriceLabel');
     if (pf) pf.style.display = isCustom ? 'none' : '';
     if (cf) cf.style.display = isCustom ? '' : 'none';
-    if (ul) ul.innerHTML = (isCustom ? '施工單價（元/式）' : '施工單價（元/m）') + '<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span>';
+    // 價格欄顯示切換
+    var ua = document.getElementById('unitPriceArea');
+    var uca = document.getElementById('unitPriceCustomArea');
+    if (ua) ua.style.display = isCustom ? 'none' : '';
+    if (uca) uca.style.display = isCustom ? '' : 'none';
+    if (!isCustom) showPipelinePriceHint();
+}
+
+function showPipelinePriceHint() {
+    var ua = document.getElementById('unitPriceArea');
+    if (!ua) return;
+    // 找出目前選的工法
+    var sel = document.getElementById('segSelect');
+    var opt = sel ? sel.options[sel.selectedIndex] : null;
+    var prefix = '';
+    if (opt && opt.value) {
+        prefix = [opt.dataset.diameter, opt.dataset.pipetype, opt.dataset.method].filter(Boolean).join(' ');
+    }
+    var cachedPrice = prefix ? (unitPrices.find(function(p){ return p.methodKey === prefix; }) || null) : null;
+    var priceText = cachedPrice ? cachedPrice.unitPrice.toLocaleString() + ' 元/m' : '（尚未設定，請至⚙️施工單價管理設定）';
+    ua.innerHTML = '<label style="display:flex;justify-content:space-between;color:#666;">施工單價（元/m）<span style="font-size:10px;color:#388e3c;">由施工單價工作表統一管理</span></label><div style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:8px 10px;font-size:13px;color:#555;margin-bottom:8px;">' + priceText + '</div>';
 }
 
 async function saveItem() {
@@ -6968,7 +6996,9 @@ async function saveItem() {
         var rateEl = document.getElementById('customRateNum');
         statusVal = 'custom:' + (rateEl ? (rateEl.value || '0') : '0');
     }
-    const params = new URLSearchParams({ action, pipelineId: pipeline.id, label, startDate, endDate, status: statusVal, notes, unitPrice });
+    // 管線項目不儲存 per-item 單價（統一用施工單價工作表）；自訂項目才儲存
+    var unitPriceToSave = (itemTypeVal === 'custom') ? unitPrice : '';
+    const params = new URLSearchParams({ action, pipelineId: pipeline.id, label, startDate, endDate, status: statusVal, notes, unitPrice: unitPriceToSave });
     if (editingItem) params.append('itemId', editingItem.id);
     try {
         const res = await fetch(API_URL + '?' + params.toString());
@@ -7022,13 +7052,16 @@ function hideEditForm() {
 
 // ===== S 曲線 =====
 function getEffectiveUnitPrice(item) {
-    // 先用 item 本身的 unitPrice，若無則從 unitPrices 快取比對 methodKey
-    if (item.unitPrice && item.unitPrice > 0) return item.unitPrice;
+    // 自訂項目（custom:xxx）才用 item 自身的 unitPrice
+    if (isCustomItem(item)) {
+        return (item.unitPrice && item.unitPrice > 0) ? +item.unitPrice : 0;
+    }
+    // 管線項目：統一從施工單價工作表讀取（by methodKey），忽略 item.unitPrice
     var label = item.label || '';
     var match = unitPrices.find(function(p) {
         return label.indexOf(p.methodKey) >= 0;
     });
-    return match ? match.unitPrice : 0;
+    return match ? +match.unitPrice : 0;
 }
 
 function computeMonthlyCumulative() {
