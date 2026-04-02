@@ -6989,7 +6989,7 @@ function handleSegChange() {
     let firstFree = -1;
     for (let i = 1; i <= numSmall; i++) {
         const used = isUsed(i);
-        const label = '#' + i + (used ? ' ✓' : '');
+
         const label = '#' + i + (used ? ' (已建立)' : '');
         opts += '<option value="' + i + '"' + (used ? ' disabled' : '') + '>' + label + '</option>';
     }
