@@ -6925,9 +6925,11 @@ function getUsedSmallSegs(segNum, excludeItemId) {
     var used = new Set();
     console.log('[DEBUG] getUsedSmallSegs called, segNum=', segNum, 'items count=', items.length);
     items.forEach(function(item){ console.log('[DEBUG] item label:', item.label); });
+
     items.forEach(function(item) {
         if (excludeItemId && item.id === excludeItemId) return;
         var m = (item.label || '').match(/段落([\w\-]+)\s+#(\d+)～#(\d+)/);
+        var testM = (item.label || '').match(/段落([\w\-]+)\s+#(\d+)～#(\d+)/); console.log('[DEBUG] match:', item.label, '->', testM ? 'seg='+testM[1] : 'NO MATCH');
         if (m && String(m[1]) === String(segNum)) {
             var f = parseInt(m[2]), t = parseInt(m[3]);
             for (var i = f; i <= t; i++) used.add(i);
