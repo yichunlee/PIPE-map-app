@@ -6934,29 +6934,6 @@ function getUsedSmallSegs(segNum, excludeItemId) {
     return used;
 }
 
-// 檢查段落是否已全部建立
-function isSegFullyCovered(segNum, numSmall, excludeItemId) {
-    var used = getUsedSmallSegs(segNum, excludeItemId);
-    for (var i = 1; i <= numSmall; i++) {
-        if (!used.has(i)) return false;
-    }
-    return true;
-}
-
-// 計算某段落的已使用小段列表
-function getUsedSmallSegs(segNum, excludeItemId) {
-    var used = new Set();
-    items.forEach(function(item) {
-        if (excludeItemId && item.id === excludeItemId) return;
-        var m = (item.label || '').match(/段落([\w\-]+)\s+#(\d+)～#(\d+)/);
-        if (m && String(m[1]) === String(segNum)) {
-            var f = parseInt(m[2]), t = parseInt(m[3]);
-            for (var i = f; i <= t; i++) used.add(i);
-        }
-    });
-    return used;
-}
-
 function isSegFullyCovered(segNum, numSmall, excludeItemId) {
 
 
