@@ -6923,13 +6923,10 @@ function closePanel() { document.getElementById('editPanel').classList.remove('s
 // 計算某段落的已使用小段列表（回傳 Set of used small segment numbers）
 function getUsedSmallSegs(segNum, excludeItemId) {
     var used = new Set();
-    console.log('[DEBUG] getUsedSmallSegs called, segNum=', segNum, 'items count=', items.length);
-    items.forEach(function(item){ console.log('[DEBUG] item label:', item.label); });
 
     items.forEach(function(item) {
         if (excludeItemId && item.id === excludeItemId) return;
-        var m = (item.label || '').match(/段落([\w\-]+)\s+#(\d+)～#(\d+)/);
-        var testM = (item.label || '').match(/段落([\w\-]+)\s+#(\d+)～#(\d+)/); console.log('[DEBUG] match:', item.label, '->', testM ? 'seg='+testM[1] : 'NO MATCH');
+        var m = (item.label || '').match(/æ®µè½([^ ]+) #([0-9]+)ï½#([0-9]+)/);
         if (m && String(m[1]) === String(segNum)) {
             var f = parseInt(m[2]), t = parseInt(m[3]);
             for (var i = f; i <= t; i++) used.add(i);
@@ -6960,7 +6957,7 @@ function handleSegChange() {
     const usedRanges = []; // 計算已用區間（用於提示）
     items.forEach(function(item) {
         if (excludeId && item.id === excludeId) return;
-        const m = (item.label || '').match(/段落([\w\-]+)\s+#(\d+)～#(\d+)/);
+        const m = (item.label || '').match(/æ®µè½([^ ]+) #([0-9]+)ï½#([0-9]+)/);
         if (m && String(m[1]) === String(segNum)) {
             usedRanges.push({ from: parseInt(m[2]), to: parseInt(m[3]) });
         }
