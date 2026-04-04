@@ -1679,6 +1679,63 @@ function renderGanttChart() {
     }
 }
 
+// ===== 甘特圖 bar → 地圖螢光高亮 =====
+let _ganttHighlightedPolylines = []; // 目前螢光中的 { polyline, origColor, origWeight, origOpacity }
+
+function clearGanttHighlight() {
+    for (const h of _ganttHighlightedPolylines) {
+        try {
+            h.polyline.setStyle({ color: h.origColor, weight: h.origWeight, opacity: h.origOpacity });
+        } catch(e) {}
+    }
+    _ganttHighlightedPolylines = [];
+}
+
+function highlightGanttSegment(item) {
+    clearGanttHighlight();
+    if (!item || !item.label) return;
+
+    // 解析 label：「xxx - 段落{segNum} #{from}～#{to}」
+    const sMatch = item.label.match(/段落([A-Za-z0-9\-]+)/);
+    const rMatch = item.label.match(/#(\d+)～#(\d+)/);
+    if (!sMatch) return;
+
+    const segNum = String(sMatch[1]);
+    const fromIdx = rMatch ? parseInt(rMatch[1]) - 1 : null; // 轉 0-based
+    const toIdx   = rMatch ? parseInt(rMatch[2]) - 1 : null;
+
+    // 掃描 smallSegmentPolylines 找出符合的 polylines
+    const matched = [];
+    for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
+        if (String(entry.segment.segmentNumber) !== segNum) continue;
+        if (fromIdx !== null && (entry.smallIndex < fromIdx || entry.smallIndex > toIdx)) continue;
+        matched.push(entry);
+    }
+
+    if (matched.length === 0) return;
+
+    // 螢光樣式
+    for (const entry of matched) {
+        const style = entry.polyline.options;
+        _ganttHighlightedPolylines.push({
+            polyline: entry.polyline,
+            origColor: style.color || entry.color || '#2196F3',
+            origWeight: style.weight || 4,
+            origOpacity: style.opacity !== undefined ? style.opacity : 1
+        });
+        entry.polyline.setStyle({ color: '#FFEB3B', weight: 10, opacity: 1 });
+        entry.polyline.bringToFront();
+    }
+
+    // 移動地圖視角到第一個螢光段
+    try {
+        const first = matched[0].polyline.getLatLngs();
+        if (first && first.length > 0) map.panTo(first[Math.floor(first.length / 2)], { animate: true });
+    } catch(e) {}
+}
+
+window.clearGanttHighlight = clearGanttHighlight;
+
 window.showGanttPopup = function(idx) {
     console.log('showGanttPopup called with idx:', idx);
     const item = ganttData[idx];
@@ -1687,6 +1744,8 @@ window.showGanttPopup = function(idx) {
         console.error('Item not found for idx:', idx);
         return;
     }
+    // 地圖螢光高亮對應管段
+    highlightGanttSegment(item);
     const days = Math.round((new Date(item.endDate) - new Date(item.startDate)) / 86400000);
     document.getElementById('ganttSidebarTitle').textContent = '📋 ' + item.label;
     const body = document.getElementById('ganttSidebarBody');
@@ -1966,6 +2025,7 @@ window.closeGanttInPagePanel = function() {
     const backdrop = document.getElementById('ganttBackdrop');
     if (panel) panel.style.display = 'none';
     if (backdrop) backdrop.style.display = 'none';
+    clearGanttHighlight(); // 關閉時清除地圖螢光
 };
 
 window.openGanttPanelForSegment = async function(segmentNumber, fromSmall, toSmall) {
