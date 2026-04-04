@@ -772,11 +772,15 @@ window.showRightClickMenu = function(latlng, clientX, clientY) {
     menu.style.cssText = 'position:fixed; left:' + clientX + 'px; top:' + clientY + 'px; background:white; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,0.2); z-index:9999; overflow:hidden; min-width:160px;';
     const lat = latlng.lat;
     const lng = latlng.lng;
+    const ganttRectItem = currentPipeline
+        ? '<div class="rcm-item" style="border-top:2px solid #e8f5e9;background:#f9fffe;" onclick="closeRightClickMenu();startGanttRectSelect()">🗺️ <span>圈選建甘特</span></div>'
+        : '';
     menu.innerHTML =
         '<div class="rcm-item" onclick="closeRightClickMenu();showAddNotePopup({lat:' + lat + ',lng:' + lng + '})">📝 <span>新增備註</span></div>' +
         '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddShaftPopup(' + lat + ',' + lng + ')">🕳️ <span>新增工作井</span></div>' +
         '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddPanelPopup({lat:' + lat + ',lng:' + lng + '})">🔌 <span>新增配電盤/儀表箱</span></div>' +
-        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>';
+        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>' +
+        ganttRectItem;
     
     document.body.appendChild(menu);
     
