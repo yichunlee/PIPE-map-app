@@ -626,8 +626,8 @@ function cancelGanttRectSelect() {
 function finishGanttRectSelect(bounds) {
     cancelGanttRectSelect();
 
-    // 找出在範圍內的 segments（用 smallSegmentPolylines 判斷）
-    const hitSegments = new Map(); // segmentNumber → segment 物件
+    // 找出在範圍內的 segments + 記錄命中的小段範圍（min/max smallIndex，1-based）
+    const hitMap = new Map(); // segmentNumber → { segment, minIdx, maxIdx }
     for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
         const latlngs = entry.polyline.getLatLngs();
         const midpoint = latlngs.length >= 2
@@ -636,29 +636,39 @@ function finishGanttRectSelect(bounds) {
                 (latlngs[0].lng + latlngs[latlngs.length - 1].lng) / 2
               )
             : latlngs[0];
-        if (bounds.contains(latlngs[0]) || bounds.contains(latlngs[latlngs.length - 1]) || bounds.contains(midpoint)) {
-            hitSegments.set(String(entry.segment.segmentNumber), entry.segment);
+        const hit = bounds.contains(latlngs[0]) ||
+                    bounds.contains(latlngs[latlngs.length - 1]) ||
+                    bounds.contains(midpoint);
+        if (!hit) continue;
+
+        const segKey = String(entry.segment.segmentNumber);
+        const idx1based = entry.smallIndex + 1; // smallIndex 是 0-based，選單是 1-based
+        if (!hitMap.has(segKey)) {
+            hitMap.set(segKey, { segment: entry.segment, minIdx: idx1based, maxIdx: idx1based });
+        } else {
+            const cur = hitMap.get(segKey);
+            cur.minIdx = Math.min(cur.minIdx, idx1based);
+            cur.maxIdx = Math.max(cur.maxIdx, idx1based);
         }
     }
 
-    if (hitSegments.size === 0) {
+    if (hitMap.size === 0) {
         showToast('框選範圍內沒有找到管線段落', 'warning');
         return;
     }
 
-    const segments = Array.from(hitSegments.values())
-        .sort((a, b) => a.startDistance - b.startDistance);
+    const entries = Array.from(hitMap.values())
+        .sort((a, b) => a.segment.startDistance - b.segment.startDistance);
 
-    if (segments.length === 1) {
-        // 只有一個段落，直接帶入
-        openGanttPanelForSegment(segments[0].segmentNumber);
+    if (entries.length === 1) {
+        const e = entries[0];
+        openGanttPanelForSegment(e.segment.segmentNumber, e.minIdx, e.maxIdx);
     } else {
-        // 多個段落 → 讓使用者選
-        showGanttSegmentPicker(segments);
+        showGanttSegmentPicker(entries);
     }
 }
 
-function showGanttSegmentPicker(segments) {
+function showGanttSegmentPicker(entries) {
     // 移除舊的
     const old = document.getElementById('ganttSegPickerModal');
     if (old) old.remove();
@@ -668,24 +678,28 @@ function showGanttSegmentPicker(segments) {
     backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;';
 
     const box = document.createElement('div');
-    box.style.cssText = 'background:white;border-radius:12px;padding:20px;min-width:300px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+    box.style.cssText = 'background:white;border-radius:12px;padding:20px;min-width:300px;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
 
     const title = document.createElement('div');
     title.style.cssText = 'font-weight:bold;font-size:14px;margin-bottom:12px;color:#00695C;';
-    title.textContent = `📋 找到 ${segments.length} 個段落，請選擇要新增甘特項目的段落：`;
+    title.textContent = `📋 找到 ${entries.length} 個段落，請選擇要新增甘特項目的段落：`;
     box.appendChild(title);
 
-    segments.forEach(seg => {
+    entries.forEach(e => {
+        const seg = e.segment;
         const method = seg.method || '未設定';
         const numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
+        const rangeText = e.minIdx === e.maxIdx
+            ? `#${e.minIdx}`
+            : `#${e.minIdx}～#${e.maxIdx}`;
         const btn = document.createElement('button');
         btn.style.cssText = 'display:block;width:100%;text-align:left;padding:9px 12px;margin-bottom:6px;border:1px solid #e0e0e0;border-radius:6px;cursor:pointer;background:#f9f9f9;font-size:13px;transition:background 0.15s;';
-        btn.innerHTML = `<strong>段落 #${seg.segmentNumber}</strong> <span style="color:#666;font-size:12px;">— ${method}，${numSmall} 小段（${seg.startDistance}m～${seg.endDistance}m）</span>`;
+        btn.innerHTML = `<strong>段落 #${seg.segmentNumber}</strong> 小段 <span style="color:#00695C;font-weight:bold;">${rangeText}</span> <span style="color:#888;font-size:11px;">（${method}，共 ${numSmall} 小段）</span>`;
         btn.onmouseover = () => btn.style.background = '#e8f5e9';
         btn.onmouseout = () => btn.style.background = '#f9f9f9';
         btn.onclick = () => {
             backdrop.remove();
-            openGanttPanelForSegment(seg.segmentNumber);
+            openGanttPanelForSegment(seg.segmentNumber, e.minIdx, e.maxIdx);
         };
         box.appendChild(btn);
     });
