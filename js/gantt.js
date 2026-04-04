@@ -1854,8 +1854,7 @@ function showGanttForm(item, isEdit) {
         `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">完成日期</div><input id="gt_endDate" type="date" value="${item.endDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></div>`,
         `</div>`,
         `<input id="gt_notes" placeholder="備註（選填）" value="${esc(item.notes||'')}" style="${inputStyle}">`,
-        `<div style="font-size:10px;color:#666;margin-bottom:2px;">施工單價（元/m）<span id="gt_unitPriceHint" style="color:#1976d2;font-size:10px;margin-left:4px;"></span></div>`,
-        `<input id="gt_unitPrice" type="number" placeholder="輸入或自動帶入" value="${item.unitPrice||''}" style="${inputStyle}" oninput="document.getElementById('gt_unitPriceHint').textContent='';">`
+        `<div id="gt_unitPriceDisplay" style="font-size:11px;color:#666;padding:6px 8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:5px;">施工單價：計算中…</div>`
     ].join('');
     
     // 如果是編輯模式，設定預選值
@@ -1927,14 +1926,19 @@ function updateGanttLabelFromRange() {
     const labelEl = document.getElementById('gt_label');
     if (labelEl) labelEl.value = label;
     
-    // 自動帶入施工單價（從 unitPricesCache 查詢 methodKey = prefix）
-    const priceEl = document.getElementById('gt_unitPrice');
-    const hintEl = document.getElementById('gt_unitPriceHint');
-    if (priceEl && !priceEl.value && prefix) {
-        const match = unitPricesCache.find(p => p.methodKey === prefix);
-        if (match) {
-            priceEl.value = match.unitPrice;
-            if (hintEl) hintEl.textContent = '（自動帶入）';
+    // 顯示施工單價（從 unitPricesCache 查詢，唯讀）
+    const displayEl = document.getElementById('gt_unitPriceDisplay');
+    if (displayEl) {
+        if (prefix) {
+            const match = unitPricesCache.find(p => p.methodKey === prefix);
+            if (match) {
+                displayEl.innerHTML = `施工單價：<b style="color:#00695C;">${match.unitPrice.toLocaleString()} 元/m</b> <span style="font-size:10px;color:#888;">（由⚙️單價管理設定）</span>`;
+                displayEl.style.color = '#333';
+            } else {
+                displayEl.innerHTML = `施工單價：<span style="color:#e57373;">尚未設定</span> <a href="#" onclick="showUnitPriceManager();return false;" style="font-size:10px;color:#1976d2;">→ 前往⚙️設定</a>`;
+            }
+        } else {
+            displayEl.textContent = '施工單價：（選取段落後顯示）';
         }
     }
     
@@ -1953,13 +1957,18 @@ function updateGanttLabelFromRange() {
 };
 
 function getGanttFormData() {
+    // 從 label 反推 methodKey，查 unitPricesCache 取得單價
+    const label = document.getElementById('gt_label') ? document.getElementById('gt_label').value.trim() : '';
+    const dashIdx = label.lastIndexOf(' - 段落');
+    const prefix = dashIdx > 0 ? label.substring(0, dashIdx) : '';
+    const matched = prefix ? unitPricesCache.find(p => p.methodKey === prefix) : null;
     return {
-        label: document.getElementById('gt_label').value.trim(),
+        label,
         startDate: document.getElementById('gt_startDate').value,
         endDate: document.getElementById('gt_endDate').value,
         status: '',
         notes: document.getElementById('gt_notes').value.trim(),
-        unitPrice: document.getElementById('gt_unitPrice') ? (document.getElementById('gt_unitPrice').value || '') : ''
+        unitPrice: matched ? String(matched.unitPrice) : ''
     };
 }
 
