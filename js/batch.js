@@ -660,7 +660,7 @@ function finishGanttRectSelect(bounds) {
     // 排除已建立 bar 的小段範圍
     // ganttData label 格式：「xxx - 段落{segNum} #{from}～#{to}」
     // 對每個 entry，掃描 ganttData 找出同段落已佔用的小段，計算未覆蓋的範圍
-    const existingItems = (typeof ganttData !== 'undefined') ? ganttData : [];
+    const existingItems = window.ganttData || [];
 
     function getUnoccupiedRange(segNum, minIdx, maxIdx) {
         // 找出同段落所有已建立 bar 的 [from, to] 區間
