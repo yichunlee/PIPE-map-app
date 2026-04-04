@@ -2044,14 +2044,10 @@ window.openGanttPanelForSegment = async function(segmentNumber, fromSmall, toSma
     const nameEl = document.getElementById('ganttPipelineName');
     if (nameEl) nameEl.textContent = currentPipeline.name || '';
 
-    // 載入甘特圖資料（如果還沒載入）
-    if (ganttData.length === 0) {
-        document.getElementById('ganttPanelBody').innerHTML =
-            '<div style="color:#aaa;text-align:center;padding:30px;">載入中…</div>';
-        await loadGanttData();
-    } else {
-        renderGanttChart();
-    }
+    // 永遠重新載入當前工程的甘特資料（避免顯示舊工程殘留）
+    document.getElementById('ganttPanelBody').innerHTML =
+        '<div style="color:#aaa;text-align:center;padding:30px;">載入中…</div>';
+    await loadGanttData();
 
     // 顯示新增表單並自動選好段落
     showGanttForm({}, false);

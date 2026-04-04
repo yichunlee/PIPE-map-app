@@ -1,5 +1,14 @@
 async function showPipelineDetail(pipelineId, keepView = false) {
     currentPipeline = allPipelines.find(p => p.id === pipelineId);
+
+    // 切換工程時清空甘特資料，避免顯示舊工程的甘特條
+    if (typeof ganttData !== 'undefined') ganttData = [];
+    if (window.ganttData) window.ganttData = [];
+    // 同時關閉 in-page panel（若開著）
+    const _gp = document.getElementById('ganttPanel');
+    const _gb = document.getElementById('ganttBackdrop');
+    if (_gp) _gp.style.display = 'none';
+    if (_gb) _gb.style.display = 'none';
     
     // 設定子工程地圖按鈕狀態
     setMapContext('pipeline');
