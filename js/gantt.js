@@ -1958,3 +1958,51 @@ window.deleteGanttItem = async function(id) {
     } catch(e) { showToast(e.message, 'error'); }
 };
 // ========== 甘特圖功能結束 ==========
+
+// ==================== 圈選建甘特：開啟 in-page panel 並預選段落 ====================
+// 關閉 in-page 甘特圖 panel
+window.closeGanttInPagePanel = function() {
+    const panel = document.getElementById('ganttPanel');
+    const backdrop = document.getElementById('ganttBackdrop');
+    if (panel) panel.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+};
+
+window.openGanttPanelForSegment = async function(segmentNumber) {
+    if (!currentPipeline) return;
+
+    // 顯示 panel + backdrop
+    const panel = document.getElementById('ganttPanel');
+    const backdrop = document.getElementById('ganttBackdrop');
+    if (!panel) return;
+    panel.style.display = 'flex';
+    if (backdrop) backdrop.style.display = 'block';
+
+    // 設定 header 工程名稱
+    const nameEl = document.getElementById('ganttPipelineName');
+    if (nameEl) nameEl.textContent = currentPipeline.name || '';
+
+    // 載入甘特圖資料（如果還沒載入）
+    if (ganttData.length === 0) {
+        document.getElementById('ganttPanelBody').innerHTML =
+            '<div style="color:#aaa;text-align:center;padding:30px;">載入中…</div>';
+        await loadGanttData();
+    } else {
+        renderGanttChart();
+    }
+
+    // 顯示新增表單並自動選好段落
+    showGanttForm({}, false);
+
+    // 等 DOM 更新完再設值
+    setTimeout(() => {
+        const segSel = document.getElementById('gt_segSelect');
+        if (!segSel) return;
+        segSel.value = String(segmentNumber);
+        if (segSel.value === String(segmentNumber)) {
+            onGanttSegSelect(); // 觸發小段選單
+        } else {
+            showToast(`找不到段落 #${segmentNumber}，請手動選取`, 'warning');
+        }
+    }, 60);
+};
