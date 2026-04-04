@@ -1789,7 +1789,7 @@ function showGanttForm(item, isEdit) {
         `<div style="font-size:10px;color:#666;margin-bottom:2px;">項目名稱</div>`,
         `<input id="gt_label" placeholder="施工項目名稱" value="${esc(item.label||'')}" style="${inputStyle}">`,
         `<div style="display:flex;gap:4px;margin-bottom:5px;">`,
-        `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">開始日期</div><input id="gt_startDate" type="date" value="${item.startDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></div>`,
+        `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">開始日期</div><input id="gt_startDate" type="date" value="${item.startDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;" oninput="const ed=document.getElementById('gt_endDate');if(!ed.value)ed.value=this.value;"></div>`,
         `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">完成日期</div><input id="gt_endDate" type="date" value="${item.endDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></div>`,
         `</div>`,
         `<input id="gt_notes" placeholder="備註（選填）" value="${esc(item.notes||'')}" style="${inputStyle}">`,
@@ -1968,7 +1968,7 @@ window.closeGanttInPagePanel = function() {
     if (backdrop) backdrop.style.display = 'none';
 };
 
-window.openGanttPanelForSegment = async function(segmentNumber) {
+window.openGanttPanelForSegment = async function(segmentNumber, fromSmall, toSmall) {
     if (!currentPipeline) return;
 
     // 顯示 panel + backdrop
@@ -2001,6 +2001,19 @@ window.openGanttPanelForSegment = async function(segmentNumber) {
         segSel.value = String(segmentNumber);
         if (segSel.value === String(segmentNumber)) {
             onGanttSegSelect(); // 觸發小段選單
+            // 再等小段選單產生後設定 from/to
+            setTimeout(() => {
+                if (fromSmall != null) {
+                    const fromSel = document.getElementById('gt_smallFrom');
+                    if (fromSel) { fromSel.value = String(fromSmall); }
+                }
+                if (toSmall != null) {
+                    const toSel = document.getElementById('gt_smallTo');
+                    if (toSel) { toSel.value = String(toSmall); }
+                }
+                // 觸發 label/單價 自動更新
+                if (typeof updateGanttLabelFromRange === 'function') updateGanttLabelFromRange();
+            }, 60);
         } else {
             showToast(`找不到段落 #${segmentNumber}，請手動選取`, 'warning');
         }
