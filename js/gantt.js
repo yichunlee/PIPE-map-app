@@ -1,5 +1,5 @@
 // ========== 甘特圖功能 ==========
-let ganttData = [];
+window.ganttData = []; // 全域，讓 batch.js 可存取已建立的甘特項目
 let ganttPanelOpen = false;
 let unitPricesCache = []; // 施工單價快取
 
@@ -1566,7 +1566,7 @@ async function loadGanttData() {
             apiCall('getGanttItems', { pipelineId: currentPipeline.id }),
             apiCall('getUnitPrices', { pipelineId: currentPipeline.id, projectName: currentProject ? currentProject.name || '' : '' })
         ]);
-        ganttData = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+        ganttData = window.ganttData = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
         unitPricesCache = upResult.prices || [];
         console.log('甘特圖資料:', ganttData);
         console.log('施工單價:', unitPricesCache);
