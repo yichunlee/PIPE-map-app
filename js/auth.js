@@ -5,17 +5,20 @@ function showUserInfo() {
     const userAvatar = document.getElementById('userAvatar');
     const userName = document.getElementById('userName');
     const userRole = document.getElementById('userRole');
-    
+
+    // 若頁面沒有這些元素就直接跳過（避免 null.src crash）
+    if (!userInfoDiv) return;
+
     if (currentUser) {
-        userAvatar.src = currentUser.picture || '';
-        userName.textContent = currentUser.name || '';
-        userRole.textContent = getRoleLabel(currentUser.role);
+        if (userAvatar) userAvatar.src = currentUser.picture || '';
+        if (userName) userName.textContent = currentUser.name || '';
+        if (userRole) userRole.textContent = getRoleLabel(currentUser.role);
         userInfoDiv.style.display = 'flex';
     } else {
         // 訪客模式：顯示登入按鈕
-        userAvatar.src = '';
-        userName.textContent = '訪客模式';
-        userRole.textContent = '🔑 點擊登入';
+        if (userAvatar) userAvatar.src = '';
+        if (userName) userName.textContent = '訪客模式';
+        if (userRole) userRole.textContent = '🔑 點擊登入';
         userInfoDiv.style.display = 'flex';
         userInfoDiv.style.cursor = 'pointer';
         userInfoDiv.onclick = function() {
