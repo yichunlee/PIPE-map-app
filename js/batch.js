@@ -657,8 +657,84 @@ function finishGanttRectSelect(bounds) {
         return;
     }
 
-    const entries = Array.from(hitMap.values())
-        .sort((a, b) => a.segment.startDistance - b.segment.startDistance);
+    // 排除已建立 bar 的小段範圍
+    // ganttData label 格式：「xxx - 段落{segNum} #{from}～#{to}」
+    // 對每個 entry，掃描 ganttData 找出同段落已佔用的小段，計算未覆蓋的範圍
+    const existingItems = (typeof ganttData !== 'undefined') ? ganttData : [];
+
+    function getUnoccupiedRange(segNum, minIdx, maxIdx) {
+        // 找出同段落所有已建立 bar 的 [from, to] 區間
+        const occupied = [];
+        for (const item of existingItems) {
+            const label = item.label || '';
+            const sMatch = label.match(/段落([A-Za-z0-9\-]+)/);
+            const rMatch = label.match(/#(\d+)～#(\d+)/);
+            if (!sMatch || !rMatch) continue;
+            if (String(sMatch[1]) !== String(segNum)) continue;
+            occupied.push([parseInt(rMatch[1]), parseInt(rMatch[2])]);
+        }
+        if (occupied.length === 0) return { minIdx, maxIdx, conflicts: [] };
+
+        // 找出 [minIdx, maxIdx] 中被完整覆蓋的小段
+        const covered = new Set();
+        for (const [f, t] of occupied) {
+            for (let i = f; i <= t; i++) covered.add(i);
+        }
+
+        // 找出圈選範圍內未被覆蓋的連續區間（取第一段連續未覆蓋區）
+        let newMin = null, newMax = null;
+        for (let i = minIdx; i <= maxIdx; i++) {
+            if (!covered.has(i)) {
+                if (newMin === null) newMin = i;
+                newMax = i;
+            }
+        }
+
+        // 計算有哪些已建立 bar 與圈選範圍重疊（用於提示）
+        const conflicts = occupied
+            .filter(([f, t]) => f <= maxIdx && t >= minIdx)
+            .map(([f, t]) => `#${f}～#${t}`);
+
+        return { minIdx: newMin, maxIdx: newMax, conflicts };
+    }
+
+    // 套用排除邏輯
+    const entries = [];
+    const skipped = [];
+    for (const e of hitMap.values()) {
+        const { minIdx, maxIdx, conflicts } = getUnoccupiedRange(
+            e.segment.segmentNumber, e.minIdx, e.maxIdx
+        );
+        if (minIdx === null) {
+            // 整段都已建立
+            skipped.push({ seg: e.segment, conflicts });
+        } else {
+            entries.push({ segment: e.segment, minIdx, maxIdx, conflicts });
+        }
+    }
+    entries.sort((a, b) => a.segment.startDistance - b.segment.startDistance);
+
+    if (entries.length === 0) {
+        // 全部都重複
+        const detail = skipped.map(s =>
+            `段落 #${s.seg.segmentNumber}（已建立：${s.conflicts.join('、')}）`
+        ).join('\n');
+        showToast(`框選範圍內的小段已全部建立過甘特圖項目`, 'warning');
+        console.warn('[圈選甘特] 重複段落：', detail);
+        return;
+    }
+
+    // 若有部分重複，先 toast 提示
+    const allConflicts = [...entries, ...skipped].flatMap(e => e.conflicts || []);
+    if (allConflicts.length > 0 || skipped.length > 0) {
+        const msgs = [];
+        for (const s of skipped) msgs.push(`段落 #${s.seg.segmentNumber} 已完整建立（${s.conflicts.join('、')}），已略過`);
+        for (const e of entries) {
+            if (e.conflicts.length > 0)
+                msgs.push(`段落 #${e.segment.segmentNumber} 已有 ${e.conflicts.join('、')}，自動調整為 #${e.minIdx}～#${e.maxIdx}`);
+        }
+        if (msgs.length) showToast(msgs.join('\n'), 'warning');
+    }
 
     if (entries.length === 1) {
         const e = entries[0];
