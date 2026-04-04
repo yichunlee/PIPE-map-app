@@ -1182,6 +1182,12 @@ window.addEventListener('message', async function(event) {
         }
         return;
     }
+
+    if (event.data && event.data.type === 'ganttAuthExpired') {
+        // blob 視窗登入過期 → 主頁提示重新登入
+        showToast('甘特圖視窗登入已過期，請關閉甘特視窗後重新登入，再重新開啟', 'error');
+        return;
+    }
     
     if (event.data && event.data.type === 'ganttChanged') {
         console.log('收到甘特圖變更通知，刷新日期標註...');

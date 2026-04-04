@@ -39,6 +39,16 @@ window.toggleGanttPanel = async function() {
     const loadingUrl = URL.createObjectURL(loadingBlob);
     window.ganttWindow = window.open(loadingUrl, 'gantt_' + currentPipeline.id, 'width=1400,height=900');
     setTimeout(() => URL.revokeObjectURL(loadingUrl), 1000);
+
+    // 偵測 blob 視窗關閉 → 清除地圖螢光
+    if (window._ganttWindowCloseTimer) clearInterval(window._ganttWindowCloseTimer);
+    window._ganttWindowCloseTimer = setInterval(() => {
+        if (!window.ganttWindow || window.ganttWindow.closed) {
+            clearInterval(window._ganttWindowCloseTimer);
+            window._ganttWindowCloseTimer = null;
+            if (typeof clearGanttHighlight === 'function') clearGanttHighlight();
+        }
+    }, 800);
     
     try {
         // 平行抓取三個 API
@@ -685,6 +695,7 @@ try {
         itemId:item.id, label:item.label||'', startDate:state.newStart, endDate:state.newEnd,
         status:item.status||'', notes:item.notes||'', unitPrice:item.unitPrice||'' });
     const r = await fetch(API_URL + '?' + p).then(r => r.json());
+    if (r.authError) { showAuthExpiredBanner(); item.startDate = state.origStart; item.endDate = state.origEnd; renderChart(); renderBudgetChart(); return; }
     if (r.success) {
         showToast('日期已更新', 'success');
         if (window.opener) window.opener.postMessage({type:'ganttChanged'}, '*');
@@ -990,6 +1001,7 @@ statusVal = 'custom:' + (rateEl ? (rateEl.value || '0') : '0');
     try {
 const res = await fetch(API_URL + '?' + params.toString());
 const result = await res.json();
+if (result.authError) { showAuthExpiredBanner(); return; }
 if (result.success) { 
     showToast('儲存成功', 'success');
     if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
@@ -1005,6 +1017,7 @@ async function deleteItem() {
     try {
 const res = await fetch(API_URL + '?action=deleteGanttItem&itemId=' + editingItem.id);
 const result = await res.json();
+if (result.authError) { showAuthExpiredBanner(); return; }
 if (result.success) { 
     showToast('刪除成功', 'success');
     if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
@@ -1013,6 +1026,20 @@ if (result.success) {
 }
 else { showToast('失敗：' + (result.error || '未知錯誤'), 'error'); }
     } catch(e) { showToast('失敗：' + e.message, 'error'); }
+}
+
+// 登入過期友善提示（帶重新開啟按鈕）
+function showAuthExpiredBanner() {
+    var old = document.getElementById('_authBanner');
+    if (old) return; // 已顯示就不重複
+    var banner = document.createElement('div');
+    banner.id = '_authBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b71c1c;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
+    banner.innerHTML = '<span>⚠️ <b>登入已過期</b>，請關閉此視窗並重新開啟甘特圖（點右上角⚙️甘特圖按鈕）</span>' +
+        '<button onclick="window.close()" style="background:white;color:#b71c1c;border:none;border-radius:5px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;margin-left:16px;">✕ 關閉此視窗</button>';
+    document.body.prepend(banner);
+    // 同時通知主視窗顯示 toast
+    if (window.opener) window.opener.postMessage({ type: 'ganttAuthExpired' }, '*');
 }
 
 // 重新載入甘特圖資料（不關視窗）
