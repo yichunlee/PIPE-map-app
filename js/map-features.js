@@ -1174,6 +1174,14 @@ window.addEventListener('message', async function(event) {
         }
         return;
     }
+
+    if (event.data && event.data.type === 'ganttHighlight') {
+        // blob 視窗點 bar → 主頁螢光高亮對應管段
+        if (typeof highlightGanttSegment === 'function') {
+            highlightGanttSegment({ label: event.data.label });
+        }
+        return;
+    }
     
     if (event.data && event.data.type === 'ganttChanged') {
         console.log('收到甘特圖變更通知，刷新日期標註...');
