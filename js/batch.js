@@ -536,3 +536,167 @@ async function reloadCurrentPipeline() {
     setTimeout(() => { showStatsPanel(); }, 50);
 }
 
+
+// ==================== 地圖圈選 → 建甘特圖 ====================
+
+let ganttRectMode = false;       // 是否在圈選甘特模式
+let ganttRectStart = null;       // 起始點 {lat, lng}
+let ganttRectLayer = null;       // 畫在地圖上的矩形預覽
+let ganttRectHint = null;        // 提示文字 div
+let _ganttRectMoveFn = null;   // Leaflet mousemove 函數參照
+let _ganttRectDownFn = null;   // Leaflet mousedown 函數參照
+let ganttRectKeyHandler = null;
+
+window.startGanttRectSelect = function() {
+    if (!currentPipeline) { showToast('請先選擇一個工程', 'warning'); return; }
+
+    // 若已在模式中，取消
+    if (ganttRectMode) { cancelGanttRectSelect(); return; }
+
+    ganttRectMode = true;
+    ganttRectStart = null;
+    map.dragging.disable();
+    map.getContainer().style.cursor = 'crosshair';
+
+    // 提示文字
+    ganttRectHint = document.createElement('div');
+    ganttRectHint.id = 'ganttRectHint';
+    ganttRectHint.style.cssText = [
+        'position:fixed', 'top:70px', 'left:50%', 'transform:translateX(-50%)',
+        'background:rgba(0,103,80,0.92)', 'color:white', 'padding:8px 18px',
+        'border-radius:20px', 'font-size:13px', 'font-weight:bold',
+        'z-index:9999', 'pointer-events:none',
+        'box-shadow:0 2px 10px rgba(0,0,0,0.3)'
+    ].join(';');
+    ganttRectHint.textContent = '🗺️ 拖曳框選管線範圍，按 Esc 取消';
+    document.body.appendChild(ganttRectHint);
+
+    // mousemove handler（在 mousedown 後才掛上）
+    _ganttRectMoveFn = function(ev) {
+        if (!ganttRectStart) return;
+        const bounds = L.latLngBounds(ganttRectStart, ev.latlng);
+        if (ganttRectLayer) map.removeLayer(ganttRectLayer);
+        ganttRectLayer = L.rectangle(bounds, {
+            color: '#00695C', weight: 2, dashArray: '6,4',
+            fillColor: '#00695C', fillOpacity: 0.12
+        }).addTo(map);
+    };
+
+    // mousedown handler：開始拖拉
+    _ganttRectDownFn = function(e) {
+        if (!ganttRectMode) return;
+        ganttRectStart = e.latlng;
+        map.on('mousemove', _ganttRectMoveFn);
+
+        // 放開滑鼠 → 確定範圍（用 document mouseup 以防止 Leaflet 攔截）
+        const upHandler = function() {
+            map.off('mousemove', _ganttRectMoveFn);
+            document.removeEventListener('mouseup', upHandler);
+            if (!ganttRectStart) return;
+            // 取得目前矩形的 bounds（若使用者沒拖就用起點點位）
+            const bounds = ganttRectLayer
+                ? ganttRectLayer.getBounds()
+                : L.latLngBounds(ganttRectStart, ganttRectStart);
+            ganttRectStart = null;
+            finishGanttRectSelect(bounds);
+        };
+        document.addEventListener('mouseup', upHandler);
+    };
+    map.on('mousedown', _ganttRectDownFn);
+
+    // Esc 取消
+    ganttRectKeyHandler = function(e) {
+        if (e.key === 'Escape') cancelGanttRectSelect();
+    };
+    document.addEventListener('keydown', ganttRectKeyHandler);
+};
+
+function cancelGanttRectSelect() {
+    ganttRectMode = false;
+    ganttRectStart = null;
+    if (ganttRectLayer) { map.removeLayer(ganttRectLayer); ganttRectLayer = null; }
+    if (ganttRectHint) { ganttRectHint.remove(); ganttRectHint = null; }
+    if (_ganttRectMoveFn) { map.off('mousemove', _ganttRectMoveFn); _ganttRectMoveFn = null; }
+    if (_ganttRectDownFn) { map.off('mousedown', _ganttRectDownFn); _ganttRectDownFn = null; }
+    if (ganttRectKeyHandler) { document.removeEventListener('keydown', ganttRectKeyHandler); ganttRectKeyHandler = null; }
+    map.dragging.enable();
+    map.getContainer().style.cursor = '';
+}
+
+function finishGanttRectSelect(bounds) {
+    cancelGanttRectSelect();
+
+    // 找出在範圍內的 segments（用 smallSegmentPolylines 判斷）
+    const hitSegments = new Map(); // segmentNumber → segment 物件
+    for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
+        const latlngs = entry.polyline.getLatLngs();
+        const midpoint = latlngs.length >= 2
+            ? L.latLng(
+                (latlngs[0].lat + latlngs[latlngs.length - 1].lat) / 2,
+                (latlngs[0].lng + latlngs[latlngs.length - 1].lng) / 2
+              )
+            : latlngs[0];
+        if (bounds.contains(latlngs[0]) || bounds.contains(latlngs[latlngs.length - 1]) || bounds.contains(midpoint)) {
+            hitSegments.set(String(entry.segment.segmentNumber), entry.segment);
+        }
+    }
+
+    if (hitSegments.size === 0) {
+        showToast('框選範圍內沒有找到管線段落', 'warning');
+        return;
+    }
+
+    const segments = Array.from(hitSegments.values())
+        .sort((a, b) => a.startDistance - b.startDistance);
+
+    if (segments.length === 1) {
+        // 只有一個段落，直接帶入
+        openGanttPanelForSegment(segments[0].segmentNumber);
+    } else {
+        // 多個段落 → 讓使用者選
+        showGanttSegmentPicker(segments);
+    }
+}
+
+function showGanttSegmentPicker(segments) {
+    // 移除舊的
+    const old = document.getElementById('ganttSegPickerModal');
+    if (old) old.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'ganttSegPickerModal';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:white;border-radius:12px;padding:20px;min-width:300px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:bold;font-size:14px;margin-bottom:12px;color:#00695C;';
+    title.textContent = `📋 找到 ${segments.length} 個段落，請選擇要新增甘特項目的段落：`;
+    box.appendChild(title);
+
+    segments.forEach(seg => {
+        const method = seg.method || '未設定';
+        const numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
+        const btn = document.createElement('button');
+        btn.style.cssText = 'display:block;width:100%;text-align:left;padding:9px 12px;margin-bottom:6px;border:1px solid #e0e0e0;border-radius:6px;cursor:pointer;background:#f9f9f9;font-size:13px;transition:background 0.15s;';
+        btn.innerHTML = `<strong>段落 #${seg.segmentNumber}</strong> <span style="color:#666;font-size:12px;">— ${method}，${numSmall} 小段（${seg.startDistance}m～${seg.endDistance}m）</span>`;
+        btn.onmouseover = () => btn.style.background = '#e8f5e9';
+        btn.onmouseout = () => btn.style.background = '#f9f9f9';
+        btn.onclick = () => {
+            backdrop.remove();
+            openGanttPanelForSegment(seg.segmentNumber);
+        };
+        box.appendChild(btn);
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.style.cssText = 'display:block;width:100%;padding:8px;margin-top:4px;border:none;border-radius:6px;cursor:pointer;background:#eeeeee;color:#666;font-size:13px;';
+    cancelBtn.textContent = '取消';
+    cancelBtn.onclick = () => backdrop.remove();
+    box.appendChild(cancelBtn);
+
+    backdrop.appendChild(box);
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
+    document.body.appendChild(backdrop);
+}
