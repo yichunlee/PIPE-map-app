@@ -723,6 +723,8 @@ overlay: e.currentTarget
 function editItem(idx) {
     const item = items[idx];
     editingItem = item;
+    // 通知主頁面高亮對應管段
+    if (window.opener) window.opener.postMessage({ type: 'ganttHighlight', label: item.label }, '*');
     const prog = getItemProgress(item);
     const segMatch = item.label.match(/段落([\w\-]+)/);
     const rangeMatch = item.label.match(/#(\d+)～#(\d+)/);
