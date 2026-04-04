@@ -59,6 +59,13 @@ function selectTool(tool) {
         case 'gantt':
             toggleGanttPanel();
             break;
+        case 'ganttRect':
+            if (!currentPipeline) {
+                showToast('請先選擇一個工程', 'warning');
+                return;
+            }
+            startGanttRectSelect();
+            break;
         case 'editPipeline':
             // 編輯工程
             if (!currentPipeline) {
