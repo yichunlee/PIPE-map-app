@@ -1,0 +1,813 @@
+/* ========== Toast 通知系統 ========== */
+#toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: white;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    pointer-events: auto;
+    max-width: 320px;
+    animation: toastIn 0.25s ease;
+    line-height: 1.4;
+}
+.toast.success { background: #2e7d32; }
+.toast.error   { background: #c62828; }
+.toast.warning { background: #e65100; }
+.toast.info    { background: #1565c0; }
+.toast.hiding  { animation: toastOut 0.3s ease forwards; }
+.node-label { position:absolute; left:10px; top:-5px; white-space:nowrap; font-size:10px; font-weight:bold; background:rgba(255,255,255,0.9); padding:0 3px; border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.12); }
+@keyframes toastIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@keyframes toastOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(12px); } }
+@media (max-width: 768px) {
+    #toast-container { bottom: 70px; right: 12px; left: 12px; }
+    .toast { max-width: 100%; }
+}
+
+/* ========== 自訂確認 Modal ========== */
+.confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 99990;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.15s ease;
+}
+.confirm-box {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    padding: 28px 28px 22px;
+    max-width: 380px;
+    width: 90%;
+    animation: scaleIn 0.15s ease;
+}
+.confirm-icon { font-size: 32px; margin-bottom: 10px; text-align: center; }
+.confirm-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    text-align: center;
+}
+.confirm-msg {
+    font-size: 13px;
+    color: #555;
+    text-align: center;
+    margin-bottom: 22px;
+    line-height: 1.6;
+    white-space: pre-line;
+}
+.confirm-btns {
+    display: flex;
+    gap: 10px;
+}
+.confirm-btn {
+    flex: 1;
+    padding: 11px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.confirm-btn:hover { opacity: 0.85; }
+.confirm-btn-cancel { background: #f0f0f0; color: #555; }
+.confirm-btn-ok     { background: #1976d2; color: white; }
+.confirm-btn-danger { background: #c62828; color: white; }
+@keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+@keyframes scaleIn { from { opacity:0; transform:scale(0.92); } to { opacity:1; transform:scale(1); } }
+        .measure-button {
+    position: absolute;
+    top: 260px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 8px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    cursor: pointer;
+    font-size: 18px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.measure-button:hover {
+    background: #f4f4f4;
+}
+.measure-button.active {
+    background: #667eea;
+    color: white;
+}
+
+/* 圖層切換按鈕 */
+.layer-switch-button {
+    position: absolute;
+    top: 125px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 8px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    cursor: pointer;
+    font-size: 18px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.layer-switch-button:hover { background: #f4f4f4; }
+.layer-switch-button.active { background: #1565c0; color: white; }
+
+/* 整合圖層面板 */
+.layer-panel {
+    position: absolute;
+    top: 80px;
+    left: 54px;
+    z-index: 1000;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    width: 240px;
+    max-height: calc(100vh - 140px);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+.layer-panel.show { display: flex; }
+.layer-panel-header {
+    padding: 10px 14px 6px;
+    font-weight: bold;
+    font-size: 13px;
+    color: #1565c0;
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0;
+}
+.layer-panel-section {
+    padding: 8px 14px 4px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+.layer-panel-body {
+    overflow-y: auto;
+    flex: 1;
+    padding-bottom: 8px;
+}
+.layer-option {
+    padding: 7px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.layer-option:hover { background: #f5f5f5; }
+.layer-option.active { background: #e3f2fd; color: #1565c0; font-weight: 600; }
+.layer-radio { font-size: 15px; flex-shrink: 0; }
+.layer-divider { height: 1px; background: #eeeeee; margin: 4px 14px; flex-shrink: 0; }
+
+/* WGIS 在圖層面板內的樣式 */
+.wgis-in-panel { padding: 0 14px 8px; }
+.wgis-upload-btn {
+    width: 100%; padding: 6px; background: #1565c0; color: white;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold;
+    margin-bottom: 6px;
+}
+.wgis-upload-btn:hover { background: #0d47a1; }
+.wgis-file-list { display: flex; flex-direction: column; gap: 4px; }
+.wgis-file-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 7px; border-radius: 5px; background: #f5f5f5;
+    font-size: 12px; cursor: pointer; border: 1px solid transparent;
+}
+.wgis-file-item:hover { background: #e3f2fd; border-color: #90caf9; }
+.wgis-file-item.active { background: #e3f2fd; border-color: #1565c0; }
+.wgis-file-item input[type=checkbox] { cursor: pointer; accent-color: #1565c0; width: 14px; height: 14px; flex-shrink: 0; }
+.wgis-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.wgis-file-count { color: #888; font-size: 10px; flex-shrink: 0; }
+.wgis-file-del { color: #ccc; font-size: 12px; flex-shrink: 0; cursor: pointer; }
+.wgis-file-del:hover { color: #e53935; }
+.wgis-info { color: #999; font-size: 10px; margin-top: 4px; line-height: 1.5; }
+.wgis-tooltip {
+    background: rgba(30,30,30,0.88) !important; color: white !important;
+    border: none !important; border-radius: 5px !important;
+    font-size: 11px !important; padding: 4px 8px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
+}
+.wgis-tooltip::before { display: none !important; }
+
+/* 備註圖示樣式 */
+.note-marker-custom {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* 懸停照片預覽 */
+.marker-photo-preview {
+    position: absolute;
+    z-index: 10000;
+    background: white;
+    border: 2px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    padding: 8px;
+    pointer-events: none;
+    max-width: 300px;
+}
+.marker-photo-preview img {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+}
+.marker-photo-preview-label {
+    text-align: center;
+    font-size: 11px;
+    color: #666;
+    margin-top: 5px;
+    font-weight: 600;
+}
+
+/* 右鍵選單項目 */
+.rcm-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+.rcm-item:hover { background: #f5f5f5; }
+
+/* 甘特圖面板 */
+.gantt-btn {
+    position: absolute;
+    bottom: 70px;
+    right: 10px;
+    z-index: 1000;
+    background: #00695C;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    display: none;
+}
+.gantt-btn:hover { background: #004D40; }
+
+/* 手機版優化 */
+@media (max-width: 768px) {
+    /* 縮小右側按鈕 */
+    .gantt-btn, 
+    .gantt-btn { bottom: 60px; right: 8px; }
+    
+}
+
+/* 甘特圖改為浮動視窗 */
+.gantt-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2000;
+    background: white;
+    display: none;
+    flex-direction: row;
+    overflow: hidden;
+    width: 90%;
+    max-width: 1400px;
+    height: 80%;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+/* 半透明背景遮罩 */
+.gantt-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1999;
+    display: none;
+}
+.gantt-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 2px solid #e0e0e0;
+}
+.gantt-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: #f9f9f9;
+    overflow-y: auto;
+}
+.gantt-sidebar-header {
+    background: #00695C;
+    color: white;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.gantt-sidebar-body {
+    padding: 10px;
+    flex: 1;
+}
+.gantt-panel-header {
+    background: #00695C;
+    color: white;
+    padding: 6px 10px;
+    font-weight: bold;
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+.gantt-panel-body {
+    overflow: auto;
+    flex: 1;
+    padding: 8px;
+}
+.gantt-panel-footer {
+    padding: 6px 8px;
+    border-top: 1px solid #eee;
+    flex-shrink: 0;
+}
+.gantt-chart { position: relative; }
+.gantt-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+.gantt-label {
+    width: 160px;
+    flex-shrink: 0;
+    padding-right: 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gantt-track {
+    flex: 1;
+    height: 22px;
+    position: relative;
+    background: #f5f5f5;
+    border-radius: 3px;
+}
+.gantt-bar {
+    position: absolute;
+    height: 100%;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: white;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    cursor: pointer;
+    transition: opacity 0.1s;
+}
+.gantt-bar:hover { opacity: 0.85; }
+.gantt-drag-overlay:hover { outline: 2px solid rgba(255,255,255,0.5); border-radius: 3px; }
+.gantt-drag-overlay.dragging { cursor: grabbing !important; opacity: 0.85; }
+.gantt-resize-handle:hover { background: rgba(255,255,255,0.3); border-radius: 0 3px 3px 0; }
+.gantt-drag-ghost { position:absolute; border:2px dashed rgba(255,255,255,0.8); border-radius:3px; pointer-events:none; z-index:20; background:rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; font-size:10px; color:white; font-weight:bold; text-shadow:0 1px 2px rgba(0,0,0,0.5); top:0; height:100%; }
+.gantt-drag-overlay:hover { outline: 2px solid rgba(255,255,255,0.5); border-radius: 3px; }
+.gantt-drag-overlay.dragging { cursor: grabbing !important; opacity: 0.85; }
+.gantt-resize-handle:hover { background: rgba(255,255,255,0.3); border-radius: 0 3px 3px 0; }
+.gantt-drag-ghost { position: absolute; border: 2px dashed rgba(255,255,255,0.8); border-radius: 3px; pointer-events: none; z-index: 20; background: rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.5); top: 0; height: 100%; }
+.gantt-today-line {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    background: #e53935;
+    pointer-events: none;
+    z-index: 2;
+}
+.gantt-header-row {
+    display: flex;
+    margin-bottom: 4px;
+    font-size: 10px;
+    color: #999;
+}
+.gantt-actions { display: flex; gap: 4px; }
+
+/* 施工里程碑面板 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* 段落管理面板 */
+.segment-panel {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 2000;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    width: 450px;
+    max-height: calc(100vh - 100px);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+.segment-panel.minimized {
+    height: auto;
+    max-height: none;
+}
+.segment-panel.minimized .segment-panel-body {
+    display: none;
+}
+.segment-panel-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 20px;
+    font-weight: bold;
+    font-size: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+.segment-panel-body {
+    overflow-y: auto;
+    flex: 1;
+    padding: 15px;
+}
+.segment-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.segment-table th {
+    background: #f5f5f5;
+    color: #333;
+    padding: 8px 4px;
+    text-align: center;
+    border-bottom: 2px solid #ddd;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-weight: 600;
+    font-size: 11px;
+}
+.segment-table td {
+    padding: 6px 4px;
+    border-bottom: 1px solid #f0f0f0;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 11px;
+}
+.segment-table tr:hover td { background: #f9f9f9; }
+.segment-panel-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    flex-shrink: 0;
+}
+.btn-add-segment {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+.btn-add-segment:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+.btn-visual-segment {
+    padding: 10px;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+.btn-visual-segment:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(240, 147, 251, 0.4);
+}
+.btn-visual-segment.active {
+    background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+    box-shadow: 0 0 0 2px rgba(245, 87, 108, 0.3);
+}
+
+/* 視覺化分段線標記 */
+.segment-divider-marker {
+    width: 30px;
+    height: 30px;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    border: 3px solid white;
+    border-radius: 50%;
+    cursor: move;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 12px;
+    z-index: 2000;
+    transition: all 0.2s;
+}
+.segment-divider-marker:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(245, 87, 108, 0.5);
+}
+.segment-divider-marker.dragging {
+    transform: scale(1.3);
+    box-shadow: 0 6px 16px rgba(245, 87, 108, 0.6);
+    cursor: grabbing;
+}
+.segment-divider-label {
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.btn-edit-segment, .btn-delete-segment {
+    padding: 4px 6px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    margin: 0 1px;
+    transition: all 0.2s;
+}
+.btn-edit-segment {
+    background: #4CAF50;
+    color: white;
+}
+.btn-edit-segment:hover {
+    background: #45a049;
+}
+.btn-delete-segment {
+    background: #f44336;
+    color: white;
+}
+.btn-delete-segment:hover {
+    background: #da190b;
+}
+
+/* 標記顯示/隱藏按鈕 */
+.permit-zone-button {
+    position: absolute;
+    top: 215px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    cursor: pointer;
+    font-size: 20px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.permit-zone-button:hover { background: #f4f4f4; }
+.permit-zone-button.hidden-markers { background: #7f8c8d; color: white; }
+
+
+
+/* 施工日期標註按鈕 */
+.date-label-button {
+    position: absolute;
+    top: 305px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    cursor: pointer;
+    font-size: 20px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.date-label-button:hover { background: #f4f4f4; }
+.date-label-button.active { background: #00695C; color: white; }
+
+/* 施工日期標籤 - 簡化單行樣式 */
+.schedule-label-watermark {
+    background: rgba(255, 255, 255, 0.92);
+    border: 2px solid rgba(0, 121, 107, 0.8);
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: bold;
+    color: #00695C;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    pointer-events: none;
+    text-shadow: 0 0 4px white, 0 0 4px white;
+}
+
+/* 箭頭線樣式 - 更明顯 */
+.schedule-arrow {
+    stroke: #00796B;
+    stroke-width: 2.5;
+    fill: none;
+    opacity: 0.8;
+    pointer-events: none;
+}
+.schedule-arrow-marker {
+    fill: #00BFA5;
+}
+
+/* 台中挖掘許可按鈕 */
+.roadwork-button {
+    position: absolute;
+    top: 170px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    cursor: pointer;
+    font-size: 20px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.roadwork-button:hover { background: #f4f4f4; }
+.roadwork-button.active { background: #FF5722; color: white; }
+
+/* 台中挖掘許可面板 */
+.roadwork-panel {
+    position: absolute;
+    bottom: 30px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    font-size: 12px;
+    display: none;
+}
+    
+/* 統計報表面板 */
+.stats-report-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3000;
+    background: white;
+    display: none;
+    width: 90%;
+    max-width: 1200px;
+    height: 80%;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    flex-direction: column;
+}
+
+.stats-report-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stats-report-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.stats-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.stats-report-table th,
+.stats-report-table td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+}
+
+.stats-report-table th {
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.stats-report-table tbody tr:hover {
+    background: #f5f5f5;
+}
+
+/* 分支繪製模式樣式 */
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Leaflet 圖層控制美化 */
+.leaflet-control-layers {
+    border-radius: 8px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    border: none !important;
+}
+
+.leaflet-control-layers-toggle {
+    width: 40px !important;
+    height: 40px !important;
+    background-size: 24px 24px !important;
+}
+
+.leaflet-control-layers-expanded {
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+}
+
+.leaflet-control-layers-base label {
+    padding: 6px 0 !important;
+    font-weight: 500 !important;
+}
+
