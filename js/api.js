@@ -72,11 +72,20 @@ async function apiCall(action, params, opts) {
 
     // --- authError 檢查 ---
     if (data && data.authError) {
-        showToast('登入已過期，請重新登入', 'error');
-        localStorage.removeItem('userInfo');
-        currentUser = null;
-        userToken = null;
-        showUserInfo();
+        // 先嘗試 silent refresh，若有新 token 就直接用（不打擾使用者）
+        // silentRefreshToken 是非同步的，這裡只能觸發，無法等待結果
+        // 所以仍然拋錯，讓呼叫端知道這次失敗，但背景已在更新 token
+        if (currentUser && typeof silentRefreshToken === 'function') {
+            console.log('🔄 authError 觸發，嘗試 silent refresh...');
+            silentRefreshToken(currentUser.email);
+        } else {
+            // 無法 silent refresh → 清除登入狀態
+            showToast('登入已過期，請重新登入', 'error');
+            localStorage.removeItem('userInfo');
+            currentUser = null;
+            userToken = null;
+            showUserInfo();
+        }
         throw new Error('AUTH_EXPIRED');
     }
 

@@ -126,6 +126,9 @@ window.addEventListener('load', function() {
                 userToken = userInfo.token;
                 
                 console.log('✅ 使用者已登入:', currentUser.email, '角色:', currentUser.role);
+
+                // 啟動 silent token refresh
+                initSilentRefresh(userInfo.email);
             }
         } catch (error) {
             console.error('❌ 解析使用者資訊失敗:', error);
@@ -145,8 +148,95 @@ window.addEventListener('load', function() {
     loadData();
 });
 
-// 載入所有資料
-// 🔐 Google OAuth2 登入處理
+// ==================== Silent Token Refresh ====================
+// Google ID Token 約 1 小時過期，用 silent refresh 在背景自動更新
+// 不需要使用者操作，完全無感
+
+let _silentRefreshTimer = null;
+
+function initSilentRefresh(email) {
+    // 清除舊的 timer
+    if (_silentRefreshTimer) clearInterval(_silentRefreshTimer);
+
+    // 每 45 分鐘執行一次 silent refresh（token 1hr 過期，45min 更新確保不斷線）
+    _silentRefreshTimer = setInterval(() => {
+        silentRefreshToken(email);
+    }, 45 * 60 * 1000);
+
+    console.log('🔄 Silent token refresh 已啟動（每 45 分鐘自動更新）');
+}
+
+function silentRefreshToken(email) {
+    if (!currentUser) return; // 已登出就不更新
+    console.log('🔄 嘗試 silent token refresh...');
+
+    try {
+        // 用 Google Identity Services 的 prompt: 'none' 靜默取得新 token
+        // 這不會彈出任何視窗，完全在背景執行
+        google.accounts.id.initialize({
+            client_id: getGoogleClientId(),
+            callback: function(response) {
+                if (response && response.credential) {
+                    const payload = parseJwt(response.credential);
+                    // 確認是同一個使用者
+                    if (payload.email === (email || currentUser?.email)) {
+                        const oldToken = userToken;
+                        userToken = response.credential;
+
+                        // 更新 localStorage
+                        const userInfoStr = localStorage.getItem('userInfo');
+                        if (userInfoStr) {
+                            try {
+                                const userInfo = JSON.parse(userInfoStr);
+                                userInfo.token = response.credential;
+                                userInfo.timestamp = Date.now(); // 重置 24hr 計時
+                                localStorage.setItem('userInfo', JSON.stringify(userInfo));
+                            } catch(e) {}
+                        }
+
+                        console.log('✅ Token 已靜默更新');
+                    }
+                }
+            },
+            prompt_parent_id: null,
+        });
+        google.accounts.id.prompt(function(notification) {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                console.log('ℹ️ Silent refresh: 無法靜默更新（', notification.getNotDisplayedReason() || notification.getSkippedReason(), '）');
+                // 靜默更新失敗時不強制登出，繼續用舊 token 直到真正過期
+            }
+        });
+    } catch(e) {
+        console.warn('⚠️ Silent refresh 失敗:', e.message);
+        // 失敗時靜默忽略，讓使用者自然遇到 authError 再處理
+    }
+}
+
+// 從 index.html 的 Google Sign-In script tag 取得 client_id
+function getGoogleClientId() {
+    // 嘗試從頁面的 meta tag 或 script 屬性取得
+    const metaClientId = document.querySelector('meta[name="google-signin-client_id"]');
+    if (metaClientId) return metaClientId.content;
+
+    // 嘗試從 google.accounts.id 現有設定取得（若已初始化）
+    const scriptTag = document.querySelector('script[src*="accounts.google.com/gsi"]');
+    if (scriptTag) {
+        // 從 data attribute 取
+        const dataClientId = document.querySelector('[data-client_id]');
+        if (dataClientId) return dataClientId.getAttribute('data-client_id');
+    }
+
+    // fallback: 從 localStorage 取得（login.html 存進去時帶的）
+    try {
+        const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        if (userInfo.clientId) return userInfo.clientId;
+    } catch(e) {}
+
+    console.warn('⚠️ 無法取得 Google Client ID，silent refresh 停用');
+    return null;
+}
+
+// ==================== Google OAuth2 登入處理 ====================
 
 // Google Sign-In 回調函數
 function handleCredentialResponse(response) {
@@ -187,6 +277,26 @@ async function verifyUserAccess(payload) {
                 picture: payload.picture,
                 role: result.role // 'admin', 'supervisor', 或 'user'
             };
+
+            // 儲存到 localStorage（含 clientId 供 silent refresh 使用）
+            const clientId = (() => {
+                const el = document.querySelector('[data-client_id]') ||
+                           document.querySelector('div[data-client_id]') ||
+                           document.getElementById('g_id_onload');
+                return el ? (el.getAttribute('data-client_id') || el.dataset.client_id) : null;
+            })();
+            localStorage.setItem('userInfo', JSON.stringify({
+                email: payload.email,
+                name: payload.name,
+                picture: payload.picture,
+                role: result.role,
+                token: userToken,
+                timestamp: Date.now(),
+                clientId: clientId || ''
+            }));
+            
+            // 啟動 silent refresh
+            initSilentRefresh(payload.email);
             
             // 顯示使用者資訊
             showUserInfo();
