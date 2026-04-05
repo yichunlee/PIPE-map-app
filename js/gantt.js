@@ -2028,10 +2028,16 @@ async function saveGanttNew() {
             status: data.status, notes: data.notes, unitPrice: data.unitPrice || ''
         });
         if (result.success) { 
-            map.closePopup(); 
+            map.closePopup();
+            showToast('已新增，正在更新甘特圖…', 'success');
             await loadGanttData();
             await loadGanttItemsForLabels();
             if (dateLabelsVisible) showDateLabels();
+            // 自動重整 blob 視窗（若已開啟）
+            if (window.ganttWindow && !window.ganttWindow.closed) {
+                await toggleGanttPanel();
+            }
+            closeGanttInPagePanel();
         }
         else showToast((result.error || '儲存失敗'), 'error');
     } catch(e) { showToast(e.message, 'error'); }
@@ -2047,10 +2053,16 @@ async function saveGanttEdit(id) {
             status: data.status, notes: data.notes, unitPrice: data.unitPrice || ''
         });
         if (result.success) { 
-            map.closePopup(); 
+            map.closePopup();
+            showToast('已更新，正在重整甘特圖…', 'success');
             await loadGanttData();
             await loadGanttItemsForLabels();
             if (dateLabelsVisible) showDateLabels();
+            // 自動重整 blob 視窗（若已開啟）
+            if (window.ganttWindow && !window.ganttWindow.closed) {
+                await toggleGanttPanel();
+            }
+            closeGanttInPagePanel();
         }
         else showToast((result.error || '更新失敗'), 'error');
     } catch(e) { showToast(e.message, 'error'); }

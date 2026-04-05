@@ -348,6 +348,32 @@ function initMap() {
             showRightClickMenu(e.latlng, e.originalEvent.clientX, e.originalEvent.clientY);
         }
     });
+
+    // 手機長按觸發右鍵選單（500ms）
+    let _touchTimer = null;
+    let _touchMoved = false;
+    map.getContainer().addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        _touchMoved = false;
+        const touch = e.touches[0];
+        _touchTimer = setTimeout(function() {
+            if (_touchMoved) return;
+            // 將 touch 座標轉成 Leaflet latlng
+            const rect = map.getContainer().getBoundingClientRect();
+            const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+            const latlng = map.containerPointToLatLng(point);
+            if (currentPipeline && currentPipeline.id) {
+                showRightClickMenu(latlng, touch.clientX, touch.clientY);
+            }
+        }, 500);
+    }, { passive: true });
+    map.getContainer().addEventListener('touchmove', function() {
+        _touchMoved = true;
+        if (_touchTimer) { clearTimeout(_touchTimer); _touchTimer = null; }
+    }, { passive: true });
+    map.getContainer().addEventListener('touchend', function() {
+        if (_touchTimer) { clearTimeout(_touchTimer); _touchTimer = null; }
+    }, { passive: true });
     
     // 雙擊完成支線(分支編輯模式)
     map.on('dblclick', function(e) {

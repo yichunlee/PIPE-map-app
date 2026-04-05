@@ -546,6 +546,9 @@ let ganttRectHint = null;        // 提示文字 div
 let _ganttRectMoveFn = null;   // Leaflet mousemove 函數參照
 let _ganttRectDownFn = null;   // Leaflet mousedown 函數參照
 let ganttRectKeyHandler = null;
+let _ganttRectTouchMoveFn = null;
+let _ganttRectTouchEndFn = null;
+const _isTouchDevice = () => ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
 window.startGanttRectSelect = function() {
     if (!currentPipeline) { showToast('請先選擇一個工程', 'warning'); return; }
@@ -558,7 +561,7 @@ window.startGanttRectSelect = function() {
     map.dragging.disable();
     map.getContainer().style.cursor = 'crosshair';
 
-    // 提示文字
+    // 提示文字（依裝置類型顯示不同說明）
     ganttRectHint = document.createElement('div');
     ganttRectHint.id = 'ganttRectHint';
     ganttRectHint.style.cssText = [
@@ -568,10 +571,12 @@ window.startGanttRectSelect = function() {
         'z-index:9999', 'pointer-events:none',
         'box-shadow:0 2px 10px rgba(0,0,0,0.3)'
     ].join(';');
-    ganttRectHint.textContent = '🗺️ 拖曳框選管線範圍，按 Esc 取消';
+    ganttRectHint.textContent = _isTouchDevice()
+        ? '👆 用手指拖曳框選管線範圍'
+        : '🗺️ 拖曳框選管線範圍，按 Esc 取消';
     document.body.appendChild(ganttRectHint);
 
-    // mousemove handler（在 mousedown 後才掛上）
+    // ===== 滑鼠事件 =====
     _ganttRectMoveFn = function(ev) {
         if (!ganttRectStart) return;
         const bounds = L.latLngBounds(ganttRectStart, ev.latlng);
@@ -582,18 +587,15 @@ window.startGanttRectSelect = function() {
         }).addTo(map);
     };
 
-    // mousedown handler：開始拖拉
     _ganttRectDownFn = function(e) {
         if (!ganttRectMode) return;
         ganttRectStart = e.latlng;
         map.on('mousemove', _ganttRectMoveFn);
 
-        // 放開滑鼠 → 確定範圍（用 document mouseup 以防止 Leaflet 攔截）
         const upHandler = function() {
             map.off('mousemove', _ganttRectMoveFn);
             document.removeEventListener('mouseup', upHandler);
             if (!ganttRectStart) return;
-            // 取得目前矩形的 bounds（若使用者沒拖就用起點點位）
             const bounds = ganttRectLayer
                 ? ganttRectLayer.getBounds()
                 : L.latLngBounds(ganttRectStart, ganttRectStart);
@@ -604,7 +606,47 @@ window.startGanttRectSelect = function() {
     };
     map.on('mousedown', _ganttRectDownFn);
 
-    // Esc 取消
+    // ===== 觸控事件（手機）=====
+    const mapContainer = map.getContainer();
+
+    const getTouchLatLng = function(touch) {
+        const rect = mapContainer.getBoundingClientRect();
+        const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+        return map.containerPointToLatLng(point);
+    };
+
+    _ganttRectTouchMoveFn = function(e) {
+        if (!ganttRectMode || !ganttRectStart || e.touches.length !== 1) return;
+        e.preventDefault();
+        const latlng = getTouchLatLng(e.touches[0]);
+        const bounds = L.latLngBounds(ganttRectStart, latlng);
+        if (ganttRectLayer) map.removeLayer(ganttRectLayer);
+        ganttRectLayer = L.rectangle(bounds, {
+            color: '#00695C', weight: 2, dashArray: '6,4',
+            fillColor: '#00695C', fillOpacity: 0.12
+        }).addTo(map);
+    };
+
+    _ganttRectTouchEndFn = function(e) {
+        if (!ganttRectStart) return;
+        const bounds = ganttRectLayer
+            ? ganttRectLayer.getBounds()
+            : L.latLngBounds(ganttRectStart, ganttRectStart);
+        ganttRectStart = null;
+        mapContainer.removeEventListener('touchmove', _ganttRectTouchMoveFn);
+        mapContainer.removeEventListener('touchend', _ganttRectTouchEndFn);
+        finishGanttRectSelect(bounds);
+    };
+
+    mapContainer.addEventListener('touchstart', function onTouchStart(e) {
+        if (!ganttRectMode || e.touches.length !== 1) return;
+        ganttRectStart = getTouchLatLng(e.touches[0]);
+        mapContainer.addEventListener('touchmove', _ganttRectTouchMoveFn, { passive: false });
+        mapContainer.addEventListener('touchend', _ganttRectTouchEndFn, { once: true });
+        mapContainer.removeEventListener('touchstart', onTouchStart);
+    }, { once: true });
+
+    // Esc 取消（桌機）
     ganttRectKeyHandler = function(e) {
         if (e.key === 'Escape') cancelGanttRectSelect();
     };
@@ -618,6 +660,14 @@ function cancelGanttRectSelect() {
     if (ganttRectHint) { ganttRectHint.remove(); ganttRectHint = null; }
     if (_ganttRectMoveFn) { map.off('mousemove', _ganttRectMoveFn); _ganttRectMoveFn = null; }
     if (_ganttRectDownFn) { map.off('mousedown', _ganttRectDownFn); _ganttRectDownFn = null; }
+    if (_ganttRectTouchMoveFn) {
+        map.getContainer().removeEventListener('touchmove', _ganttRectTouchMoveFn);
+        _ganttRectTouchMoveFn = null;
+    }
+    if (_ganttRectTouchEndFn) {
+        map.getContainer().removeEventListener('touchend', _ganttRectTouchEndFn);
+        _ganttRectTouchEndFn = null;
+    }
     if (ganttRectKeyHandler) { document.removeEventListener('keydown', ganttRectKeyHandler); ganttRectKeyHandler = null; }
     map.dragging.enable();
     map.getContainer().style.cursor = '';
