@@ -818,6 +818,7 @@ function ganttBarMouseDown(e, idx, typeNum) {
     e.stopPropagation();
     const item = items[idx];
     if (!item) return;
+    const overlayEl = e.target.closest('.gantt-drag-overlay') || e.target;
     _ganttDrag = {
 type, idx,
 startX: e.clientX,
@@ -826,9 +827,9 @@ origEnd: item.endDate,
 newStart: item.startDate,
 newEnd: item.endDate,
 moved: false,
-overlay: e.currentTarget
+overlay: overlayEl
     };
-    e.currentTarget.style.cursor = 'grabbing';
+    overlayEl.style.cursor = 'grabbing';
 }
 
 function editItem(idx) {
@@ -1484,7 +1485,7 @@ try {
     window.delUp2 = async function(idx) {
 var p = unitPrices[idx];
 if (!p) return;
-if (!await showConfirm({ title: '刪除單價', message: '確定刪除「' + p.methodKey + '」的單價？', okText: '刪除', danger: true })) return;
+if (!await showConfirm({ title: '刪除單價', message: '確定刪除[' + p.methodKey + ']的單價？', okText: '刪除', danger: true })) return;
 try {
     var res = await fetch(API_URL + '?action=deleteUnitPrice&methodKey=' + encodeURIComponent(p.methodKey) + '&pipelineId=' + encodeURIComponent(pipeline.id) + '&projectName=');
     var result = await res.json();
