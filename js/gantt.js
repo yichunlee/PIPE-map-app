@@ -658,8 +658,7 @@ var _dragListenersAdded = false;
 
 // 由 label 的 onmousedown 直接呼叫（比 document 委派可靠）
 function rowDragStart(e, idx) {
-    // 不阻止冒泡，但標記這是排序拖拉
-    var rowEl = e.currentTarget.closest('.gantt-row');
+    var rowEl = e.target.closest('.gantt-row');
     var rowRect = rowEl ? rowEl.getBoundingClientRect() : null;
     var ghost = document.createElement('div');
     ghost.style.cssText = 'position:fixed;display:none;left:0;' +
@@ -670,7 +669,7 @@ function rowDragStart(e, idx) {
     ghost.textContent = items[idx] ? items[idx].label : '';
     document.body.appendChild(ghost);
     _rowDrag = { idx: idx, startY: e.clientY, targetIdx: idx, ghost: ghost, rowRect: rowRect, moved: false };
-    e.preventDefault(); // 防止文字選取
+    e.preventDefault();
 }
 
 function initGanttDrag() {
