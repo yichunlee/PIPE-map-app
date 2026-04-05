@@ -148,6 +148,141 @@ window.addEventListener('load', function() {
     loadData();
 });
 
+// ==================== 重新登入 Overlay ====================
+// 當 token 過期時，彈出小型 overlay 讓使用者重新登入
+// 不跳頁、不清除地圖狀態，登入完成後自動繼續
+
+let _reauthOverlay = null;
+let _reauthPollTimer = null;
+let _reauthWindow = null;
+
+window.showReauthOverlay = function() {
+    // 已顯示就不重複
+    if (_reauthOverlay) return;
+
+    _reauthOverlay = document.createElement('div');
+    _reauthOverlay.style.cssText = [
+        'position:fixed', 'inset:0', 'z-index:99999',
+        'background:rgba(0,0,0,0.6)',
+        'display:flex', 'align-items:center', 'justify-content:center'
+    ].join(';');
+
+    _reauthOverlay.innerHTML = `
+        <div style="background:white;border-radius:14px;padding:28px 32px;
+                    max-width:340px;width:90%;text-align:center;
+                    box-shadow:0 8px 40px rgba(0,0,0,0.35);">
+            <div style="font-size:40px;margin-bottom:12px;">🔑</div>
+            <div style="font-size:16px;font-weight:bold;color:#333;margin-bottom:8px;">
+                登入已過期
+            </div>
+            <div style="font-size:13px;color:#666;margin-bottom:20px;line-height:1.5;">
+                Google 登入憑證已過期（約 1 小時）<br>
+                點下方按鈕重新登入，<b>不會離開目前頁面</b>
+            </div>
+            <button id="_reauthBtn" style="
+                width:100%;padding:12px;border:none;border-radius:8px;
+                background:#00695C;color:white;font-size:15px;
+                font-weight:bold;cursor:pointer;margin-bottom:10px;">
+                🔄 重新登入
+            </button>
+            <div id="_reauthStatus" style="font-size:12px;color:#999;min-height:18px;"></div>
+        </div>
+    `;
+
+    document.body.appendChild(_reauthOverlay);
+
+    document.getElementById('_reauthBtn').onclick = function() {
+        _startReauthFlow();
+    };
+};
+
+function _startReauthFlow() {
+    const statusEl = document.getElementById('_reauthStatus');
+    if (statusEl) statusEl.textContent = '正在開啟登入視窗…';
+
+    // 記下目前 localStorage 的 timestamp，登入成功後 timestamp 會更新
+    let oldTimestamp = 0;
+    try {
+        const old = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        oldTimestamp = old.timestamp || 0;
+    } catch(e) {}
+
+    // 開小視窗到 login.html
+    const w = 480, h = 600;
+    const left = Math.round(screen.width / 2 - w / 2);
+    const top = Math.round(screen.height / 2 - h / 2);
+    _reauthWindow = window.open(
+        'login.html',
+        'reauth_popup',
+        `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`
+    );
+
+    if (!_reauthWindow) {
+        // popup 被封鎖（手機常見）→ 改導向
+        if (statusEl) statusEl.textContent = '彈出視窗被封鎖，請允許後再試，或點下方連結';
+        const link = document.createElement('a');
+        link.href = 'login.html';
+        link.target = '_blank';
+        link.textContent = '→ 點此開啟登入頁面';
+        link.style.cssText = 'display:block;margin-top:8px;color:#1976d2;font-size:13px;';
+        if (statusEl) statusEl.after(link);
+        // 改用 localStorage 輪詢
+        _startTokenPoll(oldTimestamp);
+        return;
+    }
+
+    if (statusEl) statusEl.textContent = '請在登入視窗完成 Google 登入…';
+    _startTokenPoll(oldTimestamp);
+}
+
+function _startTokenPoll(oldTimestamp) {
+    // 每 500ms 檢查 localStorage 是否有新 token
+    if (_reauthPollTimer) clearInterval(_reauthPollTimer);
+    _reauthPollTimer = setInterval(function() {
+        try {
+            const info = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            if (info.token && info.timestamp && info.timestamp > oldTimestamp) {
+                // 登入成功！更新主頁的 token
+                clearInterval(_reauthPollTimer);
+                _reauthPollTimer = null;
+                _applyNewToken(info);
+            }
+        } catch(e) {}
+
+        // 若小視窗被關掉了也停止輪詢
+        if (_reauthWindow && _reauthWindow.closed) {
+            clearInterval(_reauthPollTimer);
+            _reauthPollTimer = null;
+            const statusEl = document.getElementById('_reauthStatus');
+            if (statusEl) statusEl.textContent = '視窗已關閉，請再試一次';
+        }
+    }, 500);
+}
+
+function _applyNewToken(info) {
+    // 更新記憶體中的 token
+    userToken = info.token;
+    currentUser = {
+        email: info.email,
+        name: info.name,
+        picture: info.picture,
+        role: info.role
+    };
+
+    // 關閉登入小視窗
+    if (_reauthWindow && !_reauthWindow.closed) _reauthWindow.close();
+    _reauthWindow = null;
+
+    // 關閉 overlay
+    if (_reauthOverlay) { _reauthOverlay.remove(); _reauthOverlay = null; }
+
+    // 重啟 silent refresh
+    initSilentRefresh(info.email);
+
+    showToast('✅ 重新登入成功，請繼續操作', 'success');
+    console.log('✅ Token 已更新，email:', info.email);
+}
+
 // ==================== Silent Token Refresh ====================
 // Google ID Token 約 1 小時過期，用 silent refresh 在背景自動更新
 // 不需要使用者操作，完全無感
