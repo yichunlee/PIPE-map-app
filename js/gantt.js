@@ -635,134 +635,129 @@ html += '</div></div></div>';
 // ===== 甘特圖拖拉移動 / 調整長度 =====
 var _ganttDrag = null;
 
+// 拖拉只初始化一次（避免每次 renderChart 累積 listener）
+let _dragInitialized = false;
+let _rowDrag = null;
+let _insertLineEl = null;
+
 function initGanttDrag() {
-    // 時間軸範圍（與 renderChart 相同）
-    const dates = items.flatMap(i => [new Date(i.startDate), new Date(i.endDate)]);
-    let minDate = new Date(Math.min(...dates));
-    let maxDate = new Date(Math.max(...dates));
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 7);
-    const totalRangeMs = maxDate - minDate;
+    if (_dragInitialized) return;
+    _dragInitialized = true;
 
-    function innerWidth() {
-const el = document.getElementById('chartScrollInner');
-return el ? el.getBoundingClientRect().width || el.offsetWidth : 1;
+    // 時間軸計算（動態取，不快取 minDate/maxDate）
+    function getRange() {
+        const dates = items.flatMap(i => [new Date(i.startDate), new Date(i.endDate)]);
+        let mn = new Date(Math.min(...dates)), mx = new Date(Math.max(...dates));
+        mn.setDate(mn.getDate() - 7); mx.setDate(mx.getDate() + 7);
+        return mx - mn;
     }
-    function pxToDays(px) { return px / innerWidth() * totalRangeMs / 86400000; }
-    function shiftDate(dateStr, days) {
-const d = new Date(dateStr);
-d.setDate(d.getDate() + Math.round(days));
-return d.toISOString().slice(0,10);
+    function innerW() {
+        const el = document.getElementById('chartScrollInner');
+        return el ? el.getBoundingClientRect().width || el.offsetWidth : 1;
     }
-
-    // Floating tooltip（日期拖拉用）
-    let tooltip = document.getElementById('ganttDragTip');
-    if (!tooltip) {
-tooltip = document.createElement('div');
-tooltip.id = 'ganttDragTip';
-tooltip.style.cssText = 'display:none;position:fixed;background:rgba(0,0,0,0.75);color:white;font-size:11px;padding:4px 10px;border-radius:5px;pointer-events:none;z-index:9999;white-space:nowrap;';
-document.body.appendChild(tooltip);
+    function pxToDays(px) { return px / innerW() * getRange() / 86400000; }
+    function shiftDate(s, days) {
+        const d = new Date(s); d.setDate(d.getDate() + Math.round(days));
+        return d.toISOString().slice(0, 10);
     }
 
-    // ===== 上下排序拖拉 =====
-    let _rowDrag = null; // { idx, startY, ghostEl, insertLine, moved }
-
-    // 插入線（顯示放置位置）
-    let _insertLine = document.getElementById('_ganttInsertLine');
-    if (!_insertLine) {
-        _insertLine = document.createElement('div');
-        _insertLine.id = '_ganttInsertLine';
-        _insertLine.style.cssText = 'display:none;position:fixed;left:0;right:0;height:2px;background:#00695C;z-index:9998;pointer-events:none;box-shadow:0 0 4px rgba(0,105,76,0.6);';
-        document.body.appendChild(_insertLine);
+    // Tooltip（日期拖拉用）
+    let tip = document.getElementById('ganttDragTip');
+    if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'ganttDragTip';
+        tip.style.cssText = 'display:none;position:fixed;background:rgba(0,0,0,.75);color:#fff;font-size:11px;padding:4px 10px;border-radius:5px;pointer-events:none;z-index:9999;white-space:nowrap;';
+        document.body.appendChild(tip);
     }
 
-    // label mousedown → 啟動排序拖拉
-    document.getElementById('chart').addEventListener('mousedown', function(e) {
-        const label = e.target.closest('[data-drag-idx]');
+    // 插入線（排序拖拉用）
+    _insertLineEl = document.getElementById('_ganttInsertLine');
+    if (!_insertLineEl) {
+        _insertLineEl = document.createElement('div');
+        _insertLineEl.id = '_ganttInsertLine';
+        _insertLineEl.style.cssText = 'display:none;position:fixed;left:0;right:0;height:2px;background:#00695C;z-index:9998;pointer-events:none;box-shadow:0 0 4px rgba(0,105,76,.6);';
+        document.body.appendChild(_insertLineEl);
+    }
+
+    // ─── Label mousedown → 排序拖拉（委派到 document） ───
+    document.addEventListener('mousedown', function(ev) {
+        const label = ev.target.closest('[data-drag-idx]');
         if (!label) return;
         const idx = parseInt(label.dataset.dragIdx);
         if (isNaN(idx)) return;
-        e.preventDefault();
-        e.stopPropagation();
+        // 不 preventDefault / stopPropagation，讓 zoom 按鈕等正常運作
 
-        // 建立半透明 ghost
         const rowEl = label.closest('.gantt-row');
         const rowRect = rowEl ? rowEl.getBoundingClientRect() : null;
         const ghost = document.createElement('div');
-        ghost.style.cssText = 'position:fixed;left:' + (rowRect ? rowRect.left : 0) + 'px;' +
-            'width:' + (rowRect ? rowRect.width : 180) + 'px;height:' + (rowRect ? rowRect.height : 30) + 'px;' +
-            'background:rgba(0,105,76,0.15);border:1.5px dashed #00695C;border-radius:4px;' +
-            'pointer-events:none;z-index:9997;display:flex;align-items:center;padding-left:8px;' +
-            'font-size:11px;color:#00695C;font-weight:bold;';
+        ghost.style.cssText = 'position:fixed;display:none;left:' + (rowRect ? rowRect.left : 0) + 'px;' +
+            'width:180px;height:' + (rowRect ? rowRect.height : 30) + 'px;' +
+            'background:rgba(0,105,76,.15);border:1.5px dashed #00695C;border-radius:4px;' +
+            'pointer-events:none;z-index:9997;align-items:center;padding-left:8px;' +
+            'font-size:11px;color:#00695C;font-weight:bold;overflow:hidden;white-space:nowrap;';
         ghost.textContent = items[idx] ? items[idx].label : '';
         document.body.appendChild(ghost);
-
-        _rowDrag = { idx, startY: e.clientY, targetIdx: idx, ghost, rowRect, moved: false };
+        _rowDrag = { idx, startY: ev.clientY, targetIdx: idx, ghost, rowRect, moved: false };
     });
 
-    document.addEventListener('mousemove', function(e) {
-        // 日期拖拉
+    // ─── Mousemove ───
+    document.addEventListener('mousemove', function(ev) {
+        // 日期拖拉（bar 左右）
         if (_ganttDrag) {
-            const dx = e.clientX - _ganttDrag.startX;
+            const dx = ev.clientX - _ganttDrag.startX;
             const days = pxToDays(dx);
             if (_ganttDrag.type === 'move') {
                 _ganttDrag.newStart = shiftDate(_ganttDrag.origStart, days);
-                _ganttDrag.newEnd   = shiftDate(_ganttDrag.origEnd,   days);
+                _ganttDrag.newEnd   = shiftDate(_ganttDrag.origEnd, days);
             } else {
                 _ganttDrag.newEnd = shiftDate(_ganttDrag.origEnd, days);
                 if (_ganttDrag.newEnd <= _ganttDrag.origStart) _ganttDrag.newEnd = shiftDate(_ganttDrag.origStart, 1);
                 _ganttDrag.newStart = _ganttDrag.origStart;
             }
-            tooltip.textContent = _ganttDrag.newStart + ' ～ ' + _ganttDrag.newEnd;
-            tooltip.style.display = 'block';
-            tooltip.style.left = (e.clientX + 14) + 'px';
-            tooltip.style.top  = (e.clientY - 10) + 'px';
+            tip.textContent = _ganttDrag.newStart + ' ～ ' + _ganttDrag.newEnd;
+            tip.style.display = 'block';
+            tip.style.left = (ev.clientX + 14) + 'px';
+            tip.style.top  = (ev.clientY - 10) + 'px';
             _ganttDrag.moved = Math.abs(dx) > 4;
             return;
         }
 
-        // 排序拖拉
+        // 排序拖拉（label 上下）
         if (!_rowDrag) return;
-        const dy = e.clientY - _rowDrag.startY;
+        const dy = ev.clientY - _rowDrag.startY;
         if (Math.abs(dy) > 6) _rowDrag.moved = true;
         if (!_rowDrag.moved) return;
 
-        // 移動 ghost
-        const baseTop = _rowDrag.rowRect ? _rowDrag.rowRect.top : e.clientY;
+        const baseTop = _rowDrag.rowRect ? _rowDrag.rowRect.top : ev.clientY;
         _rowDrag.ghost.style.top = (baseTop + dy) + 'px';
+        _rowDrag.ghost.style.display = 'flex';
 
-        // 找出目前游標對應的 targetIdx
         const rows = document.querySelectorAll('#chart .gantt-row');
         let newTarget = _rowDrag.idx;
         rows.forEach(function(row, i) {
             const r = row.getBoundingClientRect();
-            if (e.clientY >= r.top && e.clientY < r.bottom) {
-                newTarget = i;
-            }
+            if (ev.clientY >= r.top && ev.clientY < r.bottom) newTarget = i;
         });
         _rowDrag.targetIdx = newTarget;
-
-        // 插入線位置
         const targetRow = rows[newTarget];
-        if (targetRow) {
+        if (targetRow && _insertLineEl) {
             const tr = targetRow.getBoundingClientRect();
-            const insertY = dy > 0 ? tr.bottom : tr.top;
-            _insertLine.style.top = insertY + 'px';
-            _insertLine.style.display = 'block';
+            _insertLineEl.style.top = (_rowDrag.idx < newTarget ? tr.bottom : tr.top) + 'px';
+            _insertLineEl.style.display = 'block';
         }
     }, true);
 
-    document.addEventListener('mouseup', async function(e) {
+    // ─── Mouseup ───
+    document.addEventListener('mouseup', async function(ev) {
         // 日期拖拉結束
         if (_ganttDrag) {
             const state = _ganttDrag;
             _ganttDrag = null;
-            tooltip.style.display = 'none';
+            tip.style.display = 'none';
             if (state.overlay) state.overlay.style.cursor = state.type === 'resize' ? 'ew-resize' : 'grab';
             if (!state.moved) { editItem(state.idx); return; }
             const item = items[state.idx];
-            item.startDate = state.newStart;
-            item.endDate   = state.newEnd;
+            item.startDate = state.newStart; item.endDate = state.newEnd;
             renderChart(); renderBudgetChart();
             try {
                 const p = new URLSearchParams({ action:'updateGanttItem', pipelineId:pipeline.id,
@@ -770,19 +765,9 @@ document.body.appendChild(tooltip);
                     status:item.status||'', notes:item.notes||'', unitPrice:item.unitPrice||'' });
                 const r = await fetch(API_URL + '?' + p).then(r => r.json());
                 if (r.authError) { showAuthExpiredBanner(); item.startDate = state.origStart; item.endDate = state.origEnd; renderChart(); renderBudgetChart(); return; }
-                if (r.success) {
-                    showToast('日期已更新', 'success');
-                    if (window.opener) window.opener.postMessage({type:'ganttChanged'}, '*');
-                } else {
-                    item.startDate = state.origStart; item.endDate = state.origEnd;
-                    renderChart(); renderBudgetChart();
-                    showToast('更新失敗', 'error');
-                }
-            } catch(err) {
-                item.startDate = state.origStart; item.endDate = state.origEnd;
-                renderChart(); renderBudgetChart();
-                showToast('更新失敗', 'error');
-            }
+                if (r.success) { showToast('日期已更新', 'success'); if (window.opener) window.opener.postMessage({type:'ganttChanged'}, '*'); }
+                else { item.startDate = state.origStart; item.endDate = state.origEnd; renderChart(); renderBudgetChart(); showToast('更新失敗', 'error'); }
+            } catch(err) { item.startDate = state.origStart; item.endDate = state.origEnd; renderChart(); renderBudgetChart(); showToast('更新失敗', 'error'); }
             return;
         }
 
@@ -791,41 +776,30 @@ document.body.appendChild(tooltip);
         const drag = _rowDrag;
         _rowDrag = null;
         drag.ghost.remove();
-        _insertLine.style.display = 'none';
+        if (_insertLineEl) _insertLineEl.style.display = 'none';
 
-        if (!drag.moved) {
-            // 沒移動 → 視為點擊，觸發 editItem
-            editItem(drag.idx);
-            return;
-        }
+        if (!drag.moved) { editItem(drag.idx); return; }
 
-        const from = drag.idx;
-        const to = drag.targetIdx;
+        const from = drag.idx, to = drag.targetIdx;
         if (from === to) return;
 
-        // 重新排列 items
-        const moved = items.splice(from, 1)[0];
-        items.splice(to, 0, moved);
-        items.forEach(function(item, i) { item.sortOrder = i + 1; });
+        const movedItem = items.splice(from, 1)[0];
+        items.splice(to, 0, movedItem);
+        items.forEach(function(it, i) { it.sortOrder = i + 1; });
         renderChart(); renderBudgetChart();
 
-        // 儲存到後端
-        const orders = items.map(function(item, i) { return { id: item.id, sortOrder: i + 1 }; });
+        const orders = items.map(function(it, i) { return { id: it.id, sortOrder: i + 1 }; });
         try {
             const res = await fetch(API_URL + '?action=updateGanttOrder&pipelineId=' +
-                encodeURIComponent(pipeline.id) +
-                '&userToken=' + encodeURIComponent(USER_TOKEN) +
+                encodeURIComponent(pipeline.id) + '&userToken=' + encodeURIComponent(USER_TOKEN) +
                 '&orders=' + encodeURIComponent(JSON.stringify(orders)));
             const result = await res.json();
             if (result.authError) { showAuthExpiredBanner(); return; }
             if (!result.success) showToast('排序儲存失敗', 'error');
             else if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
-        } catch(err) {
-            showToast('排序儲存失敗：' + err.message, 'error');
-        }
+        } catch(err) { showToast('排序儲存失敗：' + err.message, 'error'); }
     }, true);
 }
-
 function ganttBarMouseDown(e, idx, typeNum) {
     var type = typeNum === 1 ? 'resize' : 'move';
     e.preventDefault();
