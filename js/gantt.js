@@ -1049,8 +1049,17 @@ const [r1, r3] = await Promise.all([
     fetch(API_URL + '?action=getGanttItems&pipelineId=' + pipeline.id).then(r => r.json()),
     fetch(API_URL + '?action=getUnitPrices&pipelineId=' + encodeURIComponent(pipeline.id)).then(r => r.json())
 ]);
+// 保留舊的 unitPrice（自訂項目的 unitPrice 可能不在 GAS getGanttItems 回傳裡）
+var oldPriceMap = {};
+items.forEach(function(i) { if (i.id && i.unitPrice != null && i.unitPrice !== '') oldPriceMap[i.id] = i.unitPrice; });
 items.length = 0;
-(r1.items || []).sort((a,b) => new Date(a.startDate)-new Date(b.startDate)).forEach(i => items.push(i));
+(r1.items || []).sort((a,b) => new Date(a.startDate)-new Date(b.startDate)).forEach(function(i) {
+    // 若 API 沒回傳 unitPrice，從舊快取補回
+    if ((i.unitPrice == null || i.unitPrice === '') && oldPriceMap[i.id] != null) {
+        i.unitPrice = oldPriceMap[i.id];
+    }
+    items.push(i);
+});
 unitPrices = r3.prices || [];
 renderChart();
 renderBudgetChart();
