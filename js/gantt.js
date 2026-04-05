@@ -58,7 +58,11 @@ window.toggleGanttPanel = async function() {
             apiCall('getUnitPrices', { pipelineId: currentPipeline.id, projectName: projName })
         ]);
         
-        const items = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+        const items = (result.items || []).sort((a, b) => {
+            const oa = a.sortOrder != null ? a.sortOrder : 9999;
+            const ob = b.sortOrder != null ? b.sortOrder : 9999;
+            return oa !== ob ? oa - ob : new Date(a.startDate) - new Date(b.startDate);
+        });
         const milestones = [];
         const unitPrices = upResult.prices || [];
         
@@ -588,9 +592,20 @@ else if (rate >= 1) opacity = 1.0;
 
 const barColor = baseColor;
 const barStyle = 'background:' + barColor + ';opacity:' + opacity + ';';
+const isFirst = idx === 0;
+const isLast = idx === items.length - 1;
 
 html += '<div class="gantt-row" data-idx="' + idx + '">';
-html += '<div class="gantt-label" style="width:180px;height:auto;display:flex;flex-direction:column;justify-content:center;cursor:pointer;" onclick="editItem(' + idx + ')" title="' + esc(item.label) + (item.notes ? ' | ' + esc(item.notes) : '') + '">' + (item.notes ? '<span class="gantt-notes" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(item.notes) + '</span>' : '') + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(item.label) + '</span></div>';
+// ↑↓ 排序按鈕
+html += '<div style="width:28px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0 2px;">' +
+    '<button onclick="moveGanttItem(' + idx + ',-1)" ' +
+    'style="width:22px;height:14px;border:none;border-radius:3px;background:' + (isFirst ? '#e0e0e0' : '#b0bec5') + ';color:' + (isFirst ? '#bbb' : '#37474f') + ';font-size:10px;cursor:' + (isFirst ? 'default' : 'pointer') + ';padding:0;line-height:1;" ' +
+    (isFirst ? 'disabled' : '') + ' title="上移">▲</button>' +
+    '<button onclick="moveGanttItem(' + idx + ',1)" ' +
+    'style="width:22px;height:14px;border:none;border-radius:3px;background:' + (isLast ? '#e0e0e0' : '#b0bec5') + ';color:' + (isLast ? '#bbb' : '#37474f') + ';font-size:10px;cursor:' + (isLast ? 'default' : 'pointer') + ';padding:0;line-height:1;" ' +
+    (isLast ? 'disabled' : '') + ' title="下移">▼</button>' +
+    '</div>';
+html += '<div class="gantt-label" style="width:152px;height:auto;display:flex;flex-direction:column;justify-content:center;cursor:pointer;" onclick="editItem(' + idx + ')" title="' + esc(item.label) + (item.notes ? ' | ' + esc(item.notes) : '') + '">' + (item.notes ? '<span class="gantt-notes" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(item.notes) + '</span>' : '') + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(item.label) + '</span></div>';
 html += '<div class="gantt-timeline-container"><div class="gantt-timeline">';
 
 // Bar 分為兩部分：已完成（實心）+ 未完成（半透明）
@@ -1043,6 +1058,40 @@ function showAuthExpiredBanner() {
 }
 
 // 重新載入甘特圖資料（不關視窗）
+// 上下移動甘特圖排序
+async function moveGanttItem(idx, direction) {
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= items.length) return;
+
+    // 交換記憶體中的位置
+    const tmp = items[idx];
+    items[idx] = items[newIdx];
+    items[newIdx] = tmp;
+
+    // 重新指派 sortOrder（1-based）
+    items.forEach(function(item, i) { item.sortOrder = i + 1; });
+
+    // 立即重繪（視覺即時反饋）
+    renderChart();
+    renderBudgetChart();
+
+    // 非同步儲存到後端
+    const orders = items.map(function(item, i) {
+        return { id: item.id, sortOrder: i + 1 };
+    });
+    try {
+        const res = await fetch(API_URL + '?action=updateGanttOrder&pipelineId=' +
+            encodeURIComponent(pipeline.id) +
+            '&userToken=' + encodeURIComponent(USER_TOKEN) +
+            '&orders=' + encodeURIComponent(JSON.stringify(orders)));
+        const result = await res.json();
+        if (result.authError) { showAuthExpiredBanner(); return; }
+        if (!result.success) showToast('排序儲存失敗：' + (result.error || ''), 'error');
+    } catch(e) {
+        showToast('排序儲存失敗：' + e.message, 'error');
+    }
+}
+
 async function reloadGanttData() {
     try {
 const [r1, r3] = await Promise.all([
@@ -1053,8 +1102,12 @@ const [r1, r3] = await Promise.all([
 var oldPriceMap = {};
 items.forEach(function(i) { if (i.id && i.unitPrice != null && i.unitPrice !== '') oldPriceMap[i.id] = i.unitPrice; });
 items.length = 0;
-(r1.items || []).sort((a,b) => new Date(a.startDate)-new Date(b.startDate)).forEach(function(i) {
-    // 若 API 沒回傳 unitPrice，從舊快取補回
+// 依 sortOrder 排序（GAS 已排好，但保留 fallback）
+(r1.items || []).sort(function(a, b) {
+    const oa = a.sortOrder != null ? a.sortOrder : 9999;
+    const ob = b.sortOrder != null ? b.sortOrder : 9999;
+    return oa !== ob ? oa - ob : new Date(a.startDate) - new Date(b.startDate);
+}).forEach(function(i) {
     if ((i.unitPrice == null || i.unitPrice === '') && oldPriceMap[i.id] != null) {
         i.unitPrice = oldPriceMap[i.id];
     }
@@ -1604,7 +1657,11 @@ async function loadGanttData() {
             apiCall('getGanttItems', { pipelineId: currentPipeline.id }),
             apiCall('getUnitPrices', { pipelineId: currentPipeline.id, projectName: currentProject ? currentProject.name || '' : '' })
         ]);
-        ganttData = window.ganttData = (result.items || []).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+        ganttData = window.ganttData = (result.items || []).sort((a, b) => {
+            const oa = a.sortOrder != null ? a.sortOrder : 9999;
+            const ob = b.sortOrder != null ? b.sortOrder : 9999;
+            return oa !== ob ? oa - ob : new Date(a.startDate) - new Date(b.startDate);
+        });
         unitPricesCache = upResult.prices || [];
         console.log('甘特圖資料:', ganttData);
         console.log('施工單價:', unitPricesCache);
