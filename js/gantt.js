@@ -210,7 +210,7 @@ label { display: block; font-size: 10px; color: #666; margin: 5px 0 2px; font-we
 </style>
 </head>
 <body>
-<div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showAddForm()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">＋ 新增</button><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button><button onclick="exportToExcel()" style="background:rgba(76,175,80,0.8);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📥 匯出Excel</button></div></div>
+<div class="header" style="display:flex;justify-content:space-between;align-items:center;"><h1>📊 施工甘特圖 - ${nameEscaped}</h1><div style="display:flex;gap:6px;"><button onclick="showAddForm()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">＋ 新增</button><button onclick="showSCurveWindow()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📈 S曲線</button><button onclick="showUnitPriceMgr()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">⚙️ 施工單價</button><button onclick="exportToExcel()" style="background:rgba(76,175,80,0.8);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📥 匯出Excel</button><button onclick="exportToPDF()" style="background:rgba(244,143,0,0.85);border:none;color:white;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:4px;">📄 匯出PDF</button></div></div>
 <div style="background:#f5f5f5;border-bottom:1px solid #e0e0e0;padding:4px 12px;display:flex;align-items:center;gap:6px;font-size:12px;color:#555;">
     <span>🔍</span>
     <button onclick="adjustZoom(-1)" style="padding:1px 9px;border:1px solid #bbb;border-radius:3px;cursor:pointer;font-size:15px;font-weight:bold;background:white;line-height:1.4;">−</button>
@@ -407,6 +407,35 @@ priceData.push([p.methodKey, p.unitPrice, p.remark || '']);
     showToast('已匯出：' + filename, 'success');
 }
 
+
+function exportToPDF() {
+    // 使用瀏覽器內建列印功能匯出 PDF
+    // 先套用列印樣式讓甘特圖適合 A3 橫向
+    var style = document.createElement('style');
+    style.id = '_printStyle';
+    style.textContent = [
+        '@media print {',
+        '  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+        '  .header { background: #00695C !important; -webkit-print-color-adjust: exact; }',
+        '  .gantt-bar { -webkit-print-color-adjust: exact; }',
+        '  @page { size: A3 landscape; margin: 10mm; }',
+        '  .edit-panel, .edit-backdrop, #editPanel, #editBackdrop { display: none !important; }',
+        '  #chartScrollOuter { overflow: visible !important; height: auto !important; }',
+        '  #chartScrollInner { min-width: 100% !important; }',
+        '  .gantt-sidebar { display: none !important; }',
+        '}'
+    ].join('\n');
+    document.head.appendChild(style);
+    
+    showToast('正在準備 PDF...', 'info');
+    setTimeout(function() {
+        window.print();
+        setTimeout(function() {
+            var s = document.getElementById('_printStyle');
+            if (s) s.remove();
+        }, 1000);
+    }, 300);
+}
 function showToast(message, type = 'info', duration = null) {
     let container = document.getElementById('_toast_container');
     if (!container) {
@@ -594,8 +623,8 @@ const barColor = baseColor;
 const barStyle = 'background:' + barColor + ';opacity:' + opacity + ';';
 
 html += '<div class="gantt-row" data-idx="' + idx + '" style="position:relative;">';
-// gantt-label：mousedown 啟動上下排序拖拉（點擊仍觸發 editItem）
-html += '<div class="gantt-label" data-drag-idx="' + idx + '" style="width:180px;height:auto;display:flex;flex-direction:column;justify-content:center;cursor:grab;user-select:none;" title="拖拉可調整順序，點擊可編輯">' +
+// gantt-label：直接 onmousedown 觸發排序拖拉（比 document 委派更可靠）
+html += '<div class="gantt-label" style="width:180px;height:auto;display:flex;flex-direction:column;justify-content:center;cursor:grab;user-select:none;" onmousedown="rowDragStart(event,' + idx + ')" title="拖拉可調整順序，點擊可編輯">' +
     (item.notes ? '<span class="gantt-notes" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:#999;">' + esc(item.notes) + '</span>' : '') +
     '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(item.label) + '</span>' +
     '</div>';
@@ -635,34 +664,52 @@ html += '</div></div></div>';
 // ===== 甘特圖拖拉移動 / 調整長度 =====
 var _ganttDrag = null;
 
-// 拖拉只初始化一次（避免每次 renderChart 累積 listener）
-let _dragInitialized = false;
-let _rowDrag = null;
-let _insertLineEl = null;
+// ── 排序拖拉狀態 ──
+var _rowDrag = null;
+var _insertLineEl = null;
+var _dragListenersAdded = false;
+
+// 由 label 的 onmousedown 直接呼叫（比 document 委派可靠）
+function rowDragStart(e, idx) {
+    // 不阻止冒泡，但標記這是排序拖拉
+    var rowEl = e.currentTarget.closest('.gantt-row');
+    var rowRect = rowEl ? rowEl.getBoundingClientRect() : null;
+    var ghost = document.createElement('div');
+    ghost.style.cssText = 'position:fixed;display:none;left:0;' +
+        'width:200px;height:' + (rowRect ? rowRect.height : 30) + 'px;' +
+        'background:rgba(0,105,76,.18);border:1.5px dashed #00695C;border-radius:4px;' +
+        'pointer-events:none;z-index:9997;align-items:center;padding-left:8px;' +
+        'font-size:11px;color:#00695C;font-weight:bold;overflow:hidden;white-space:nowrap;';
+    ghost.textContent = items[idx] ? items[idx].label : '';
+    document.body.appendChild(ghost);
+    _rowDrag = { idx: idx, startY: e.clientY, targetIdx: idx, ghost: ghost, rowRect: rowRect, moved: false };
+    e.preventDefault(); // 防止文字選取
+}
 
 function initGanttDrag() {
-    if (_dragInitialized) return;
-    _dragInitialized = true;
+    if (_dragListenersAdded) return;
+    _dragListenersAdded = true;
 
-    // 時間軸計算（動態取，不快取 minDate/maxDate）
+    // 時間軸計算（動態取，不快取）
     function getRange() {
-        const dates = items.flatMap(i => [new Date(i.startDate), new Date(i.endDate)]);
-        let mn = new Date(Math.min(...dates)), mx = new Date(Math.max(...dates));
+        var dates = items.flatMap(function(i) { return [new Date(i.startDate), new Date(i.endDate)]; });
+        var mn = new Date(Math.min.apply(null, dates));
+        var mx = new Date(Math.max.apply(null, dates));
         mn.setDate(mn.getDate() - 7); mx.setDate(mx.getDate() + 7);
         return mx - mn;
     }
     function innerW() {
-        const el = document.getElementById('chartScrollInner');
+        var el = document.getElementById('chartScrollInner');
         return el ? el.getBoundingClientRect().width || el.offsetWidth : 1;
     }
     function pxToDays(px) { return px / innerW() * getRange() / 86400000; }
     function shiftDate(s, days) {
-        const d = new Date(s); d.setDate(d.getDate() + Math.round(days));
+        var d = new Date(s); d.setDate(d.getDate() + Math.round(days));
         return d.toISOString().slice(0, 10);
     }
 
-    // Tooltip（日期拖拉用）
-    let tip = document.getElementById('ganttDragTip');
+    // Tooltip（日期拖拉）
+    var tip = document.getElementById('ganttDragTip');
     if (!tip) {
         tip = document.createElement('div');
         tip.id = 'ganttDragTip';
@@ -670,7 +717,7 @@ function initGanttDrag() {
         document.body.appendChild(tip);
     }
 
-    // 插入線（排序拖拉用）
+    // 插入線（排序拖拉）
     _insertLineEl = document.getElementById('_ganttInsertLine');
     if (!_insertLineEl) {
         _insertLineEl = document.createElement('div');
@@ -679,33 +726,12 @@ function initGanttDrag() {
         document.body.appendChild(_insertLineEl);
     }
 
-    // ─── Label mousedown → 排序拖拉（委派到 document） ───
-    document.addEventListener('mousedown', function(ev) {
-        const label = ev.target.closest('[data-drag-idx]');
-        if (!label) return;
-        const idx = parseInt(label.dataset.dragIdx);
-        if (isNaN(idx)) return;
-        // 不 preventDefault / stopPropagation，讓 zoom 按鈕等正常運作
-
-        const rowEl = label.closest('.gantt-row');
-        const rowRect = rowEl ? rowEl.getBoundingClientRect() : null;
-        const ghost = document.createElement('div');
-        ghost.style.cssText = 'position:fixed;display:none;left:' + (rowRect ? rowRect.left : 0) + 'px;' +
-            'width:180px;height:' + (rowRect ? rowRect.height : 30) + 'px;' +
-            'background:rgba(0,105,76,.15);border:1.5px dashed #00695C;border-radius:4px;' +
-            'pointer-events:none;z-index:9997;align-items:center;padding-left:8px;' +
-            'font-size:11px;color:#00695C;font-weight:bold;overflow:hidden;white-space:nowrap;';
-        ghost.textContent = items[idx] ? items[idx].label : '';
-        document.body.appendChild(ghost);
-        _rowDrag = { idx, startY: ev.clientY, targetIdx: idx, ghost, rowRect, moved: false };
-    });
-
-    // ─── Mousemove ───
+    // ── mousemove ──
     document.addEventListener('mousemove', function(ev) {
-        // 日期拖拉（bar 左右）
+        // 日期拖拉
         if (_ganttDrag) {
-            const dx = ev.clientX - _ganttDrag.startX;
-            const days = pxToDays(dx);
+            var dx = ev.clientX - _ganttDrag.startX;
+            var days = pxToDays(dx);
             if (_ganttDrag.type === 'move') {
                 _ganttDrag.newStart = shiftDate(_ganttDrag.origStart, days);
                 _ganttDrag.newEnd   = shiftDate(_ganttDrag.origEnd, days);
@@ -722,82 +748,82 @@ function initGanttDrag() {
             return;
         }
 
-        // 排序拖拉（label 上下）
+        // 排序拖拉
         if (!_rowDrag) return;
-        const dy = ev.clientY - _rowDrag.startY;
+        var dy = ev.clientY - _rowDrag.startY;
         if (Math.abs(dy) > 6) _rowDrag.moved = true;
         if (!_rowDrag.moved) return;
 
-        const baseTop = _rowDrag.rowRect ? _rowDrag.rowRect.top : ev.clientY;
+        var baseTop = _rowDrag.rowRect ? _rowDrag.rowRect.top : ev.clientY;
         _rowDrag.ghost.style.top = (baseTop + dy) + 'px';
         _rowDrag.ghost.style.display = 'flex';
 
-        const rows = document.querySelectorAll('#chart .gantt-row');
-        let newTarget = _rowDrag.idx;
+        var rows = document.querySelectorAll('#chart .gantt-row');
+        var newTarget = _rowDrag.idx;
         rows.forEach(function(row, i) {
-            const r = row.getBoundingClientRect();
+            var r = row.getBoundingClientRect();
             if (ev.clientY >= r.top && ev.clientY < r.bottom) newTarget = i;
         });
         _rowDrag.targetIdx = newTarget;
-        const targetRow = rows[newTarget];
+        var targetRow = rows[newTarget];
         if (targetRow && _insertLineEl) {
-            const tr = targetRow.getBoundingClientRect();
+            var tr = targetRow.getBoundingClientRect();
             _insertLineEl.style.top = (_rowDrag.idx < newTarget ? tr.bottom : tr.top) + 'px';
             _insertLineEl.style.display = 'block';
         }
     }, true);
 
-    // ─── Mouseup ───
+    // ── mouseup ──
     document.addEventListener('mouseup', async function(ev) {
         // 日期拖拉結束
         if (_ganttDrag) {
-            const state = _ganttDrag;
+            var state = _ganttDrag;
             _ganttDrag = null;
             tip.style.display = 'none';
             if (state.overlay) state.overlay.style.cursor = state.type === 'resize' ? 'ew-resize' : 'grab';
             if (!state.moved) { editItem(state.idx); return; }
-            const item = items[state.idx];
+            var item = items[state.idx];
             item.startDate = state.newStart; item.endDate = state.newEnd;
             renderChart(); renderBudgetChart();
             try {
-                const p = new URLSearchParams({ action:'updateGanttItem', pipelineId:pipeline.id,
+                var p = new URLSearchParams({ action:'updateGanttItem', pipelineId:pipeline.id,
                     itemId:item.id, label:item.label||'', startDate:state.newStart, endDate:state.newEnd,
                     status:item.status||'', notes:item.notes||'', unitPrice:item.unitPrice||'' });
-                const r = await fetch(API_URL + '?' + p).then(r => r.json());
-                if (r.authError) { showAuthExpiredBanner(); item.startDate = state.origStart; item.endDate = state.origEnd; renderChart(); renderBudgetChart(); return; }
-                if (r.success) { showToast('日期已更新', 'success'); if (window.opener) window.opener.postMessage({type:'ganttChanged'}, '*'); }
-                else { item.startDate = state.origStart; item.endDate = state.origEnd; renderChart(); renderBudgetChart(); showToast('更新失敗', 'error'); }
-            } catch(err) { item.startDate = state.origStart; item.endDate = state.origEnd; renderChart(); renderBudgetChart(); showToast('更新失敗', 'error'); }
+                var r = await fetch(API_URL + '?' + p).then(function(r){return r.json();});
+                if (r.authError) { showAuthExpiredBanner(); item.startDate=state.origStart; item.endDate=state.origEnd; renderChart(); renderBudgetChart(); return; }
+                if (r.success) { showToast('日期已更新','success'); if(window.opener) window.opener.postMessage({type:'ganttChanged'},'*'); }
+                else { item.startDate=state.origStart; item.endDate=state.origEnd; renderChart(); renderBudgetChart(); showToast('更新失敗','error'); }
+            } catch(err) { item.startDate=state.origStart; item.endDate=state.origEnd; renderChart(); renderBudgetChart(); showToast('更新失敗','error'); }
             return;
         }
 
         // 排序拖拉結束
         if (!_rowDrag) return;
-        const drag = _rowDrag;
+        var drag = _rowDrag;
         _rowDrag = null;
         drag.ghost.remove();
         if (_insertLineEl) _insertLineEl.style.display = 'none';
 
         if (!drag.moved) { editItem(drag.idx); return; }
 
-        const from = drag.idx, to = drag.targetIdx;
+        var from = drag.idx, to = drag.targetIdx;
         if (from === to) return;
 
-        const movedItem = items.splice(from, 1)[0];
+        var movedItem = items.splice(from, 1)[0];
         items.splice(to, 0, movedItem);
         items.forEach(function(it, i) { it.sortOrder = i + 1; });
         renderChart(); renderBudgetChart();
 
-        const orders = items.map(function(it, i) { return { id: it.id, sortOrder: i + 1 }; });
+        var orders = items.map(function(it, i) { return { id: it.id, sortOrder: i + 1 }; });
         try {
-            const res = await fetch(API_URL + '?action=updateGanttOrder&pipelineId=' +
+            var res = await fetch(API_URL + '?action=updateGanttOrder&pipelineId=' +
                 encodeURIComponent(pipeline.id) + '&userToken=' + encodeURIComponent(USER_TOKEN) +
                 '&orders=' + encodeURIComponent(JSON.stringify(orders)));
-            const result = await res.json();
+            var result = await res.json();
             if (result.authError) { showAuthExpiredBanner(); return; }
-            if (!result.success) showToast('排序儲存失敗', 'error');
-            else if (window.opener) window.opener.postMessage({ type: 'ganttChanged' }, '*');
-        } catch(err) { showToast('排序儲存失敗：' + err.message, 'error'); }
+            if (!result.success) showToast('排序儲存失敗','error');
+            else if (window.opener) window.opener.postMessage({ type:'ganttChanged' },'*');
+        } catch(err) { showToast('排序儲存失敗：'+err.message,'error'); }
     }, true);
 }
 function ganttBarMouseDown(e, idx, typeNum) {
