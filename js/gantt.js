@@ -511,11 +511,14 @@ return;
     minDate.setDate(minDate.getDate() - 7);
     maxDate.setDate(maxDate.getDate() + 7);
     
-    // 動態計算最小寬度：每天至少 pxPerDay px，最少 100%
+    // 依 pxPerDay 設定確切寬度（非 min-width），確保縮放真正有效果
     const totalDaysCalc = (maxDate - minDate) / 86400000;
-    const minPxWidth = Math.max(totalDaysCalc * pxPerDay, 800);
+    const totalPxWidth = Math.max(totalDaysCalc * pxPerDay, 800);
     const scrollInner = document.getElementById('chartScrollInner');
-    if (scrollInner) scrollInner.style.minWidth = minPxWidth + 'px';
+    if (scrollInner) {
+        scrollInner.style.width = totalPxWidth + 'px';
+        scrollInner.style.minWidth = '100%';
+    }
     
 
     let html = '<div style="display:flex;margin-bottom:6px;"><div style="width:180px;position:sticky;left:0;background:white;z-index:2;flex-shrink:0;"></div><div style="flex:1;position:relative;height:28px;padding-right:80px;border-bottom:1px solid #ddd;">';
@@ -1132,14 +1135,16 @@ else { showToast('失敗：' + (result.error || '未知錯誤'), 'error'); }
 // 登入過期友善提示（帶重新開啟按鈕）
 function showAuthExpiredBanner() {
     var old = document.getElementById('_authBanner');
-    if (old) return; // 已顯示就不重複
+    if (old) return;
     var banner = document.createElement('div');
     banner.id = '_authBanner';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b71c1c;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
-    banner.innerHTML = '<span>⚠️ <b>登入已過期</b>，請關閉此視窗並重新開啟甘特圖（點右上角⚙️甘特圖按鈕）</span>' +
-        '<button onclick="window.close()" style="background:white;color:#b71c1c;border:none;border-radius:5px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;margin-left:16px;">✕ 關閉此視窗</button>';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b71c1c;color:white;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
+    banner.innerHTML = '<span>⚠️ <b>登入已過期</b>，請重新登入後繼續操作</span>' +
+        '<div style="display:flex;gap:8px;">' +
+        '<button onclick="window.close()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:5px;padding:6px 14px;font-size:13px;cursor:pointer;">✕ 關閉視窗</button>' +
+        '<button onclick="document.getElementById(\'_authBanner\').remove();window.location.href=\'login.html\';" style="background:white;color:#b71c1c;border:none;border-radius:5px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">🔑 重新登入</button>' +
+        '</div>';
     document.body.prepend(banner);
-    // 同時通知主視窗顯示 toast
     if (window.opener) window.opener.postMessage({ type: 'ganttAuthExpired' }, '*');
 }
 
