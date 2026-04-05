@@ -413,7 +413,7 @@ function exportToPDF() {
     style.id = '_printStyle';
     style.textContent = '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .header { background: #00695C !important; -webkit-print-color-adjust: exact; } .gantt-bar { -webkit-print-color-adjust: exact; } @page { size: A3 landscape; margin: 10mm; } .edit-panel, .edit-backdrop, #editPanel, #editBackdrop { display: none !important; } #chartScrollOuter { overflow: visible !important; height: auto !important; } #chartScrollInner { min-width: 100% !important; } .gantt-sidebar { display: none !important; } }';
     document.head.appendChild(style);
-    showToast('列印視窗即將開啟，請選擇「另存為PDF」', 'info');
+    showToast('列印視窗即將開啟，請選擇 [另存為PDF]', 'info');
     setTimeout(function() {
         window.print();
         setTimeout(function() {
