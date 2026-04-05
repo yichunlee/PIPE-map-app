@@ -409,33 +409,20 @@ priceData.push([p.methodKey, p.unitPrice, p.remark || '']);
 
 
 function exportToPDF() {
-    // 使用瀏覽器內建列印功能匯出 PDF
-    // 先套用列印樣式讓甘特圖適合 A3 橫向
     var style = document.createElement('style');
     style.id = '_printStyle';
-    style.textContent = [
-        '@media print {',
-        '  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
-        '  .header { background: #00695C !important; -webkit-print-color-adjust: exact; }',
-        '  .gantt-bar { -webkit-print-color-adjust: exact; }',
-        '  @page { size: A3 landscape; margin: 10mm; }',
-        '  .edit-panel, .edit-backdrop, #editPanel, #editBackdrop { display: none !important; }',
-        '  #chartScrollOuter { overflow: visible !important; height: auto !important; }',
-        '  #chartScrollInner { min-width: 100% !important; }',
-        '  .gantt-sidebar { display: none !important; }',
-        '}'
-    ].join('\n');
+    style.textContent = '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .header { background: #00695C !important; -webkit-print-color-adjust: exact; } .gantt-bar { -webkit-print-color-adjust: exact; } @page { size: A3 landscape; margin: 10mm; } .edit-panel, .edit-backdrop, #editPanel, #editBackdrop { display: none !important; } #chartScrollOuter { overflow: visible !important; height: auto !important; } #chartScrollInner { min-width: 100% !important; } .gantt-sidebar { display: none !important; } }';
     document.head.appendChild(style);
-    
-    showToast('正在準備 PDF...', 'info');
+    showToast('列印視窗即將開啟，請選擇「另存為PDF」', 'info');
     setTimeout(function() {
         window.print();
         setTimeout(function() {
             var s = document.getElementById('_printStyle');
             if (s) s.remove();
-        }, 1000);
-    }, 300);
+        }, 1500);
+    }, 400);
 }
+
 function showToast(message, type = 'info', duration = null) {
     let container = document.getElementById('_toast_container');
     if (!container) {
