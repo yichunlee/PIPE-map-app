@@ -774,7 +774,7 @@ html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" d
     html += '<label>備註</label><input id="notes" value="' + esc(item.notes || '') + '">';
     if (isCustom) {
 html += '<label id="unitPriceLabel" style="display:flex;justify-content:space-between;">施工單價（元/式）<span id="upHint" style="color:#1976d2;font-size:10px;font-weight:normal;"></span></label>';
-html += '<input id="unitPriceInput" type="number" placeholder="輸入金額" value="' + (item.unitPrice || '') + '" style="margin-bottom:8px;">';
+html += '<input id="unitPriceInput" type="number" placeholder="輸入金額" value="' + (item.unitPrice != null && item.unitPrice !== '' ? item.unitPrice : '') + '" style="margin-bottom:8px;">';
     } else {
 var cachedPrice = getEffectiveUnitPrice(item);
 html += '<label style="display:flex;justify-content:space-between;color:#666;">施工單價（元/m）<span style="font-size:10px;color:#388e3c;">由施工單價工作表統一管理</span></label>';
@@ -1764,6 +1764,15 @@ function highlightGanttSegment(item) {
 }
 
 window.clearGanttHighlight = clearGanttHighlight;
+
+// 點地圖任何地方清除螢光（map 在 config.js 宣告，這裡延遲掛事件）
+setTimeout(() => {
+    if (typeof map !== 'undefined' && map) {
+        map.on('click', function() {
+            if (_ganttHighlightedPolylines.length > 0) clearGanttHighlight();
+        });
+    }
+}, 2000);
 
 window.showGanttPopup = function(idx) {
     console.log('showGanttPopup called with idx:', idx);
