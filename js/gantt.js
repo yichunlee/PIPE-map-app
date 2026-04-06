@@ -243,6 +243,12 @@ let unitPrices = ${unitPricesJson};
 const API_URL = '${apiUrl}';
 const USER_TOKEN = '${tokenEscaped}';
 
+// ── 拖拉狀態全域變數（blob 視窗獨立作用域）──
+var _ganttDrag = null;
+var _rowDrag = null;
+var _insertLineEl = null;
+var _dragListenersAdded = false;
+
 // 🔐 Blob 視窗用的 fetch 攔截器（與主視窗相同邏輯）
 (function() {
     var _of = window.fetch;
