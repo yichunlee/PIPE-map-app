@@ -835,21 +835,8 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
         var toLeft    = parseFloat(toBarEl.getAttribute('data-bar-left'))    || 0;
 
         // 轉成 SVG 像素座標
-        // x1：掃描 fromRow 所有子元素找最右邊的 right（含 progress label）
-        var chartRect = chartEl.getBoundingClientRect();
-        var fromRowEl = rows[dataArr.indexOf(fromItem)];
-        var maxChildRight = labelW + (fromRight / 100) * trackW;
-        if (fromRowEl) {
-            var track = fromRowEl.querySelector('.gantt-timeline-container, .gantt-track');
-            if (track) {
-                Array.from(track.children).forEach(function(ch) {
-                    var r = ch.getBoundingClientRect();
-                    var chRight = r.right - chartRect.left;
-                    if (chRight > maxChildRight && chRight < svgW) maxChildRight = chRight;
-                });
-            }
-        }
-        var x1 = maxChildRight + 4;
+        // x1：bar 右端（data-bar-right 已含整條 bar 寬度，不需額外 offset）
+        var x1 = labelW + (fromRight / 100) * trackW;
         var x2 = labelW + (toLeft / 100) * trackW;
 
         // Y 座標用 offsetTop + offsetHeight/2（相對於 chartEl）
