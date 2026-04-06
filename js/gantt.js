@@ -2071,7 +2071,14 @@ function showGanttForm(item, isEdit) {
         `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">完成日期</div><input id="gt_endDate" type="date" value="${item.endDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></div>`,
         `</div>`,
         `<input id="gt_notes" placeholder="備註（選填）" value="${esc(item.notes||'')}" style="${inputStyle}">`,
-        `<div id="gt_unitPriceDisplay" style="font-size:11px;color:#666;padding:6px 8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:5px;">施工單價：計算中…</div>`
+        `<div id="gt_unitPriceDisplay" style="font-size:11px;color:#666;padding:6px 8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:5px;">施工單價：計算中…</div>`,
+        `<div style="font-size:10px;color:#666;margin-bottom:2px;margin-top:4px;">前置項目（完成後才開始）</div>`,
+        `<select id="gt_dependsOn" style="${inputStyle}margin-bottom:8px;">
+          <option value="">— 無前置項目 —</option>
+          ${(ganttData || []).filter(i => i.id !== (item.id || null)).map(i =>
+            `<option value="${i.id}" ${(item.dependsOn === i.id) ? 'selected' : ''}>${esc(i.label)}</option>`
+          ).join('')}
+        </select>`
     ].join('');
     
     // 如果是編輯模式，設定預選值
@@ -2179,13 +2186,15 @@ function getGanttFormData() {
     const dashIdx = label.lastIndexOf(' - 段落');
     const prefix = dashIdx > 0 ? label.substring(0, dashIdx) : '';
     const matched = prefix ? unitPricesCache.find(p => p.methodKey === prefix) : null;
+    const depEl = document.getElementById('gt_dependsOn');
     return {
         label,
         startDate: document.getElementById('gt_startDate').value,
         endDate: document.getElementById('gt_endDate').value,
         status: '',
         notes: document.getElementById('gt_notes').value.trim(),
-        unitPrice: matched ? String(matched.unitPrice) : ''
+        unitPrice: matched ? String(matched.unitPrice) : '',
+        dependsOn: depEl ? (depEl.value || '') : ''
     };
 }
 
@@ -2197,7 +2206,8 @@ async function saveGanttNew() {
         const result = await apiCall('addGanttItem', {
             pipelineId: currentPipeline.id, label: data.label,
             startDate: data.startDate, endDate: data.endDate,
-            status: data.status, notes: data.notes, unitPrice: data.unitPrice || ''
+            status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
+            dependsOn: data.dependsOn || ''
         });
         if (result.success) { 
             map.closePopup();
@@ -2222,7 +2232,8 @@ async function saveGanttEdit(id) {
         const result = await apiCall('updateGanttItem', {
             itemId: id, label: data.label,
             startDate: data.startDate, endDate: data.endDate,
-            status: data.status, notes: data.notes, unitPrice: data.unitPrice || ''
+            status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
+            dependsOn: data.dependsOn || ''
         });
         if (result.success) { 
             map.closePopup();
