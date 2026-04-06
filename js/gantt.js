@@ -121,7 +121,11 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; displ
 .gantt-row { display: flex; margin-bottom: 3px; align-items: center; cursor: pointer; }
 .gantt-row:hover { background: #f5f5f5; }
 .gantt-row:hover .gantt-label { background: #f5f5f5; }
-.gantt-label { width: 180px; font-size: 9px; color: #999; padding: 2px 4px 2px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; position:sticky; left:0; background:white; z-index:2; }
+.gantt-label { width: var(--label-w, 180px); font-size: 9px; color: #999; padding: 2px 4px 2px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; position:sticky; left:0; background:white; z-index:2; transition: width 0.15s; }
+.label-resize-handle { width: 6px; height: 100%; cursor: col-resize; background: transparent; flex-shrink: 0; position: sticky; left: var(--label-w, 180px); z-index: 3; display: flex; align-items: center; justify-content: center; user-select: none; }
+.label-resize-handle:hover::after, .label-resize-handle.dragging::after { content: ""; width: 2px; height: 60%; background: #00695C; border-radius: 2px; }
+.label-collapsed .gantt-label { width: 0 !important; padding: 0 !important; }
+.label-collapsed .label-resize-handle { left: 0; }
 .gantt-notes { font-size: 11px; font-weight: bold; color: #222; font-style: normal; padding: 1px 4px 1px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gantt-timeline-container { flex: 1; position: relative; }
 .gantt-timeline { height: 26px; background: #f9f9f9; border-radius: 3px; position: relative; }
@@ -505,6 +509,46 @@ function isCustomItem(item) {
     return item.status && item.status.toString().startsWith('custom:');
 }
 
+// ── 左欄寬度拖曳調整 ──
+var _labelResizing = false;
+var _labelResizeStartX = 0;
+var _labelResizeStartW = 180;
+var LABEL_MIN_W = 0;
+var LABEL_MAX_W = 320;
+
+function startLabelResize(e) {
+    _labelResizing = true;
+    _labelResizeStartX = e.clientX;
+    _labelResizeStartW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--label-w')) || 180;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.querySelectorAll('.label-resize-handle').forEach(function(h) { h.classList.add('dragging'); });
+    e.preventDefault();
+}
+
+document.addEventListener('mousemove', function(e) {
+    if (!_labelResizing) return;
+    var dx = e.clientX - _labelResizeStartX;
+    var newW = Math.max(LABEL_MIN_W, Math.min(LABEL_MAX_W, _labelResizeStartW + dx));
+    document.documentElement.style.setProperty('--label-w', newW + 'px');
+    if (window._updateLabelHandle) window._updateLabelHandle();
+    // 重畫箭頭（標籤寬度改變了）
+    clearTimeout(window._arrowRedrawTimer);
+    window._arrowRedrawTimer = setTimeout(function() {
+        var old = document.getElementById('_depSvg');
+        if (old) old.remove();
+        drawDependencyArrows();
+    }, 100);
+});
+
+document.addEventListener('mouseup', function() {
+    if (!_labelResizing) return;
+    _labelResizing = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    document.querySelectorAll('.label-resize-handle').forEach(function(h) { h.classList.remove('dragging'); });
+});
+
 function renderChart() {
     if (!items || items.length === 0) {
 document.getElementById('chart').innerHTML = '<div style="text-align:center;padding:60px;color:#999;">📋 尚無甘特圖項目</div>';
@@ -528,7 +572,7 @@ return;
     }
     
 
-    let html = '<div style="display:flex;margin-bottom:6px;"><div style="width:180px;position:sticky;left:0;background:white;z-index:2;flex-shrink:0;"></div><div style="flex:1;position:relative;height:28px;padding-right:80px;border-bottom:1px solid #ddd;">';
+    let html = '<div style="display:flex;margin-bottom:6px;"><div style="width:var(--label-w,180px);position:sticky;left:0;background:white;z-index:2;flex-shrink:0;transition:width 0.15s;"></div><div style="flex:1;position:relative;height:28px;padding-right:80px;border-bottom:1px solid #ddd;">';
     
     // 第一步：繪製年份背景色塊和標籤
     const yearColors = {
@@ -655,6 +699,35 @@ html += '</div></div></div>';
     });
     
     document.getElementById('chart').innerHTML = html;
+
+    // 在 chart 右上角加（或更新）label resize handle
+    var chartEl = document.getElementById('chart');
+    var existHandle = document.getElementById('_labelHandle');
+    if (!existHandle) {
+        existHandle = document.createElement('div');
+        existHandle.id = '_labelHandle';
+        existHandle.title = '拖曳調整名稱欄寬度（雙擊恢復預設）';
+        existHandle.style.cssText = 'position:absolute;top:0;bottom:0;width:8px;cursor:col-resize;z-index:50;background:transparent;';
+        existHandle.addEventListener('mousedown', startLabelResize);
+        existHandle.addEventListener('dblclick', function() {
+            document.documentElement.style.setProperty('--label-w', '180px');
+            updateHandlePos();
+            setTimeout(function() { var o=document.getElementById('_depSvg');if(o)o.remove(); drawDependencyArrows(); }, 80);
+        });
+        // hover 效果
+        existHandle.innerHTML = '<div style="width:2px;height:100%;background:transparent;margin:0 auto;transition:background 0.15s;"></div>';
+        existHandle.addEventListener('mouseenter', function() { this.firstChild.style.background='#00695C'; });
+        existHandle.addEventListener('mouseleave', function() { if(!_labelResizing) this.firstChild.style.background='transparent'; });
+        chartEl.style.position = 'relative';
+        chartEl.appendChild(existHandle);
+    }
+    function updateHandlePos() {
+        var lw = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--label-w')) || 180;
+        existHandle.style.left = (lw - 2) + 'px';
+    }
+    updateHandlePos();
+    window._updateLabelHandle = updateHandlePos;
+
     initGanttDrag();
     setTimeout(drawDependencyArrows, 80);
 }
@@ -712,6 +785,9 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
     svg.appendChild(defs);
 
     // track 區域寬度 = chartEl 寬度 - label 寬度
+    // 動態讀取當前 label 寬度（可能被拖曳調整）
+    var actualLabelW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--label-w')) || labelW;
+    labelW = actualLabelW;
     var trackW = svgW - labelW;
 
     // 建立 idx → row 的 map
@@ -740,7 +816,11 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
         var toLeft    = parseFloat(toBarEl.getAttribute('data-bar-left'))    || 0;
 
         // 轉成 SVG 像素座標
-        var x1 = labelW + (fromRight / 100) * trackW;
+        // x1：bar 右端再加 progress label 估算寬度（避免箭頭穿越文字）
+        var barRightPx = labelW + (fromRight / 100) * trackW;
+        // progress label 寬度估算（"1840m/1840m" 約 70px）
+        var progLabelW = 72;
+        var x1 = barRightPx + progLabelW;
         var x2 = labelW + (toLeft   / 100) * trackW;
 
         // Y 座標用 offsetTop + offsetHeight/2（相對於 chartEl）
