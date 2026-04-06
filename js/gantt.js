@@ -1,3 +1,4 @@
+// v20260406_0206
 // ========== 甘特圖功能 ==========
 window.ganttData = []; // 全域，讓 batch.js 可存取已建立的甘特項目
 let ganttPanelOpen = false;
