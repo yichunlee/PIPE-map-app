@@ -126,7 +126,7 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; height: 100vh; displ
 .label-resize-handle:hover::after, .label-resize-handle.dragging::after { content: ""; width: 2px; height: 60%; background: #00695C; border-radius: 2px; }
 .label-collapsed .gantt-label { width: 0 !important; padding: 0 !important; }
 .label-collapsed .label-resize-handle { left: 0; }
-.gantt-notes { font-size: 11px; font-weight: bold; color: #222; font-style: normal; padding: 1px 4px 1px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-notes { font-size: 13px; font-weight: 700; color: #111; font-style: normal; padding: 1px 4px 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gantt-timeline-container { flex: 1; position: relative; }
 .gantt-timeline { height: 26px; background: #f9f9f9; border-radius: 3px; position: relative; }
 .gantt-bar { position: absolute; height: 100%; border-radius: 3px; display: flex; align-items: center; padding: 0 6px; font-size: 9px; color: white; font-weight: bold; }
@@ -422,7 +422,7 @@ priceData.push([p.methodKey, p.unitPrice, p.remark || '']);
 function exportToPDF() {
     var style = document.createElement('style');
     style.id = '_printStyle';
-    style.textContent = '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .header { background: #00695C !important; -webkit-print-color-adjust: exact; } .gantt-bar { -webkit-print-color-adjust: exact; } @page { size: A3 landscape; margin: 10mm; } .edit-panel, .edit-backdrop, #editPanel, #editBackdrop { display: none !important; } #chartScrollOuter { overflow: visible !important; height: auto !important; } #chartScrollInner { min-width: 100% !important; } .gantt-sidebar { display: none !important; } }';
+    style.textContent = '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .header { background: #00695C !important; -webkit-print-color-adjust: exact; } .gantt-bar { -webkit-print-color-adjust: exact; } @page { size: A3 landscape; margin: 10mm; } .edit-panel, .edit-backdrop, #editPanel, #editBackdrop { display: none !important; } #chartScrollOuter { overflow: visible !important; height: auto !important; } #chartScrollInner { min-width: 100% !important; width: auto !important; } .gantt-sidebar { display: none !important; } #_labelHandle, #_depSvg, #_inPageDepSvg { display: none !important; } }';
     document.head.appendChild(style);
     showToast('列印視窗即將開啟，請選擇 [另存為PDF]', 'info');
     setTimeout(function() {
@@ -678,7 +678,7 @@ const barStyle = 'background:' + barColor + ';opacity:' + opacity + ';';
 html += '<div class="gantt-row" data-idx="' + idx + '" style="position:relative;">';
 // gantt-label：直接 onmousedown 觸發排序拖拉（比 document 委派更可靠）
 html += '<div class="gantt-label" style="width:var(--label-w,180px);height:auto;display:flex;flex-direction:column;justify-content:center;cursor:grab;user-select:none;" onmousedown="rowDragStart(event,' + idx + ')" title="拖拉可調整順序，點擊可編輯">' +
-    (item.notes ? '<span class="gantt-notes" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:#999;">' + esc(item.notes) + '</span>' : '') +
+    (item.notes ? '<span class="gantt-notes" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:700;color:#111;">' + esc(item.notes) + '</span>' : '') +
     '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(item.label) + '</span>' +
     '</div>';
 html += '<div class="gantt-timeline-container"><div class="gantt-timeline">';
@@ -835,12 +835,22 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
         var toLeft    = parseFloat(toBarEl.getAttribute('data-bar-left'))    || 0;
 
         // 轉成 SVG 像素座標
-        // x1：bar 右端再加 progress label 估算寬度（避免箭頭穿越文字）
-        var barRightPx = labelW + (fromRight / 100) * trackW;
-        // progress label 寬度估算（"1840m/1840m" 約 70px）
-        var progLabelW = 72;
-        var x1 = barRightPx + progLabelW;
-        var x2 = labelW + (toLeft   / 100) * trackW;
+        // x1：掃描 fromRow 所有子元素找最右邊的 right（含 progress label）
+        var chartRect = chartEl.getBoundingClientRect();
+        var fromRowEl = rows[dataArr.indexOf(fromItem)];
+        var maxChildRight = labelW + (fromRight / 100) * trackW;
+        if (fromRowEl) {
+            var track = fromRowEl.querySelector('.gantt-timeline-container, .gantt-track');
+            if (track) {
+                Array.from(track.children).forEach(function(ch) {
+                    var r = ch.getBoundingClientRect();
+                    var chRight = r.right - chartRect.left;
+                    if (chRight > maxChildRight && chRight < svgW) maxChildRight = chRight;
+                });
+            }
+        }
+        var x1 = maxChildRight + 4;
+        var x2 = labelW + (toLeft / 100) * trackW;
 
         // Y 座標用 offsetTop + offsetHeight/2（相對於 chartEl）
         var y1 = fromRow.offsetTop + fromRow.offsetHeight / 2;
