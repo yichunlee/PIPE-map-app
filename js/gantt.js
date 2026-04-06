@@ -510,35 +510,48 @@ function isCustomItem(item) {
 }
 
 // ── 左欄寬度拖曳調整 ──
+var _curLabelW = 180;   // 目前欄寬（像素）
 var _labelResizing = false;
 var _labelResizeStartX = 0;
 var _labelResizeStartW = 180;
-var LABEL_MIN_W = 0;
-var LABEL_MAX_W = 320;
+
+function setLabelWidth(w) {
+    _curLabelW = Math.max(0, Math.min(320, w));
+    // 直接設定所有相關元素
+    document.querySelectorAll('.gantt-label').forEach(function(el) {
+        el.style.width = _curLabelW + 'px';
+        el.style.minWidth = _curLabelW + 'px';
+    });
+    document.querySelectorAll('.gantt-header-label').forEach(function(el) {
+        el.style.width = _curLabelW + 'px';
+        el.style.minWidth = _curLabelW + 'px';
+    });
+    document.documentElement.style.setProperty('--label-w', _curLabelW + 'px');
+    // 更新 handle 位置
+    var handle = document.getElementById('_labelHandle');
+    if (handle) handle.style.left = (_curLabelW - 3) + 'px';
+}
 
 function startLabelResize(e) {
     _labelResizing = true;
     _labelResizeStartX = e.clientX;
-    _labelResizeStartW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--label-w')) || 180;
+    _labelResizeStartW = _curLabelW;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-    document.querySelectorAll('.label-resize-handle').forEach(function(h) { h.classList.add('dragging'); });
     e.preventDefault();
+    e.stopPropagation();
 }
 
 document.addEventListener('mousemove', function(e) {
     if (!_labelResizing) return;
-    var dx = e.clientX - _labelResizeStartX;
-    var newW = Math.max(LABEL_MIN_W, Math.min(LABEL_MAX_W, _labelResizeStartW + dx));
-    document.documentElement.style.setProperty('--label-w', newW + 'px');
-    if (window._updateLabelHandle) window._updateLabelHandle();
-    // 重畫箭頭（標籤寬度改變了）
+    var newW = _labelResizeStartW + (e.clientX - _labelResizeStartX);
+    setLabelWidth(newW);
     clearTimeout(window._arrowRedrawTimer);
     window._arrowRedrawTimer = setTimeout(function() {
         var old = document.getElementById('_depSvg');
         if (old) old.remove();
         drawDependencyArrows();
-    }, 100);
+    }, 150);
 });
 
 document.addEventListener('mouseup', function() {
@@ -546,7 +559,6 @@ document.addEventListener('mouseup', function() {
     _labelResizing = false;
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-    document.querySelectorAll('.label-resize-handle').forEach(function(h) { h.classList.remove('dragging'); });
 });
 
 function renderChart() {
@@ -572,7 +584,7 @@ return;
     }
     
 
-    let html = '<div style="display:flex;margin-bottom:6px;"><div style="width:var(--label-w,180px);position:sticky;left:0;background:white;z-index:2;flex-shrink:0;transition:width 0.15s;"></div><div style="flex:1;position:relative;height:28px;padding-right:80px;border-bottom:1px solid #ddd;">';
+    let html = '<div style="display:flex;margin-bottom:6px;"><div class="gantt-header-label" style="width:var(--label-w,180px);position:sticky;left:0;background:white;z-index:2;flex-shrink:0;transition:width 0.15s;"></div><div style="flex:1;position:relative;height:28px;padding-right:80px;border-bottom:1px solid #ddd;">';
     
     // 第一步：繪製年份背景色塊和標籤
     const yearColors = {
@@ -665,7 +677,7 @@ const barStyle = 'background:' + barColor + ';opacity:' + opacity + ';';
 
 html += '<div class="gantt-row" data-idx="' + idx + '" style="position:relative;">';
 // gantt-label：直接 onmousedown 觸發排序拖拉（比 document 委派更可靠）
-html += '<div class="gantt-label" style="width:180px;height:auto;display:flex;flex-direction:column;justify-content:center;cursor:grab;user-select:none;" onmousedown="rowDragStart(event,' + idx + ')" title="拖拉可調整順序，點擊可編輯">' +
+html += '<div class="gantt-label" style="width:var(--label-w,180px);height:auto;display:flex;flex-direction:column;justify-content:center;cursor:grab;user-select:none;" onmousedown="rowDragStart(event,' + idx + ')" title="拖拉可調整順序，點擊可編輯">' +
     (item.notes ? '<span class="gantt-notes" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:#999;">' + esc(item.notes) + '</span>' : '') +
     '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(item.label) + '</span>' +
     '</div>';
@@ -700,33 +712,40 @@ html += '</div></div></div>';
     
     document.getElementById('chart').innerHTML = html;
 
-    // 在 chart 右上角加（或更新）label resize handle
-    var chartEl = document.getElementById('chart');
+    // label resize handle（固定在 chartScrollOuter 左邊緣）
+    var outerEl = document.getElementById('chartScrollOuter');
     var existHandle = document.getElementById('_labelHandle');
-    if (!existHandle) {
+    if (!existHandle && outerEl) {
+        outerEl.style.position = 'relative';
         existHandle = document.createElement('div');
         existHandle.id = '_labelHandle';
-        existHandle.title = '拖曳調整名稱欄寬度（雙擊恢復預設）';
-        existHandle.style.cssText = 'position:absolute;top:0;bottom:0;width:8px;cursor:col-resize;z-index:50;background:transparent;';
+        existHandle.title = '← 拖曳調整名稱欄寬度 / 雙擊恢復預設';
+        existHandle.style.cssText = [
+            'position:sticky',
+            'float:left',
+            'top:0',
+            'left:' + (_curLabelW - 3) + 'px',
+            'width:7px',
+            'height:100%',
+            'cursor:col-resize',
+            'z-index:100',
+            'background:transparent',
+            'border-right:2px solid transparent',
+            'transition:border-color 0.15s',
+            'box-sizing:border-box'
+        ].join(';');
         existHandle.addEventListener('mousedown', startLabelResize);
         existHandle.addEventListener('dblclick', function() {
-            document.documentElement.style.setProperty('--label-w', '180px');
-            updateHandlePos();
+            setLabelWidth(180);
             setTimeout(function() { var o=document.getElementById('_depSvg');if(o)o.remove(); drawDependencyArrows(); }, 80);
         });
-        // hover 效果
-        existHandle.innerHTML = '<div style="width:2px;height:100%;background:transparent;margin:0 auto;transition:background 0.15s;"></div>';
-        existHandle.addEventListener('mouseenter', function() { this.firstChild.style.background='#00695C'; });
-        existHandle.addEventListener('mouseleave', function() { if(!_labelResizing) this.firstChild.style.background='transparent'; });
-        chartEl.style.position = 'relative';
-        chartEl.appendChild(existHandle);
+        existHandle.addEventListener('mouseenter', function() { this.style.borderColor='#00695C'; });
+        existHandle.addEventListener('mouseleave', function() { if(!_labelResizing) this.style.borderColor='transparent'; });
+        // 把 handle 插到 chartScrollInner 的最前面
+        var inner = document.getElementById('chartScrollInner');
+        if (inner) inner.parentNode.insertBefore(existHandle, inner);
     }
-    function updateHandlePos() {
-        var lw = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--label-w')) || 180;
-        existHandle.style.left = (lw - 2) + 'px';
-    }
-    updateHandlePos();
-    window._updateLabelHandle = updateHandlePos;
+    if (existHandle) existHandle.style.left = (_curLabelW - 3) + 'px';
 
     initGanttDrag();
     setTimeout(drawDependencyArrows, 80);
@@ -1896,7 +1915,7 @@ xCur.setMonth(xCur.getMonth() + xStep);
     var html = '<div style="display:flex;align-items:stretch;">';
 
     // ── 左欄：sticky，含標題 + Y軸文字（對應 gantt-label width:180px）──
-    html += '<div style="width:180px;flex-shrink:0;position:sticky;left:0;background:white;z-index:2;box-sizing:border-box;padding:8px 8px 0 8px;display:flex;flex-direction:column;justify-content:flex-start;">';
+    html += '<div class="gantt-header-label" style="width:var(--label-w,180px);flex-shrink:0;position:sticky;left:0;background:white;z-index:2;box-sizing:border-box;padding:8px 8px 0 8px;display:flex;flex-direction:column;justify-content:flex-start;transition:width 0.15s;">';
     // 預估金額標題已移除
     html += '<div style="position:relative;flex:1;min-height:' + CHART_H + 'px;">';
     yLabelItems.forEach(function(item) {
