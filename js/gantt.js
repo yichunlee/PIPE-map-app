@@ -1133,6 +1133,11 @@ else { showToast('失敗：' + (result.error || '未知錯誤'), 'error'); }
 }
 
 // 登入過期友善提示（帶重新開啟按鈕）
+function closeAuthBanner() {
+    var b = document.getElementById('_authBanner');
+    if (b) b.remove();
+    window.location.href = 'login.html';
+}
 function showAuthExpiredBanner() {
     var old = document.getElementById('_authBanner');
     if (old) return;
@@ -1142,7 +1147,7 @@ function showAuthExpiredBanner() {
     banner.innerHTML = '<span>⚠️ <b>登入已過期</b>，請重新登入後繼續操作</span>' +
         '<div style="display:flex;gap:8px;">' +
         '<button onclick="window.close()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:5px;padding:6px 14px;font-size:13px;cursor:pointer;">✕ 關閉視窗</button>' +
-        '<button onclick="document.getElementById(\'_authBanner\').remove();window.location.href=\'login.html\';" style="background:white;color:#b71c1c;border:none;border-radius:5px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">🔑 重新登入</button>' +
+        '<button onclick="closeAuthBanner()" style="background:white;color:#b71c1c;border:none;border-radius:5px;padding:6px 16px;font-size:13px;font-weight:bold;cursor:pointer;">🔑 重新登入</button>' +
         '</div>';
     document.body.prepend(banner);
     if (window.opener) window.opener.postMessage({ type: 'ganttAuthExpired' }, '*');
