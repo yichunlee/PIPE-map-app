@@ -786,14 +786,26 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
     var rows = Array.from(chartEl.querySelectorAll('.gantt-row'));
     if (rows.length === 0) return;
 
-    var svgW = chartEl.scrollWidth  || chartEl.offsetWidth  || 800;
-    var svgH = chartEl.scrollHeight || chartEl.offsetHeight || 400;
+    // ① 確保 chartEl 是 position:relative（SVG absolute 定位基準）
+    chartEl.style.position = 'relative';
 
+    // ② 移除舊 SVG
+    var oldSvg = document.getElementById(svgId);
+    if (oldSvg) oldSvg.remove();
+
+    // ③ 動態 labelW（可能被拖曳改變）
+    var curLabelW = (typeof _curLabelW !== 'undefined') ? _curLabelW : labelW;
+
+    // ④ 用 chartEl 的 getBoundingClientRect 作為基準
+    var cRect = chartEl.getBoundingClientRect();
+    var svgW  = chartEl.scrollWidth;
+    var svgH  = chartEl.scrollHeight;
+
+    // ⑤ 建立 SVG
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.id = svgId;
-    svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:30;overflow:visible;';
-    svg.setAttribute('width', svgW);
-    svg.setAttribute('height', svgH);
+    svg.style.cssText = 'position:absolute;top:0;left:0;width:' + svgW + 'px;height:' + svgH + 'px;pointer-events:none;z-index:30;overflow:visible;';
+    svg.setAttribute('viewBox', '0 0 ' + svgW + ' ' + svgH);
     chartEl.appendChild(svg);
 
     var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -803,15 +815,8 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
         + ' stroke-linecap="round" stroke-linejoin="round"/></marker>';
     svg.appendChild(defs);
 
-    // track 區域寬度 = chartEl 寬度 - label 寬度
-    // 動態讀取當前 label 寬度（可能被拖曳調整）
-    var actualLabelW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--label-w')) || labelW;
-    labelW = actualLabelW;
-    var trackW = svgW - labelW;
-
-    // 建立 idx → row 的 map
-    var idxToRow = {};
-    rows.forEach(function(row, i) { idxToRow[i] = row; });
+    // ⑥ trackW = timeline 區寬度（整個 chart 寬 - label 寬）
+    var trackW = svgW - curLabelW;
 
     deps.forEach(function(item) {
         var fromItem = dataArr.find(function(i) { return i.id === item.dependsOn; });
@@ -821,70 +826,53 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
         var toIdx   = dataArr.indexOf(item);
         if (fromIdx < 0 || toIdx < 0) return;
 
-        var fromRow = idxToRow[fromIdx];
-        var toRow   = idxToRow[toIdx];
+        var fromRow = rows[fromIdx];
+        var toRow   = rows[toIdx];
         if (!fromRow || !toRow) return;
 
-        // 從 row 裡找帶有 data-bar-left 的元素（drag overlay 或 track）
+        // ⑦ 取 data-bar-left/right（%）
         var fromBarEl = fromRow.querySelector('[data-bar-left]');
         var toBarEl   = toRow.querySelector('[data-bar-left]');
         if (!fromBarEl || !toBarEl) return;
 
-        var fromLeft  = parseFloat(fromBarEl.getAttribute('data-bar-left'))  || 0;
         var fromRight = parseFloat(fromBarEl.getAttribute('data-bar-right')) || 0;
         var toLeft    = parseFloat(toBarEl.getAttribute('data-bar-left'))    || 0;
 
-        // 轉成 SVG 像素座標
-        // x1：bar 右端（data-bar-right 已含整條 bar 寬度，不需額外 offset）
-        var x1 = labelW + (fromRight / 100) * trackW;
-        var x2 = labelW + (toLeft / 100) * trackW;
+        // ⑧ X 座標：% → px（相對於 chartEl 左邊）
+        var x1 = curLabelW + (fromRight / 100) * trackW;
+        var x2 = curLabelW + (toLeft   / 100) * trackW;
 
-        // Y 座標用 offsetTop + offsetHeight/2（相對於 chartEl）
-        var y1 = fromRow.offsetTop + fromRow.offsetHeight / 2;
-        var y2 = toRow.offsetTop   + toRow.offsetHeight   / 2;
+        // ⑨ Y 座標：用 getBoundingClientRect 相對於 chartEl
+        var fromRect = fromRow.getBoundingClientRect();
+        var toRect   = toRow.getBoundingClientRect();
+        var y1 = fromRect.top + fromRect.height / 2 - cRect.top + chartEl.scrollTop;
+        var y2 = toRect.top   + toRect.height   / 2 - cRect.top + chartEl.scrollTop;
 
-        // 畫帶圓角轉折的 L 形路徑
+        if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
+
+        // ⑩ 路徑
         var r = 5;
-        var gap = 16;
-        var midX = x1 + gap;
-        var goDown = y2 > y1;
-
         var d;
         if (x2 > x1 + r * 2) {
-            // 正常：from bar 在 to bar 左邊，畫 Z 形
-            midX = x1 + Math.min((x2 - x1) / 2, 32);
+            var midX = x1 + Math.min((x2 - x1) / 2, 36);
+            var goDown = y2 >= y1;
             if (goDown) {
-                d = 'M' + x1 + ',' + y1
-                  + ' L' + (midX - r) + ',' + y1
-                  + ' Q' + midX + ',' + y1 + ' ' + midX + ',' + (y1 + r)
-                  + ' L' + midX + ',' + (y2 - r)
-                  + ' Q' + midX + ',' + y2 + ' ' + (midX + r) + ',' + y2
-                  + ' L' + (x2 - 2) + ',' + y2;
+                d = 'M'+x1+','+y1+' L'+(midX-r)+','+y1+' Q'+midX+','+y1+' '+midX+','+(y1+r)
+                  +' L'+midX+','+(y2-r)+' Q'+midX+','+y2+' '+(midX+r)+','+y2+' L'+(x2-2)+','+y2;
             } else {
-                d = 'M' + x1 + ',' + y1
-                  + ' L' + (midX - r) + ',' + y1
-                  + ' Q' + midX + ',' + y1 + ' ' + midX + ',' + (y1 - r)
-                  + ' L' + midX + ',' + (y2 + r)
-                  + ' Q' + midX + ',' + y2 + ' ' + (midX + r) + ',' + y2
-                  + ' L' + (x2 - 2) + ',' + y2;
+                d = 'M'+x1+','+y1+' L'+(midX-r)+','+y1+' Q'+midX+','+y1+' '+midX+','+(y1-r)
+                  +' L'+midX+','+(y2+r)+' Q'+midX+','+y2+' '+(midX+r)+','+y2+' L'+(x2-2)+','+y2;
             }
         } else {
-            // from bar 右端 超過/接近 to bar 左端：先往右延伸繞過去
-            var extX = Math.max(x1, x2) + gap;
-            if (goDown) {
-                d = 'M' + x1 + ',' + y1
-                  + ' L' + (extX - r) + ',' + y1
-                  + ' Q' + extX + ',' + y1 + ' ' + extX + ',' + (y1 + r)
-                  + ' L' + extX + ',' + (y2 - r)
-                  + ' Q' + extX + ',' + y2 + ' ' + (extX - r) + ',' + y2
-                  + ' L' + (x2 - 2) + ',' + y2;
+            // from bar 右端接近 to bar 左端：繞道
+            var extX = Math.max(x1, x2) + 20;
+            var goDown2 = y2 >= y1;
+            if (goDown2) {
+                d = 'M'+x1+','+y1+' L'+(extX-r)+','+y1+' Q'+extX+','+y1+' '+extX+','+(y1+r)
+                  +' L'+extX+','+(y2-r)+' Q'+extX+','+y2+' '+(extX-r)+','+y2+' L'+(x2-2)+','+y2;
             } else {
-                d = 'M' + x1 + ',' + y1
-                  + ' L' + (extX - r) + ',' + y1
-                  + ' Q' + extX + ',' + y1 + ' ' + extX + ',' + (y1 - r)
-                  + ' L' + extX + ',' + (y2 + r)
-                  + ' Q' + extX + ',' + y2 + ' ' + (extX - r) + ',' + y2
-                  + ' L' + (x2 - 2) + ',' + y2;
+                d = 'M'+x1+','+y1+' L'+(extX-r)+','+y1+' Q'+extX+','+y1+' '+extX+','+(y1-r)
+                  +' L'+extX+','+(y2+r)+' Q'+extX+','+y2+' '+(extX-r)+','+y2+' L'+(x2-2)+','+y2;
             }
         }
 
@@ -898,6 +886,7 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
         svg.appendChild(path);
     });
 }
+
 
 // ── 拖拉狀態全域變數 ──
 var _ganttDrag = null;
