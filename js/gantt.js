@@ -639,7 +639,7 @@ if (undoneWidth > 0) {
 }
 
 // Drag overlay（整條 bar 可拖移）+ resize handle（右端可拉長縮短）
-html += '<div class="gantt-drag-overlay" onmousedown="ganttBarMouseDown(event,' + idx + ',0)" style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;z-index:10;cursor:grab;box-sizing:border-box;user-select:none;" title="拖拉移動">';
+html += '<div class="gantt-drag-overlay" onmousedown="ganttBarMouseDown(event,' + idx + ',0)" data-bar-left="' + left.toFixed(4) + '" data-bar-right="' + (left + barWidth).toFixed(4) + '" style="position:absolute;left:' + left + '%;width:' + barWidth + '%;height:100%;z-index:10;cursor:grab;box-sizing:border-box;user-select:none;" title="拖拉移動">';
 html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:bold;text-shadow:0 1px 2px rgba(0,0,0,0.4);pointer-events:none;">' + barLabel + '</div>';
 // Resize handle（右邊 8px，蓋在 overlay 上面）
 html += '<div class="gantt-resize-handle" onmousedown="ganttBarMouseDown(event,' + idx + ',1)" style="position:absolute;right:0;top:0;width:10px;height:100%;cursor:ew-resize;z-index:12;" title="拖拉調整結束日期"></div>';
@@ -683,21 +683,13 @@ function drawInPageDependencyArrows() {
     _drawArrows(chartEl, ganttData, deps, '_inPageDepSvg', '_ipArr', 240);
 }
 
-// 通用箭頭繪製：直接從 DOM row 元素讀取位置
+// 通用箭頭繪製：從 data-bar-left/right 屬性讀取百分比座標
 function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
     var rows = Array.from(chartEl.querySelectorAll('.gantt-row'));
     if (rows.length === 0) return;
 
-    // 用 data-idx 屬性或順序找 row
-    // 先建立 item → row 的對應
-    var itemToRow = {};
-    rows.forEach(function(row, i) {
-        itemToRow[i] = row;
-    });
-
-    // 建 SVG（和 chartEl 等寬高，absolute 定位）
-    var svgW = chartEl.offsetWidth  || chartEl.scrollWidth  || 800;
-    var svgH = chartEl.offsetHeight || chartEl.scrollHeight || 400;
+    var svgW = chartEl.scrollWidth  || chartEl.offsetWidth  || 800;
+    var svgH = chartEl.scrollHeight || chartEl.offsetHeight || 400;
 
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.id = svgId;
@@ -706,13 +698,19 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
     svg.setAttribute('height', svgH);
     chartEl.appendChild(svg);
 
-    // arrowhead marker
     var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
     defs.innerHTML = '<marker id="' + markerId + '" viewBox="0 0 10 10" refX="9" refY="5"'
         + ' markerWidth="5" markerHeight="5" orient="auto-start-reverse">'
         + '<path d="M1 2L8 5L1 8" fill="none" stroke="#555" stroke-width="1.5"'
         + ' stroke-linecap="round" stroke-linejoin="round"/></marker>';
     svg.appendChild(defs);
+
+    // track 區域寬度 = chartEl 寬度 - label 寬度
+    var trackW = svgW - labelW;
+
+    // 建立 idx → row 的 map
+    var idxToRow = {};
+    rows.forEach(function(row, i) { idxToRow[i] = row; });
 
     deps.forEach(function(item) {
         var fromItem = dataArr.find(function(i) { return i.id === item.dependsOn; });
@@ -722,76 +720,70 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
         var toIdx   = dataArr.indexOf(item);
         if (fromIdx < 0 || toIdx < 0) return;
 
-        var fromRow = itemToRow[fromIdx];
-        var toRow   = itemToRow[toIdx];
+        var fromRow = idxToRow[fromIdx];
+        var toRow   = idxToRow[toIdx];
         if (!fromRow || !toRow) return;
 
-        // 找 bar 元素：帶有 left% style 且是 position:absolute 的第一個 div
-        // gantt-track 或 gantt-timeline-container 裡的 bar
-        var fromTrack = fromRow.querySelector('.gantt-track, .gantt-timeline-container, .gantt-timeline');
-        var toTrack   = toRow.querySelector('.gantt-track, .gantt-timeline-container, .gantt-timeline');
-        if (!fromTrack || !toTrack) return;
+        // 從 row 裡找帶有 data-bar-left 的元素（drag overlay 或 track）
+        var fromBarEl = fromRow.querySelector('[data-bar-left]');
+        var toBarEl   = toRow.querySelector('[data-bar-left]');
+        if (!fromBarEl || !toBarEl) return;
 
-        // 找所有 bar（有 left% style 的絕對定位 div）
-        var fromBars = Array.from(fromTrack.querySelectorAll('div[style*="left:"]'))
-            .filter(function(d) { return d.style.position === 'absolute' || d.className.includes('gantt-bar') || d.className.includes('gantt-drag'); });
-        var toBars = Array.from(toTrack.querySelectorAll('div[style*="left:"]'))
-            .filter(function(d) { return d.style.position === 'absolute' || d.className.includes('gantt-bar') || d.className.includes('gantt-drag'); });
+        var fromLeft  = parseFloat(fromBarEl.getAttribute('data-bar-left'))  || 0;
+        var fromRight = parseFloat(fromBarEl.getAttribute('data-bar-right')) || 0;
+        var toLeft    = parseFloat(toBarEl.getAttribute('data-bar-left'))    || 0;
 
-        if (fromBars.length === 0 || toBars.length === 0) return;
+        // 轉成 SVG 像素座標
+        var x1 = labelW + (fromRight / 100) * trackW;
+        var x2 = labelW + (toLeft   / 100) * trackW;
 
-        // 用 getBoundingClientRect 相對於 chartEl
-        var chartRect = chartEl.getBoundingClientRect();
+        // Y 座標用 offsetTop + offsetHeight/2（相對於 chartEl）
+        var y1 = fromRow.offsetTop + fromRow.offsetHeight / 2;
+        var y2 = toRow.offsetTop   + toRow.offsetHeight   / 2;
 
-        // from: 取最右邊的 bar 的右端
-        var maxRight = -Infinity;
-        fromBars.forEach(function(b) {
-            var r = b.getBoundingClientRect();
-            if (r.right > maxRight) maxRight = r.right;
-        });
-
-        // to: 取最左邊的 bar 的左端
-        var minLeft = Infinity, toBarTop = 0, toBarH = 0;
-        toBars.forEach(function(b) {
-            var r = b.getBoundingClientRect();
-            if (r.left < minLeft) {
-                minLeft = r.left;
-                toBarTop = r.top;
-                toBarH = r.height;
-            }
-        });
-
-        var fromRowRect = fromRow.getBoundingClientRect();
-        var toRowRect   = toRow.getBoundingClientRect();
-
-        var x1 = maxRight - chartRect.left;
-        var y1 = fromRowRect.top + fromRowRect.height / 2 - chartRect.top;
-        var x2 = minLeft  - chartRect.left;
-        var y2 = toRowRect.top   + toRowRect.height   / 2 - chartRect.top;
-
-        if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
-
-        // L 形路徑（從 from bar 右端 → 折彎 → 到 to bar 左端）
-        var curve = 5;
-        var midX  = x1 + Math.min(Math.max((x2 - x1) / 2, 12), 36);
-
-        var goingDown = y2 > y1;
-        var cy1 = goingDown ?  curve : -curve;
-        var cy2 = goingDown ? -curve :  curve;
+        // 畫帶圓角轉折的 L 形路徑
+        var r = 5;
+        var gap = 16;
+        var midX = x1 + gap;
+        var goDown = y2 > y1;
 
         var d;
-        if (Math.abs(x2 - x1) > 4) {
-            // 正常情況：from 在 to 左邊
-            d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
-              + ' L' + (midX - curve).toFixed(1) + ',' + y1.toFixed(1)
-              + ' Q' + midX.toFixed(1) + ',' + y1.toFixed(1) + ' ' + midX.toFixed(1) + ',' + (y1 + cy1).toFixed(1)
-              + ' L' + midX.toFixed(1) + ',' + (y2 - cy1).toFixed(1)
-              + ' Q' + midX.toFixed(1) + ',' + y2.toFixed(1) + ' ' + (midX + curve).toFixed(1) + ',' + y2.toFixed(1)
-              + ' L' + (x2 - 2).toFixed(1) + ',' + y2.toFixed(1);
+        if (x2 > x1 + r * 2) {
+            // 正常：from bar 在 to bar 左邊，畫 Z 形
+            midX = x1 + Math.min((x2 - x1) / 2, 32);
+            if (goDown) {
+                d = 'M' + x1 + ',' + y1
+                  + ' L' + (midX - r) + ',' + y1
+                  + ' Q' + midX + ',' + y1 + ' ' + midX + ',' + (y1 + r)
+                  + ' L' + midX + ',' + (y2 - r)
+                  + ' Q' + midX + ',' + y2 + ' ' + (midX + r) + ',' + y2
+                  + ' L' + (x2 - 2) + ',' + y2;
+            } else {
+                d = 'M' + x1 + ',' + y1
+                  + ' L' + (midX - r) + ',' + y1
+                  + ' Q' + midX + ',' + y1 + ' ' + midX + ',' + (y1 - r)
+                  + ' L' + midX + ',' + (y2 + r)
+                  + ' Q' + midX + ',' + y2 + ' ' + (midX + r) + ',' + y2
+                  + ' L' + (x2 - 2) + ',' + y2;
+            }
         } else {
-            // from 和 to 幾乎同 X：垂直線
-            d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
-              + ' L' + x1.toFixed(1) + ',' + (y2 - 2).toFixed(1);
+            // from bar 右端 超過/接近 to bar 左端：先往右延伸繞過去
+            var extX = Math.max(x1, x2) + gap;
+            if (goDown) {
+                d = 'M' + x1 + ',' + y1
+                  + ' L' + (extX - r) + ',' + y1
+                  + ' Q' + extX + ',' + y1 + ' ' + extX + ',' + (y1 + r)
+                  + ' L' + extX + ',' + (y2 - r)
+                  + ' Q' + extX + ',' + y2 + ' ' + (extX - r) + ',' + y2
+                  + ' L' + (x2 - 2) + ',' + y2;
+            } else {
+                d = 'M' + x1 + ',' + y1
+                  + ' L' + (extX - r) + ',' + y1
+                  + ' Q' + extX + ',' + y1 + ' ' + extX + ',' + (y1 - r)
+                  + ' L' + extX + ',' + (y2 + r)
+                  + ' Q' + extX + ',' + y2 + ' ' + (extX - r) + ',' + y2
+                  + ' L' + (x2 - 2) + ',' + y2;
+            }
         }
 
         var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -2005,7 +1997,7 @@ function renderGanttChart() {
                 <span style="display:inline-block;width:8px;height:8px;background:${dotColor};border-radius:50%;margin-right:4px;"></span>
                 ${item.notes ? `<strong>${esc(item.notes)}</strong> ` : ''}${esc(item.label)}
             </div>
-            <div class="gantt-track gantt-clickable" data-idx="${idx}" style="cursor:pointer;position:relative;">
+            <div class="gantt-track gantt-clickable" data-idx="${idx}" data-bar-left="${left.toFixed(4)}" data-bar-right="${(left+Math.max(width,1)).toFixed(4)}" style="cursor:pointer;position:relative;">
                 <div style="position:absolute;left:${left}%;width:${Math.max(width,1)}%;height:100%;background:${baseColor};border-radius:3px;opacity:0.35;pointer-events:none;"></div>
                 <div style="position:absolute;left:${left}%;width:${Math.max(width,1)*rate}%;height:100%;background:${doneColor};border-radius:3px;pointer-events:none;"
                      title="${item.startDate} ～ ${item.endDate}（${days}天）${prog?' | '+progLabel:''}"></div>
