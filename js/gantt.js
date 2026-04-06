@@ -650,6 +650,88 @@ html += '</div></div></div>';
     
     document.getElementById('chart').innerHTML = html;
     initGanttDrag();
+    drawDependencyArrows();
+}
+
+// ── 依賴箭頭 SVG 覆蓋層 ──────────────────────────────────────
+function drawDependencyArrows() {
+    // 移除舊的 SVG
+    var old = document.getElementById('_depArrowSvg');
+    if (old) old.remove();
+
+    // 找有 dependsOn 的項目
+    var deps = items.filter(function(item) { return item.dependsOn; });
+    if (deps.length === 0) return;
+
+    var chart = document.getElementById('chart');
+    if (!chart) return;
+
+    // SVG 覆蓋在 chart 上
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = '_depArrowSvg';
+    svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20;overflow:visible;';
+    chart.style.position = 'relative';
+    chart.appendChild(svg);
+
+    // arrowhead marker
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = '<marker id="_depArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>';
+    svg.appendChild(defs);
+
+    var chartRect = chart.getBoundingClientRect();
+
+    deps.forEach(function(item) {
+        var fromItem = items.find(function(i) { return i.id === item.dependsOn; });
+        if (!fromItem) return;
+
+        // 找兩個 row 的 DOM 元素
+        var fromIdx = items.indexOf(fromItem);
+        var toIdx   = items.indexOf(item);
+        var rows = chart.querySelectorAll('.gantt-row');
+        var fromRow = rows[fromIdx];
+        var toRow   = rows[toIdx];
+        if (!fromRow || !toRow) return;
+
+        // 找 timeline container（bar 所在的 div）
+        var fromTimeline = fromRow.querySelector('.gantt-timeline-container');
+        var toTimeline   = toRow.querySelector('.gantt-timeline-container');
+        if (!fromTimeline || !toTimeline) return;
+
+        // 找 bar（已完成 + 未完成）— 取最右邊的結束點
+        var fromBars = fromRow.querySelectorAll('.gantt-bar');
+        var toBars   = toRow.querySelectorAll('.gantt-bar');
+        if (fromBars.length === 0 || toBars.length === 0) return;
+
+        // from: 最後一個 bar 的右端
+        var lastFromBar = fromBars[fromBars.length - 1];
+        var fromBarRect = lastFromBar.getBoundingClientRect();
+        // to: 첫 번째 bar 의 왼쪽
+        var firstToBar  = toBars[0];
+        var toBarRect   = firstToBar.getBoundingClientRect();
+
+        // 轉成相對於 chart 的座標
+        var x1 = fromBarRect.right  - chartRect.left;
+        var y1 = fromBarRect.top + fromBarRect.height / 2 - chartRect.top;
+        var x2 = toBarRect.left     - chartRect.left;
+        var y2 = toBarRect.top  + toBarRect.height  / 2 - chartRect.top;
+
+        // 繪製 L 形路徑
+        var midX = x1 + Math.min(Math.max((x2 - x1) * 0.5, 16), 40);
+        var d = 'M ' + x1 + ' ' + y1 +
+                ' L ' + midX + ' ' + y1 +
+                ' L ' + midX + ' ' + y2 +
+                ' L ' + (x2 - 4) + ' ' + y2;
+
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#555');
+        path.setAttribute('stroke-width', '1.5');
+        path.setAttribute('stroke-dasharray', '4 2');
+        path.setAttribute('marker-end', 'url(#_depArrow)');
+        path.setAttribute('opacity', '0.7');
+        svg.appendChild(path);
+    });
 }
 
 // ===== 甘特圖拖拉移動 / 調整長度 =====
@@ -2053,6 +2135,13 @@ function showGanttForm(item, isEdit) {
         `<div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">完成日期</div><input id="gt_endDate" type="date" value="${item.endDate||''}" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></div>`,
         `</div>`,
         `<input id="gt_notes" placeholder="備註（選填）" value="${esc(item.notes||'')}" style="${inputStyle}">`,
+        `<div style="font-size:10px;color:#666;margin-bottom:2px;">前置項目（完成後才開始）</div>`,
+        `<select id="gt_dependsOn" style="${inputStyle}margin-bottom:8px;">
+            <option value="">— 無前置項目 —</option>
+            ${items.filter(i => i.id !== (item.id || null)).map(i =>
+                `<option value="${i.id}" ${(item.dependsOn === i.id) ? 'selected' : ''}>${esc(i.label)}</option>`
+            ).join('')}
+        </select>`,
         `<div id="gt_unitPriceDisplay" style="font-size:11px;color:#666;padding:6px 8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:5px;">施工單價：計算中…</div>`
     ].join('');
     
@@ -2161,13 +2250,15 @@ function getGanttFormData() {
     const dashIdx = label.lastIndexOf(' - 段落');
     const prefix = dashIdx > 0 ? label.substring(0, dashIdx) : '';
     const matched = prefix ? unitPricesCache.find(p => p.methodKey === prefix) : null;
+    const depEl = document.getElementById('gt_dependsOn');
     return {
         label,
         startDate: document.getElementById('gt_startDate').value,
         endDate: document.getElementById('gt_endDate').value,
         status: '',
         notes: document.getElementById('gt_notes').value.trim(),
-        unitPrice: matched ? String(matched.unitPrice) : ''
+        unitPrice: matched ? String(matched.unitPrice) : '',
+        dependsOn: depEl ? (depEl.value || '') : ''
     };
 }
 
@@ -2179,7 +2270,8 @@ async function saveGanttNew() {
         const result = await apiCall('addGanttItem', {
             pipelineId: currentPipeline.id, label: data.label,
             startDate: data.startDate, endDate: data.endDate,
-            status: data.status, notes: data.notes, unitPrice: data.unitPrice || ''
+            status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
+            dependsOn: data.dependsOn || ''
         });
         if (result.success) { 
             map.closePopup();
@@ -2204,7 +2296,8 @@ async function saveGanttEdit(id) {
         const result = await apiCall('updateGanttItem', {
             itemId: id, label: data.label,
             startDate: data.startDate, endDate: data.endDate,
-            status: data.status, notes: data.notes, unitPrice: data.unitPrice || ''
+            status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
+            dependsOn: data.dependsOn || ''
         });
         if (result.success) { 
             map.closePopup();
