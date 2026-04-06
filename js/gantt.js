@@ -650,6 +650,7 @@ html += '</div></div></div>';
     
     document.getElementById('chart').innerHTML = html;
     initGanttDrag();
+    setTimeout(drawDependencyArrows, 80);
 }
 
 // ===== 甘特圖拖拉移動 / 調整長度 =====
@@ -1873,7 +1874,10 @@ function renderGanttChart() {
         </div>`;
     }).join('');
     
-    body.innerHTML = headerHtml + '<div class="gantt-chart">' + rowsHtml + '</div>';
+    body.innerHTML = headerHtml + '<div class="gantt-chart" id="ganttChartInner" style="position:relative;">' + rowsHtml + '</div>';
+    
+    // 畫依賴箭頭（延遲確保 DOM 已渲染）
+    setTimeout(drawInPageDependencyArrows, 80);
     
     // 使用事件委派處理點擊
     const chart = body.querySelector('.gantt-chart');
