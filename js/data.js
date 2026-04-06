@@ -87,6 +87,8 @@ function setMapContext(context, projectPipelines) {
     if (context === 'none') {
         // 計畫選擇畫面：全部隱藏
         Object.values(ids).forEach(el => { if (el) el.style.display = 'none'; });
+        var dxfBtn0 = document.getElementById('dxfExportBtn');
+        if (dxfBtn0) dxfBtn0.style.display = 'none';
         var scBtn0 = document.getElementById('projectSCurveBtn');
         if (scBtn0) scBtn0.style.display = 'none';
         return;
@@ -94,6 +96,8 @@ function setMapContext(context, projectPipelines) {
 
     if (context === 'project') {
         // 中地圖（計畫總覽）：🗺️ 🚧 👁️ 📐 全顯示，📅 隱藏
+        var dxfBtn1 = document.getElementById('dxfExportBtn');
+        if (dxfBtn1) dxfBtn1.style.display = 'none';
         var scBtn = document.getElementById('projectSCurveBtn');
         if (scBtn) scBtn.style.display = 'block';
         if (ids.layer)    { ids.layer.style.display = 'flex'; }
@@ -113,6 +117,8 @@ function setMapContext(context, projectPipelines) {
 
     if (context === 'pipeline') {
         // 子工程地圖：全部顯示
+        var dxfBtn2 = document.getElementById('dxfExportBtn');
+        if (dxfBtn2) dxfBtn2.style.display = 'flex';
         var scBtn2 = document.getElementById('projectSCurveBtn');
         if (scBtn2) scBtn2.style.display = 'none';
         if (ids.layer)    { ids.layer.style.display = 'flex'; }
