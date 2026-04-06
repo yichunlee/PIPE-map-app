@@ -797,6 +797,12 @@ function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
     });
 }
 
+// ── 拖拉狀態全域變數 ──
+var _ganttDrag = null;
+var _rowDrag = null;
+var _insertLineEl = null;
+var _dragListenersAdded = false;
+
 function rowDragStart(e, idx) {
     var rowEl = e.target.closest('.gantt-row');
     var rowRect = rowEl ? rowEl.getBoundingClientRect() : null;
