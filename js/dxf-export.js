@@ -96,7 +96,21 @@ function parseOsmResult(data) {
 const DXF_COLOR = { RED: 1, YELLOW: 2, GREEN: 3, CYAN: 4, BLUE: 5, MAGENTA: 6, WHITE: 7, GRAY: 8, LTGRAY: 9 };
 
 function dxfHeader(minX, minY, maxX, maxY) {
-    return `0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n9\n$INSUNITS\n70\n6\n9\n$EXTMIN\n10\n${minX}\n20\n${minY}\n30\n0.0\n9\n$EXTMAX\n10\n${maxX}\n20\n${maxY}\n30\n0.0\n0\nENDSEC\n`;
+    return `0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1018\n9\n$DWGCODEPAGE\n3\nANSI_950\n9\n$INSUNITS\n70\n6\n9\n$EXTMIN\n10\n${minX}\n20\n${minY}\n30\n0.0\n9\n$EXTMAX\n10\n${maxX}\n20\n${maxY}\n30\n0.0\n0\nENDSEC\n`;
+}
+
+// 將字串中的非 ASCII 字元轉換為 DXF Unicode 跳脫格式 \U+XXXX
+function toAcadUnicode(str) {
+    let result = '';
+    for (const ch of String(str)) {
+        const code = ch.codePointAt(0);
+        if (code > 127) {
+            result += '\\U+' + code.toString(16).toUpperCase().padStart(4, '0');
+        } else {
+            result += ch;
+        }
+    }
+    return result;
 }
 
 function dxfLayers() {
@@ -125,8 +139,8 @@ function dxfPolyline(layer, coords2d, closed = false) {
 }
 
 function dxfText(layer, x, y, height, text) {
-    // 過濾 DXF 不支援的字元
-    const safe = String(text).replace(/[\x00-\x1F]/g, '');
+    // 控制字元過濾 + 中文轉 DXF Unicode 跳脫
+    const safe = toAcadUnicode(String(text).replace(/[\x00-\x1F]/g, ''));
     return `0\nTEXT\n8\n${layer}\n10\n${x}\n20\n${y}\n30\n0.0\n40\n${height}\n1\n${safe}\n`;
 }
 
