@@ -653,6 +653,159 @@ html += '</div></div></div>';
     setTimeout(drawDependencyArrows, 80);
 }
 
+// ══════════════════════════════════════════════════════════════
+// 依賴箭頭繪製（blob 視窗用 - items 變數）
+// ══════════════════════════════════════════════════════════════
+function drawDependencyArrows() {
+    var chart = document.getElementById('chart');
+    if (!chart) return;
+    var oldSvg = document.getElementById('_depSvg');
+    if (oldSvg) oldSvg.remove();
+
+    var deps = (items || []).filter(function(it) { return it.dependsOn; });
+    if (deps.length === 0) return;
+
+    var allDates = items.flatMap(function(d) { return [new Date(d.startDate), new Date(d.endDate)]; });
+    var minDate = new Date(Math.min.apply(null, allDates));
+    var maxDate = new Date(Math.max.apply(null, allDates));
+    minDate.setDate(minDate.getDate() - 7);
+    maxDate.setDate(maxDate.getDate() + 7);
+    var totalMs = maxDate - minDate;
+
+    var rows = chart.querySelectorAll('.gantt-row');
+    if (rows.length === 0) return;
+    var rowH = rows[0].getBoundingClientRect().height || 32;
+    var chartRect = chart.getBoundingClientRect();
+    var chartW = chartRect.width;
+    var labelW = 180; // gantt-label width
+
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = '_depSvg';
+    svg.setAttribute('width', chartW);
+    svg.setAttribute('height', chart.scrollHeight || chart.offsetHeight);
+    svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:30;overflow:visible;';
+    chart.style.position = 'relative';
+    chart.appendChild(svg);
+
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = '<marker id="_dArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>';
+    svg.appendChild(defs);
+
+    var trackW = chartW - labelW;
+
+    deps.forEach(function(item) {
+        var fromItem = items.find(function(i) { return i.id === item.dependsOn; });
+        if (!fromItem) return;
+        var fromIdx = items.indexOf(fromItem);
+        var toIdx   = items.indexOf(item);
+        if (fromIdx < 0 || toIdx < 0) return;
+
+        function geom(it) {
+            var s = new Date(it.startDate), e = new Date(it.endDate);
+            var left = ((s - minDate) / totalMs) * 100;
+            var width = Math.max(((e - s) / totalMs) * 100, 0.5);
+            return { left: left, right: left + width };
+        }
+
+        var fg = geom(fromItem), tg = geom(item);
+        var x1 = labelW + (fg.right / 100) * trackW;
+        var x2 = labelW + (tg.left  / 100) * trackW;
+        var y1 = fromIdx * rowH + rowH / 2;
+        var y2 = toIdx   * rowH + rowH / 2;
+
+        var midX = x1 + Math.min(Math.max((x2 - x1) * 0.4, 10), 24);
+        var d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
+              + 'L' + midX.toFixed(1) + ',' + y1.toFixed(1)
+              + 'L' + midX.toFixed(1) + ',' + y2.toFixed(1)
+              + 'L' + (x2 - 3).toFixed(1) + ',' + y2.toFixed(1);
+
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#444');
+        path.setAttribute('stroke-width', '1.5');
+        path.setAttribute('stroke-dasharray', '5 3');
+        path.setAttribute('marker-end', 'url(#_dArr)');
+        svg.appendChild(path);
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+// 依賴箭頭繪製（in-page panel 用 - ganttData 變數）
+// ══════════════════════════════════════════════════════════════
+function drawInPageDependencyArrows() {
+    var chartEl = document.getElementById('ganttChartInner');
+    if (!chartEl) return;
+    var oldSvg = document.getElementById('_inPageDepSvg');
+    if (oldSvg) oldSvg.remove();
+
+    if (!ganttData || ganttData.length === 0) return;
+    var deps = ganttData.filter(function(item) { return item.dependsOn; });
+    if (deps.length === 0) return;
+
+    var allDates = ganttData.flatMap(function(d) { return [new Date(d.startDate), new Date(d.endDate)]; });
+    var minDate = new Date(Math.min.apply(null, allDates));
+    var maxDate = new Date(Math.max.apply(null, allDates));
+    minDate.setDate(minDate.getDate() - 7);
+    maxDate.setDate(maxDate.getDate() + 7);
+    var totalMs = maxDate - minDate;
+
+    var rows = chartEl.querySelectorAll('.gantt-row');
+    if (rows.length === 0) return;
+    var rowH = rows[0].getBoundingClientRect().height || 32;
+    var chartW = chartEl.getBoundingClientRect().width;
+    if (chartW === 0) return;
+    var labelW = 240;
+    var trackW = chartW - labelW;
+
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = '_inPageDepSvg';
+    svg.setAttribute('width', chartW);
+    svg.setAttribute('height', chartEl.scrollHeight || chartEl.offsetHeight);
+    svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:30;overflow:visible;';
+    chartEl.appendChild(svg);
+
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = '<marker id="_ipArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>';
+    svg.appendChild(defs);
+
+    deps.forEach(function(item) {
+        var fromItem = ganttData.find(function(i) { return i.id === item.dependsOn; });
+        if (!fromItem) return;
+        var fromIdx = ganttData.indexOf(fromItem);
+        var toIdx   = ganttData.indexOf(item);
+        if (fromIdx < 0 || toIdx < 0) return;
+
+        function geom(it) {
+            var s = new Date(it.startDate), e = new Date(it.endDate);
+            var left = ((s - minDate) / totalMs) * 100;
+            var width = Math.max(((e - s) / totalMs) * 100, 0.5);
+            return { left: left, right: left + width };
+        }
+
+        var fg = geom(fromItem), tg = geom(item);
+        var x1 = labelW + (fg.right / 100) * trackW;
+        var x2 = labelW + (tg.left  / 100) * trackW;
+        var y1 = fromIdx * rowH + rowH / 2;
+        var y2 = toIdx   * rowH + rowH / 2;
+
+        var midX = x1 + Math.min(Math.max((x2 - x1) * 0.4, 10), 24);
+        var d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
+              + 'L' + midX.toFixed(1) + ',' + y1.toFixed(1)
+              + 'L' + midX.toFixed(1) + ',' + y2.toFixed(1)
+              + 'L' + (x2 - 3).toFixed(1) + ',' + y2.toFixed(1);
+
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#444');
+        path.setAttribute('stroke-width', '1.5');
+        path.setAttribute('stroke-dasharray', '5 3');
+        path.setAttribute('marker-end', 'url(#_ipArr)');
+        svg.appendChild(path);
+    });
+}
+
 // ===== 甘特圖拖拉移動 / 調整長度 =====
 var _ganttDrag = null;
 
