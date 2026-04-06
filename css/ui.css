@@ -812,35 +812,8 @@ kbd {
 }
 
 
-/* ── DXF 匯出按鈕 ─────────────────────────────── */
-.dxf-export-btn {
-    position: fixed;
-    bottom: 160px;
-    right: 14px;
-    background: linear-gradient(135deg, #1565C0, #0D47A1);
-    color: white;
-    padding: 10px 14px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 700;
-    box-shadow: 0 3px 12px rgba(21, 101, 192, 0.55);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    letter-spacing: 0.3px;
-    transition: all 0.2s ease;
-    user-select: none;
-    white-space: nowrap;
-}
-.dxf-export-btn:hover {
-    background: linear-gradient(135deg, #1976D2, #1565C0);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 16px rgba(21, 101, 192, 0.65);
-}
-.dxf-export-btn:active, .dxf-export-btn[disabled] {
-    opacity: 0.75;
-    transform: none;
-    cursor: not-allowed;
+/* ── DXF 工具抽屜項目 ─────────────────────────── */
+#dxfToolItem:hover {
+    background: #e3f2fd !important;
+    color: #1565C0 !important;
 }
