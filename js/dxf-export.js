@@ -46,28 +46,45 @@ function wgs84ToTWD97(lat, lng) {
     return { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 };
 }
 
-// ── OSM Overpass API 查詢 ────────────────────────────────────
+// ── OSM Overpass API 查詢（多伺服器備援）────────────────────
 async function fetchOsmData(bounds) {
-    // bounds = { south, north, west, east }
     const { south, west, north, east } = bounds;
-    const query = `
-[out:json][timeout:30];
-(
-  way["highway"](${south},${west},${north},${east});
-  way["building"](${south},${west},${north},${east});
-);
-out body;
->;
-out skel qt;`;
+    const query =
+        `[out:json][timeout:25];` +
+        `(way["highway"](${south},${west},${north},${east});` +
+        `way["building"](${south},${west},${north},${east}););` +
+        `out body;>;out skel qt;`;
 
-    const url = 'https://overpass-api.de/api/interpreter';
-    const resp = await fetch(url, {
-        method: 'POST',
-        body: 'data=' + encodeURIComponent(query),
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-    if (!resp.ok) throw new Error('OSM 查詢失敗，請稍後再試');
-    return await resp.json();
+    // 備用伺服器列表（依序嘗試）
+    const servers = [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    ];
+
+    let lastError = null;
+    for (const url of servers) {
+        try {
+            console.log('嘗試 Overpass 伺服器:', url);
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 20000);
+            const resp = await fetch(url, {
+                method: 'POST',
+                body: 'data=' + encodeURIComponent(query),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                signal: controller.signal
+            });
+            clearTimeout(timer);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            console.log('✅ Overpass 成功:', url, '→', data.elements?.length, '個元素');
+            return data;
+        } catch (e) {
+            console.warn('❌ Overpass 失敗:', url, e.message);
+            lastError = e;
+        }
+    }
+    throw new Error('所有 OSM 伺服器均無法連線：' + lastError?.message);
 }
 
 function parseOsmResult(data) {
