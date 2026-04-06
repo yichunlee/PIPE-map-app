@@ -657,164 +657,154 @@ html += '</div></div></div>';
 // 依賴箭頭繪製（blob 視窗用 - items 變數）
 // ══════════════════════════════════════════════════════════════
 function drawDependencyArrows() {
+    // blob 視窗：items 變數，chart div 裡的 gantt-row
     var chart = document.getElementById('chart');
     if (!chart) return;
-    var oldSvg = document.getElementById('_depSvg');
-    if (oldSvg) oldSvg.remove();
+    var old = document.getElementById('_depSvg');
+    if (old) old.remove();
 
     var deps = (items || []).filter(function(it) { return it.dependsOn; });
     if (deps.length === 0) return;
 
-    var allDates = items.flatMap(function(d) { return [new Date(d.startDate), new Date(d.endDate)]; });
-    var minDate = new Date(Math.min.apply(null, allDates));
-    var maxDate = new Date(Math.max.apply(null, allDates));
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 7);
-    var totalMs = maxDate - minDate;
-
-    var rows = chart.querySelectorAll('.gantt-row');
-    if (rows.length === 0) return;
-    var rowH = rows[0].getBoundingClientRect().height || 32;
-    var chartRect = chart.getBoundingClientRect();
-    var chartW = chartRect.width;
-    var labelW = 180; // gantt-label width
-
-    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.id = '_depSvg';
-    svg.setAttribute('width', chartW);
-    svg.setAttribute('height', chart.scrollHeight || chart.offsetHeight);
-    svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:30;overflow:visible;';
-    chart.style.position = 'relative';
-    chart.appendChild(svg);
-
-    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    defs.innerHTML = '<marker id="_dArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>';
-    svg.appendChild(defs);
-
-    var trackW = chartW - labelW;
-
-    deps.forEach(function(item) {
-        var fromItem = items.find(function(i) { return i.id === item.dependsOn; });
-        if (!fromItem) return;
-        var fromIdx = items.indexOf(fromItem);
-        var toIdx   = items.indexOf(item);
-        if (fromIdx < 0 || toIdx < 0) return;
-
-        function geom(it) {
-            var s = new Date(it.startDate), e = new Date(it.endDate);
-            var left = ((s - minDate) / totalMs) * 100;
-            var width = Math.max(((e - s) / totalMs) * 100, 0.5);
-            return { left: left, right: left + width };
-        }
-
-        var fg = geom(fromItem), tg = geom(item);
-        var x1 = labelW + (fg.right / 100) * trackW;
-        var x2 = labelW + (tg.left  / 100) * trackW;
-        var y1 = fromIdx * rowH + rowH / 2;
-        var y2 = toIdx   * rowH + rowH / 2;
-
-        var midX = x1 + Math.min(Math.max((x2 - x1) * 0.4, 10), 24);
-        var d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
-              + 'L' + midX.toFixed(1) + ',' + y1.toFixed(1)
-              + 'L' + midX.toFixed(1) + ',' + y2.toFixed(1)
-              + 'L' + (x2 - 3).toFixed(1) + ',' + y2.toFixed(1);
-
-        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', d);
-        path.setAttribute('fill', 'none');
-        path.setAttribute('stroke', '#444');
-        path.setAttribute('stroke-width', '1.5');
-        path.setAttribute('stroke-dasharray', '5 3');
-        path.setAttribute('marker-end', 'url(#_dArr)');
-        svg.appendChild(path);
-    });
+    _drawArrows(chart, items, deps, '_depSvg', '_dArr', 180);
 }
 
-// ══════════════════════════════════════════════════════════════
-// 依賴箭頭繪製（in-page panel 用 - ganttData 變數）
-// ══════════════════════════════════════════════════════════════
 function drawInPageDependencyArrows() {
+    // in-page panel：ganttData 變數，ganttChartInner div 裡的 gantt-row
     var chartEl = document.getElementById('ganttChartInner');
     if (!chartEl) return;
-    var oldSvg = document.getElementById('_inPageDepSvg');
-    if (oldSvg) oldSvg.remove();
+    var old = document.getElementById('_inPageDepSvg');
+    if (old) old.remove();
 
     if (!ganttData || ganttData.length === 0) return;
     var deps = ganttData.filter(function(item) { return item.dependsOn; });
     if (deps.length === 0) return;
 
-    var allDates = ganttData.flatMap(function(d) { return [new Date(d.startDate), new Date(d.endDate)]; });
-    var minDate = new Date(Math.min.apply(null, allDates));
-    var maxDate = new Date(Math.max.apply(null, allDates));
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 7);
-    var totalMs = maxDate - minDate;
+    _drawArrows(chartEl, ganttData, deps, '_inPageDepSvg', '_ipArr', 240);
+}
 
-    var rows = chartEl.querySelectorAll('.gantt-row');
+// 通用箭頭繪製：直接從 DOM row 元素讀取位置
+function _drawArrows(chartEl, dataArr, deps, svgId, markerId, labelW) {
+    var rows = Array.from(chartEl.querySelectorAll('.gantt-row'));
     if (rows.length === 0) return;
-    var rowH = rows[0].getBoundingClientRect().height || 32;
-    var chartW = chartEl.getBoundingClientRect().width;
-    if (chartW === 0) return;
-    var labelW = 240;
-    var trackW = chartW - labelW;
+
+    // 用 data-idx 屬性或順序找 row
+    // 先建立 item → row 的對應
+    var itemToRow = {};
+    rows.forEach(function(row, i) {
+        itemToRow[i] = row;
+    });
+
+    // 建 SVG（和 chartEl 等寬高，absolute 定位）
+    var svgW = chartEl.offsetWidth  || chartEl.scrollWidth  || 800;
+    var svgH = chartEl.offsetHeight || chartEl.scrollHeight || 400;
 
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.id = '_inPageDepSvg';
-    svg.setAttribute('width', chartW);
-    svg.setAttribute('height', chartEl.scrollHeight || chartEl.offsetHeight);
+    svg.id = svgId;
     svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:30;overflow:visible;';
+    svg.setAttribute('width', svgW);
+    svg.setAttribute('height', svgH);
     chartEl.appendChild(svg);
 
+    // arrowhead marker
     var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    defs.innerHTML = '<marker id="_ipArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="#444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>';
+    defs.innerHTML = '<marker id="' + markerId + '" viewBox="0 0 10 10" refX="9" refY="5"'
+        + ' markerWidth="5" markerHeight="5" orient="auto-start-reverse">'
+        + '<path d="M1 2L8 5L1 8" fill="none" stroke="#555" stroke-width="1.5"'
+        + ' stroke-linecap="round" stroke-linejoin="round"/></marker>';
     svg.appendChild(defs);
 
     deps.forEach(function(item) {
-        var fromItem = ganttData.find(function(i) { return i.id === item.dependsOn; });
+        var fromItem = dataArr.find(function(i) { return i.id === item.dependsOn; });
         if (!fromItem) return;
-        var fromIdx = ganttData.indexOf(fromItem);
-        var toIdx   = ganttData.indexOf(item);
+
+        var fromIdx = dataArr.indexOf(fromItem);
+        var toIdx   = dataArr.indexOf(item);
         if (fromIdx < 0 || toIdx < 0) return;
 
-        function geom(it) {
-            var s = new Date(it.startDate), e = new Date(it.endDate);
-            var left = ((s - minDate) / totalMs) * 100;
-            var width = Math.max(((e - s) / totalMs) * 100, 0.5);
-            return { left: left, right: left + width };
+        var fromRow = itemToRow[fromIdx];
+        var toRow   = itemToRow[toIdx];
+        if (!fromRow || !toRow) return;
+
+        // 找 bar 元素：帶有 left% style 且是 position:absolute 的第一個 div
+        // gantt-track 或 gantt-timeline-container 裡的 bar
+        var fromTrack = fromRow.querySelector('.gantt-track, .gantt-timeline-container, .gantt-timeline');
+        var toTrack   = toRow.querySelector('.gantt-track, .gantt-timeline-container, .gantt-timeline');
+        if (!fromTrack || !toTrack) return;
+
+        // 找所有 bar（有 left% style 的絕對定位 div）
+        var fromBars = Array.from(fromTrack.querySelectorAll('div[style*="left:"]'))
+            .filter(function(d) { return d.style.position === 'absolute' || d.className.includes('gantt-bar') || d.className.includes('gantt-drag'); });
+        var toBars = Array.from(toTrack.querySelectorAll('div[style*="left:"]'))
+            .filter(function(d) { return d.style.position === 'absolute' || d.className.includes('gantt-bar') || d.className.includes('gantt-drag'); });
+
+        if (fromBars.length === 0 || toBars.length === 0) return;
+
+        // 用 getBoundingClientRect 相對於 chartEl
+        var chartRect = chartEl.getBoundingClientRect();
+
+        // from: 取最右邊的 bar 的右端
+        var maxRight = -Infinity;
+        fromBars.forEach(function(b) {
+            var r = b.getBoundingClientRect();
+            if (r.right > maxRight) maxRight = r.right;
+        });
+
+        // to: 取最左邊的 bar 的左端
+        var minLeft = Infinity, toBarTop = 0, toBarH = 0;
+        toBars.forEach(function(b) {
+            var r = b.getBoundingClientRect();
+            if (r.left < minLeft) {
+                minLeft = r.left;
+                toBarTop = r.top;
+                toBarH = r.height;
+            }
+        });
+
+        var fromRowRect = fromRow.getBoundingClientRect();
+        var toRowRect   = toRow.getBoundingClientRect();
+
+        var x1 = maxRight - chartRect.left;
+        var y1 = fromRowRect.top + fromRowRect.height / 2 - chartRect.top;
+        var x2 = minLeft  - chartRect.left;
+        var y2 = toRowRect.top   + toRowRect.height   / 2 - chartRect.top;
+
+        if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
+
+        // L 形路徑（從 from bar 右端 → 折彎 → 到 to bar 左端）
+        var curve = 5;
+        var midX  = x1 + Math.min(Math.max((x2 - x1) / 2, 12), 36);
+
+        var goingDown = y2 > y1;
+        var cy1 = goingDown ?  curve : -curve;
+        var cy2 = goingDown ? -curve :  curve;
+
+        var d;
+        if (Math.abs(x2 - x1) > 4) {
+            // 正常情況：from 在 to 左邊
+            d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
+              + ' L' + (midX - curve).toFixed(1) + ',' + y1.toFixed(1)
+              + ' Q' + midX.toFixed(1) + ',' + y1.toFixed(1) + ' ' + midX.toFixed(1) + ',' + (y1 + cy1).toFixed(1)
+              + ' L' + midX.toFixed(1) + ',' + (y2 - cy1).toFixed(1)
+              + ' Q' + midX.toFixed(1) + ',' + y2.toFixed(1) + ' ' + (midX + curve).toFixed(1) + ',' + y2.toFixed(1)
+              + ' L' + (x2 - 2).toFixed(1) + ',' + y2.toFixed(1);
+        } else {
+            // from 和 to 幾乎同 X：垂直線
+            d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
+              + ' L' + x1.toFixed(1) + ',' + (y2 - 2).toFixed(1);
         }
-
-        var fg = geom(fromItem), tg = geom(item);
-        var x1 = labelW + (fg.right / 100) * trackW;
-        var x2 = labelW + (tg.left  / 100) * trackW;
-        var y1 = fromIdx * rowH + rowH / 2;
-        var y2 = toIdx   * rowH + rowH / 2;
-
-        var midX = x1 + Math.min(Math.max((x2 - x1) * 0.4, 10), 24);
-        var d = 'M' + x1.toFixed(1) + ',' + y1.toFixed(1)
-              + 'L' + midX.toFixed(1) + ',' + y1.toFixed(1)
-              + 'L' + midX.toFixed(1) + ',' + y2.toFixed(1)
-              + 'L' + (x2 - 3).toFixed(1) + ',' + y2.toFixed(1);
 
         var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', d);
         path.setAttribute('fill', 'none');
-        path.setAttribute('stroke', '#444');
+        path.setAttribute('stroke', '#555');
         path.setAttribute('stroke-width', '1.5');
         path.setAttribute('stroke-dasharray', '5 3');
-        path.setAttribute('marker-end', 'url(#_ipArr)');
+        path.setAttribute('marker-end', 'url(#' + markerId + ')');
         svg.appendChild(path);
     });
 }
 
-// ===== 甘特圖拖拉移動 / 調整長度 =====
-var _ganttDrag = null;
-
-// ── 排序拖拉狀態 ──
-var _rowDrag = null;
-var _insertLineEl = null;
-var _dragListenersAdded = false;
-
-// 由 label 的 onmousedown 直接呼叫（比 document 委派可靠）
 function rowDragStart(e, idx) {
     var rowEl = e.target.closest('.gantt-row');
     var rowRect = rowEl ? rowEl.getBoundingClientRect() : null;
