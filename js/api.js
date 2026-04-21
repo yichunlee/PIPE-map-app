@@ -24,6 +24,21 @@ async function apiCall(action, params, opts) {
     params = params || {};
     opts = opts || {};
 
+    // --- 發送前先檢查 token 是否已過期（在組 URL/body 之前，避免帶入舊 token）---
+    if (_isWriteAction(action) && userToken && typeof parseJwt === 'function') {
+        try {
+            const _jwtPayload = parseJwt(userToken);
+            if (_jwtPayload && _jwtPayload.exp && _jwtPayload.exp < Math.floor(Date.now() / 1000)) {
+                console.warn('⚠️ apiCall: token 已過期，先 reauth 再送出');
+                if (typeof showReauthOverlay === 'function') {
+                    await showReauthOverlay(); // 等 reauth 完成，userToken 會被更新
+                }
+                // 遞迴：用新 token 重新呼叫（不帶 _isRetry，讓它完整走一次）
+                return await apiCall(action, params, opts);
+            }
+        } catch(e) { /* parseJwt 失敗就繼續照舊送出 */ }
+    }
+
     // --- 組 URL ---
     const qp = new URLSearchParams();
     qp.set('action', action);
@@ -70,21 +85,22 @@ async function apiCall(action, params, opts) {
     var response = await fetch(url, fetchOpts);
     var data = await response.json();
 
-    // --- authError 檢查 ---
+    // --- authError 檢查（token 在發送途中過期的 fallback）---
     if (data && data.authError) {
-        // 若已是 retry，不再重試，直接拋錯
+        console.log('[REAUTH] apiCall 收到 authError，action:', action, '_isRetry:', opts._isRetry);
         if (opts._isRetry) {
             showToast('重新登入後仍然失敗，請重新整理頁面', 'error');
             throw new Error('AUTH_EXPIRED');
         }
-
-        // 顯示重新登入 overlay，等待用戶完成登入後自動重試
         if (typeof showReauthOverlay === 'function') {
             try {
-                await showReauthOverlay();  // 等待登入完成（見 auth.js）
-                // 重試：用新的 userToken 重新呼叫
+                console.log('[REAUTH] 開始等待 showReauthOverlay...');
+                await showReauthOverlay();
+                console.log('[REAUTH] resolve！新 userToken 長度:', userToken ? userToken.length : 0, '，準備重試', action);
                 return await apiCall(action, params, Object.assign({}, opts, { _isRetry: true }));
             } catch(e) {
+                console.log('[REAUTH] rejected 或重試失敗:', e.message);
+                showToast('重新登入失敗，請重新整理頁面', 'error');
                 throw new Error('AUTH_EXPIRED');
             }
         } else {
