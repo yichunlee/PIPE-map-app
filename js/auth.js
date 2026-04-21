@@ -330,8 +330,15 @@ function initSilentRefresh(email) {
             if (!payload || !payload.exp) return;
             const nowSec = Math.floor(Date.now() / 1000);
             const remainSec = payload.exp - nowSec;
+
+            // 若 localStorage 的 token 比記憶體的新（或記憶體沒有），同步更新
+            if (info.token !== userToken) {
+                console.log('[TOKEN SYNC] localStorage token 與記憶體不同，同步更新 userToken');
+                userToken = info.token;
+            }
+
             if (remainSec <= 0) {
-                // 已過期 → 直接彈 overlay，不做無效的 silent refresh
+                // 已過期 → 直接彈 overlay
                 console.warn('⚠️ 頁面載入時 token 已過期，直接要求重新登入');
                 if (typeof showReauthOverlay === 'function') showReauthOverlay();
             } else if (remainSec < 5 * 60) {
@@ -339,7 +346,7 @@ function initSilentRefresh(email) {
                 console.log('⏳ Token 剩餘', remainSec, '秒，嘗試 silent refresh');
                 silentRefreshToken(email);
             } else {
-                console.log('✅ Token 有效，剩餘', Math.round(remainSec / 60), '分鐘');
+                console.log('✅ Token 有效，剩餘', Math.round(remainSec / 60), '分鐘，記憶體 token 長度:', userToken ? userToken.length : 0);
             }
         } catch(e) {
             console.warn('⚠️ Token 檢查失敗:', e.message);
