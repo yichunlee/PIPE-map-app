@@ -279,6 +279,7 @@ function _startTokenPoll(oldTimestamp) {
 }
 
 function _applyNewToken(info) {
+    console.log('[REAUTH] _applyNewToken 開始執行');
     // 更新記憶體中的 token
     userToken = info.token;
     currentUser = {
@@ -287,6 +288,7 @@ function _applyNewToken(info) {
         picture: info.picture,
         role: info.role
     };
+    console.log('[REAUTH] userToken 已更新，長度:', userToken ? userToken.length : 0);
 
     // 關閉登入小視窗
     if (_reauthWindow && !_reauthWindow.closed) _reauthWindow.close();
@@ -295,11 +297,13 @@ function _applyNewToken(info) {
     // 關閉 overlay
     if (_reauthOverlay) { _reauthOverlay.remove(); _reauthOverlay = null; }
 
+    // resolve Promise → 通知 apiCall 可以重試了
+    console.log('[REAUTH] 準備 resolve，_reauthResolve 存在:', !!_reauthResolve);
+    if (_reauthResolve) { _reauthResolve(); _reauthResolve = null; _reauthReject = null; }
+    console.log('[REAUTH] resolve 完成');
+
     // 重啟 silent refresh
     initSilentRefresh(info.email);
-
-    // resolve Promise → 通知 apiCall 可以重試了
-    if (_reauthResolve) { _reauthResolve(); _reauthResolve = null; _reauthReject = null; }
 
     showToast('✅ 重新登入成功，正在重試操作…', 'success');
     console.log('✅ Token 已更新，email:', info.email);
