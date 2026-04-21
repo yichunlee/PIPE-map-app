@@ -82,6 +82,9 @@ async function apiCall(action, params, opts) {
     }
 
     // --- 發送請求 ---
+    if (_isWriteAction(action)) {
+        console.log('[API] 發送', action, '| userToken 長度:', userToken ? userToken.length : 0, '| _isRetry:', opts._isRetry || false);
+    }
     var response = await fetch(url, fetchOpts);
     var data = await response.json();
 
