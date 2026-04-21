@@ -161,7 +161,7 @@
                             // popup 模式：存完 token 後關掉自己，主視窗的輪詢會接手
                             showStatus('✅ 重新登入成功！視窗即將關閉…', 'success');
                             console.log('🔒 Popup 模式，關閉視窗，主視窗將自動更新 token');
-                            setTimeout(() => { window.close(); }, 800);
+                            setTimeout(() => { window.close(); }, 200);
                         } else {
                             // 一般登入模式：跳轉回主系統
                             showStatus('✅ 驗證成功!<br>正在進入系統...<br><br><button onclick="window.location.href=\'index.html\';" style="margin-top:10px;padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:14px;font-weight:bold;">點擊進入系統 →</button>', 'success');
