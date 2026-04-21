@@ -72,13 +72,25 @@ async function apiCall(action, params, opts) {
 
     // --- authError 檢查 ---
     if (data && data.authError) {
-        // 顯示重新登入 overlay（不跳頁、不清除狀態）
+        // 若已是 retry，不再重試，直接拋錯
+        if (opts._isRetry) {
+            showToast('重新登入後仍然失敗，請重新整理頁面', 'error');
+            throw new Error('AUTH_EXPIRED');
+        }
+
+        // 顯示重新登入 overlay，等待用戶完成登入後自動重試
         if (typeof showReauthOverlay === 'function') {
-            showReauthOverlay();
+            try {
+                await showReauthOverlay();  // 等待登入完成（見 auth.js）
+                // 重試：用新的 userToken 重新呼叫
+                return await apiCall(action, params, Object.assign({}, opts, { _isRetry: true }));
+            } catch(e) {
+                throw new Error('AUTH_EXPIRED');
+            }
         } else {
             showToast('登入已過期，請重新登入', 'error');
+            throw new Error('AUTH_EXPIRED');
         }
-        throw new Error('AUTH_EXPIRED');
     }
 
     // --- success 檢查 ---
