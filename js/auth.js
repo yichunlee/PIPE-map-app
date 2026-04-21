@@ -255,23 +255,24 @@ function _startTokenPoll(oldTimestamp) {
     // 每 500ms 檢查 localStorage 是否有新 token
     if (_reauthPollTimer) clearInterval(_reauthPollTimer);
     _reauthPollTimer = setInterval(function() {
+        // 先檢查 token（成功路徑）
         try {
             const info = JSON.parse(localStorage.getItem('userInfo') || '{}');
             if (info.token && info.timestamp && info.timestamp > oldTimestamp) {
-                // 登入成功！更新主頁的 token
+                // 登入成功！更新主頁的 token，並停止輪詢
                 clearInterval(_reauthPollTimer);
                 _reauthPollTimer = null;
                 _applyNewToken(info);
+                return;  // ← 早返回，避免同 tick 繼續執行視窗關閉判斷
             }
         } catch(e) {}
 
-        // 若小視窗被關掉了也停止輪詢
+        // 若小視窗被關掉且尚未登入成功 → reject
         if (_reauthWindow && _reauthWindow.closed) {
             clearInterval(_reauthPollTimer);
             _reauthPollTimer = null;
             const statusEl = document.getElementById('_reauthStatus');
             if (statusEl) statusEl.textContent = '視窗已關閉，請再試一次';
-            // 視窗關閉但未登入 → reject，讓 apiCall 知道用戶放棄
             if (_reauthReject) { _reauthReject(new Error('reauth_cancelled')); _reauthReject = null; _reauthResolve = null; }
         }
     }, 500);
