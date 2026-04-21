@@ -293,12 +293,39 @@ function initSilentRefresh(email) {
     // 清除舊的 timer
     if (_silentRefreshTimer) clearInterval(_silentRefreshTimer);
 
-    // 每 45 分鐘執行一次 silent refresh（token 1hr 過期，45min 更新確保不斷線）
+    // 立即執行一次：先檢查 token 是否已過期或即將過期（< 5 分鐘）
+    // 若過期 → 直接彈 reauth overlay（比等 silent refresh 失敗再彈更快）
+    // 若快過期 → 嘗試 silent refresh
+    (function checkTokenOnLoad() {
+        try {
+            const info = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            if (!info.token) return;
+            const payload = parseJwt(info.token);
+            if (!payload || !payload.exp) return;
+            const nowSec = Math.floor(Date.now() / 1000);
+            const remainSec = payload.exp - nowSec;
+            if (remainSec <= 0) {
+                // 已過期 → 直接彈 overlay，不做無效的 silent refresh
+                console.warn('⚠️ 頁面載入時 token 已過期，直接要求重新登入');
+                if (typeof showReauthOverlay === 'function') showReauthOverlay();
+            } else if (remainSec < 5 * 60) {
+                // 剩不到 5 分鐘 → 嘗試 silent refresh
+                console.log('⏳ Token 剩餘', remainSec, '秒，嘗試 silent refresh');
+                silentRefreshToken(email);
+            } else {
+                console.log('✅ Token 有效，剩餘', Math.round(remainSec / 60), '分鐘');
+            }
+        } catch(e) {
+            console.warn('⚠️ Token 檢查失敗:', e.message);
+        }
+    })();
+
+    // 每 45 分鐘再執行一次 silent refresh（token 1hr 過期，45min 更新確保不斷線）
     _silentRefreshTimer = setInterval(() => {
         silentRefreshToken(email);
     }, 45 * 60 * 1000);
 
-    console.log('🔄 Silent token refresh 已啟動（每 45 分鐘自動更新）');
+    console.log('🔄 Silent token refresh 已啟動（頁面載入立即更新 + 每 45 分鐘自動更新）');
 }
 
 function silentRefreshToken(email) {
