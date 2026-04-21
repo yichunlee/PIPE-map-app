@@ -139,11 +139,9 @@
                 console.log('驗證結果:', result);
                 
                 if (result.success && result.authorized) {
-                    showStatus('✅ 驗證成功!<br>正在進入系統...<br><br><button onclick="window.location.href=\'index.html\'" style="margin-top:10px;padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:14px;font-weight:bold;">點擊進入系統 →</button>', 'success');
-                    
                     console.log('✅ 驗證成功!準備儲存使用者資訊...');
                     
-                    // 儲存使用者資訊到 sessionStorage
+                    // 儲存使用者資訊到 localStorage
                     const userInfo = {
                         email: payload.email,
                         name: payload.name,
@@ -156,17 +154,27 @@
                     try {
                         localStorage.setItem('userInfo', JSON.stringify(userInfo));
                         console.log('✅ 使用者資訊已儲存到 localStorage');
-                        console.log('🚀 準備跳轉到 index.html...');
-                        
-                        // 2 秒後自動跳轉 (或點擊按鈕立即跳轉)
-                        setTimeout(() => {
-                            console.log('⏰ 自動跳轉執行...');
-                            window.location.href = 'index.html';
-                        }, 2000);
+
+                        // 判斷是否為 reauth popup（由主視窗開啟）
+                        const isPopup = !!window.opener;
+                        if (isPopup) {
+                            // popup 模式：存完 token 後關掉自己，主視窗的輪詢會接手
+                            showStatus('✅ 重新登入成功！視窗即將關閉…', 'success');
+                            console.log('🔒 Popup 模式，關閉視窗，主視窗將自動更新 token');
+                            setTimeout(() => { window.close(); }, 800);
+                        } else {
+                            // 一般登入模式：跳轉回主系統
+                            showStatus('✅ 驗證成功!<br>正在進入系統...<br><br><button onclick="window.location.href=\'index.html\';" style="margin-top:10px;padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:14px;font-weight:bold;">點擊進入系統 →</button>', 'success');
+                            console.log('🚀 準備跳轉到 index.html...');
+                            setTimeout(() => {
+                                console.log('⏰ 自動跳轉執行...');
+                                window.location.href = 'index.html';
+                            }, 2000);
+                        }
                         
                     } catch (e) {
-                        console.error('❌ sessionStorage 儲存失敗:', e);
-                        alert('sessionStorage 儲存失敗: ' + e.message);
+                        console.error('❌ localStorage 儲存失敗:', e);
+                        alert('localStorage 儲存失敗: ' + e.message);
                     }
                     
                 } else {
