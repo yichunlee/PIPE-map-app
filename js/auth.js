@@ -156,44 +156,60 @@ let _reauthOverlay = null;
 let _reauthPollTimer = null;
 let _reauthWindow = null;
 
+// _reauthResolve / _reauthReject：讓 apiCall 的 await showReauthOverlay() 可以等待登入結果
+let _reauthResolve = null;
+let _reauthReject = null;
+
 window.showReauthOverlay = function() {
-    // 已顯示就不重複
-    if (_reauthOverlay) return;
+    // 已顯示就不重複，但回傳同一個 Promise（讓多個同時失敗的 apiCall 都能等到）
+    if (_reauthOverlay) {
+        return new Promise((resolve, reject) => {
+            const prev_res = _reauthResolve;
+            const prev_rej = _reauthReject;
+            _reauthResolve = (...args) => { if(prev_res) prev_res(...args); resolve(...args); };
+            _reauthReject  = (...args) => { if(prev_rej) prev_rej(...args); reject(...args); };
+        });
+    }
 
-    _reauthOverlay = document.createElement('div');
-    _reauthOverlay.style.cssText = [
-        'position:fixed', 'inset:0', 'z-index:99999',
-        'background:rgba(0,0,0,0.6)',
-        'display:flex', 'align-items:center', 'justify-content:center'
-    ].join(';');
+    return new Promise((resolve, reject) => {
+        _reauthResolve = resolve;
+        _reauthReject  = reject;
 
-    _reauthOverlay.innerHTML = `
-        <div style="background:white;border-radius:14px;padding:28px 32px;
-                    max-width:340px;width:90%;text-align:center;
-                    box-shadow:0 8px 40px rgba(0,0,0,0.35);">
-            <div style="font-size:40px;margin-bottom:12px;">🔑</div>
-            <div style="font-size:16px;font-weight:bold;color:#333;margin-bottom:8px;">
-                登入已過期
+        _reauthOverlay = document.createElement('div');
+        _reauthOverlay.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:99999',
+            'background:rgba(0,0,0,0.6)',
+            'display:flex', 'align-items:center', 'justify-content:center'
+        ].join(';');
+
+        _reauthOverlay.innerHTML = `
+            <div style="background:white;border-radius:14px;padding:28px 32px;
+                        max-width:340px;width:90%;text-align:center;
+                        box-shadow:0 8px 40px rgba(0,0,0,0.35);">
+                <div style="font-size:40px;margin-bottom:12px;">🔑</div>
+                <div style="font-size:16px;font-weight:bold;color:#333;margin-bottom:8px;">
+                    登入已過期
+                </div>
+                <div style="font-size:13px;color:#666;margin-bottom:20px;line-height:1.5;">
+                    Google 登入憑證已過期（約 1 小時）<br>
+                    點下方按鈕重新登入，<b>不會離開目前頁面</b>
+                </div>
+                <button id="_reauthBtn" style="
+                    width:100%;padding:12px;border:none;border-radius:8px;
+                    background:#00695C;color:white;font-size:15px;
+                    font-weight:bold;cursor:pointer;margin-bottom:10px;">
+                    🔄 重新登入
+                </button>
+                <div id="_reauthStatus" style="font-size:12px;color:#999;min-height:18px;"></div>
             </div>
-            <div style="font-size:13px;color:#666;margin-bottom:20px;line-height:1.5;">
-                Google 登入憑證已過期（約 1 小時）<br>
-                點下方按鈕重新登入，<b>不會離開目前頁面</b>
-            </div>
-            <button id="_reauthBtn" style="
-                width:100%;padding:12px;border:none;border-radius:8px;
-                background:#00695C;color:white;font-size:15px;
-                font-weight:bold;cursor:pointer;margin-bottom:10px;">
-                🔄 重新登入
-            </button>
-            <div id="_reauthStatus" style="font-size:12px;color:#999;min-height:18px;"></div>
-        </div>
-    `;
+        `;
 
-    document.body.appendChild(_reauthOverlay);
+        document.body.appendChild(_reauthOverlay);
 
-    document.getElementById('_reauthBtn').onclick = function() {
-        _startReauthFlow();
-    };
+        document.getElementById('_reauthBtn').onclick = function() {
+            _startReauthFlow();
+        };
+    });
 };
 
 function _startReauthFlow() {
@@ -255,6 +271,8 @@ function _startTokenPoll(oldTimestamp) {
             _reauthPollTimer = null;
             const statusEl = document.getElementById('_reauthStatus');
             if (statusEl) statusEl.textContent = '視窗已關閉，請再試一次';
+            // 視窗關閉但未登入 → reject，讓 apiCall 知道用戶放棄
+            if (_reauthReject) { _reauthReject(new Error('reauth_cancelled')); _reauthReject = null; _reauthResolve = null; }
         }
     }, 500);
 }
@@ -279,7 +297,10 @@ function _applyNewToken(info) {
     // 重啟 silent refresh
     initSilentRefresh(info.email);
 
-    showToast('✅ 重新登入成功，請繼續操作', 'success');
+    // resolve Promise → 通知 apiCall 可以重試了
+    if (_reauthResolve) { _reauthResolve(); _reauthResolve = null; _reauthReject = null; }
+
+    showToast('✅ 重新登入成功，正在重試操作…', 'success');
     console.log('✅ Token 已更新，email:', info.email);
 }
 
