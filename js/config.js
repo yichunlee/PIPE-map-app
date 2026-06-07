@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbwJfTW9FHDaasFMnZluPAPPij6PhjYS5nU5qvR5fV2Y2n7tEMrhBFIKH6b0-Cn5xxjy/exec';
+const API_URL = 'https://pipe-map-worker.cyclura-rhino.workers.dev';
 
 let currentUser = null; // { email, name, picture, role }
 let userToken = null; // Google ID Token
