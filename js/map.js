@@ -233,7 +233,7 @@ const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(s
                                             0 0 3px white;
                                     ">${labelText}</div>`,
                                     iconSize: null,
-                                    iconAnchor: [0, -10]
+                                    iconAnchor: [-5, 20]
                                 })
                             }).addTo(map);
                             
@@ -554,7 +554,7 @@ const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(s
                                 0 0 3px white;
                         ">${labelText}</div>`,
                         iconSize: null,
-                        iconAnchor: [0, -10]  // 向左偏移 50px，向下偏移 15px，遠離管線
+                        iconAnchor: [-5, 20]  // 向左偏移 50px，向下偏移 15px，遠離管線
                     })
                 }).addTo(map);
                 
