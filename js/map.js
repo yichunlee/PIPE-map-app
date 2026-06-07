@@ -557,8 +557,8 @@ const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(s
                         iconAnchor: [-5, 20]  // 向左偏移 50px，向下偏移 15px，遠離管線
                     })
                 }).addTo(map);
-                
-                segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color, methodLabel, segLength: segmentLength }); // 加入標籤陣列，方便隱藏
+                segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color: labelColor, methodLabel, segLength: segmentLength });
+            
             }
             
             // 節點標記：在段落起點放節點標記
