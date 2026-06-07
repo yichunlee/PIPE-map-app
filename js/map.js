@@ -375,16 +375,7 @@ const color = getColorForMethodKey(methodKey);
             
             const startDist = segment.startDistance;
             const endDist = segment.endDistance;
-            const method = segment.method || '';
             const status = segment.status || '未施工';
-            const diameter = segment.diameter || '';
-            const pipeType = segment.pipeType || '';
-            
-            // 建立 methodKey 用於顏色匹配
-            const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
-            
-            // 使用自動生成的易區分顏色
-            const color = getColorForMethodKey(methodKey);
             
             // 解析小段狀態（K 欄）
             const smallSegmentsStatus = segment.smallSegments || '';
@@ -402,6 +393,19 @@ const color = getColorForMethodKey(methodKey);
                 const smallEnd = Math.min(startDist + ((i + 1) * 10), endDist);
                 
                 // 🆕 兼容舊格式 (0/1) 和新格式 (日期)
+// 🔧 優先用小段自己的管徑/工法決定顏色
+let diameter = segment.diameter || '';
+let pipeType = segment.pipeType || '';
+let method = segment.method || '';
+if (segment.smallSegmentDetails && segment.smallSegmentDetails[i]) {
+    const d = segment.smallSegmentDetails[i];
+    diameter = d.diameter || diameter;
+    pipeType = d.pipe_type || pipeType;
+    method = d.method || method;
+}
+const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
+const color = getColorForMethodKey(methodKey);
+                
                 const statusValue = statusArray[i] || '0';
                 const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
                 
