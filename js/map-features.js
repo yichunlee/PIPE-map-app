@@ -336,17 +336,20 @@ window.submitEditSmallSegmentInfo = async function(segmentNumber, smallIndex) {
             method: method,
         });
         
-        if (result.success) {
-            // 更新本地資料
-            const seg = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
-            if (seg && seg.smallSegmentDetails && seg.smallSegmentDetails[smallIndex]) {
-                seg.smallSegmentDetails[smallIndex].diameter = diameter;
-                seg.smallSegmentDetails[smallIndex].pipe_type = pipeType;
-                seg.smallSegmentDetails[smallIndex].method = method;
-            }
-            document.querySelector('div[style*="inset:0"]')?.remove();
-            showToast('小段資料已更新', 'success');
-        }
+if (result.success) {
+    // 更新本地資料
+    const seg = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
+    if (seg && seg.smallSegmentDetails && seg.smallSegmentDetails[smallIndex]) {
+        seg.smallSegmentDetails[smallIndex].diameter = diameter;
+        seg.smallSegmentDetails[smallIndex].pipe_type = pipeType;
+        seg.smallSegmentDetails[smallIndex].method = method;
+    }
+    // 關閉視窗
+    document.querySelectorAll('div[style*="inset:0"]').forEach(el => el.remove());
+    // 更新統計面板
+    showStatsPanel();
+    showToast('小段資料已更新', 'success');
+}
     } catch (error) {
         showToast('更新失敗：' + error.message, 'error');
     }
