@@ -216,7 +216,7 @@ const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(s
                                     className: 'segment-label',
                                     html: `<div style="
                                         background: transparent;
-                                        color: ${color};
+                                        color: ${labelColor};
                                         padding: 3px 6px;
                                         border-radius: 3px;
                                         font-size: 10px;
@@ -537,7 +537,7 @@ const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(s
                         className: 'segment-label',
                         html: `<div style="
                             background: transparent;
-                            color: ${color};
+                            color: ${labelColor};
                             padding: 3px 6px;
                             border-radius: 3px;
                             font-size: 10px;
