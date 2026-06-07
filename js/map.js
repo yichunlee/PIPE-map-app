@@ -208,7 +208,7 @@ for (let j = 0; j < numSmallSegments; j++) {
 const dominantMethod = Object.entries(methodLengths).sort((a, b) => b[1] - a[1])[0];
 const methodLabel = dominantMethod ? dominantMethod[0] : [segment.diameter, segment.pipeType, segment.method].filter(Boolean).join(' ');
 const methodKeyForColor = methodLabel.split(' ').filter(Boolean).join('-');
-const color = getColorForMethodKey(methodKeyForColor);
+const labelColor = getColorForMethodKey(methodKeyForColor);
 const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
                             
                             const label = L.marker(midLatLng, {
