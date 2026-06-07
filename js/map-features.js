@@ -337,17 +337,15 @@ window.submitEditSmallSegmentInfo = async function(segmentNumber, smallIndex) {
         });
         
 if (result.success) {
-    // 更新本地資料
     const seg = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
     if (seg && seg.smallSegmentDetails && seg.smallSegmentDetails[smallIndex]) {
         seg.smallSegmentDetails[smallIndex].diameter = diameter;
         seg.smallSegmentDetails[smallIndex].pipe_type = pipeType;
         seg.smallSegmentDetails[smallIndex].method = method;
     }
-    // 關閉視窗
     document.querySelectorAll('div[style*="inset:0"]').forEach(el => el.remove());
-    // 更新統計面板
     showStatsPanel();
+    showPipelineDetail(currentPipeline.id, true);
     showToast('小段資料已更新', 'success');
 }
     } catch (error) {
