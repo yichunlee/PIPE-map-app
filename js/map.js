@@ -125,12 +125,18 @@ async function showPipelineDetail(pipelineId, keepView = false) {
                             const statusValue = statusArray[i] || '0';
                             const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
                             
-                            // 🔧 根據施工方式決定顏色(與統計面板一致)
-                            const diameter = segment.diameter || '';
-                            const pipeType = segment.pipeType || '';
-                            const method = segment.method || '';
-                            const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
-                            const color = getColorForMethodKey(methodKey);
+// 🔧 優先用小段自己的管徑/工法決定顏色
+let diameter = segment.diameter || '';
+let pipeType = segment.pipeType || '';
+let method = segment.method || '';
+if (segment.smallSegmentDetails && segment.smallSegmentDetails[i]) {
+    const d = segment.smallSegmentDetails[i];
+    diameter = d.diameter || diameter;
+    pipeType = d.pipe_type || pipeType;
+    method = d.method || method;
+}
+const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
+const color = getColorForMethodKey(methodKey);
                             
                             const polyline = L.polyline(smallCoords, {
                                 color: color,
