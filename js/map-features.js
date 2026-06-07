@@ -210,12 +210,22 @@ window.markWholeSegmentIncomplete = async function(segmentNumber) {
 function showSmallSegmentPopup(latlng, segment, smallIndex, smallStart, smallEnd, isCompleted) {
     const statusIcon = isCompleted ? '🟢' : '⚪';
     
-    // 🆕 取得狀態值（可能是 "1" 或日期）
     const smallSegmentsStatus = segment.smallSegments || '';
     const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
     const statusValue = statusArray[smallIndex] || '0';
     
-    // 判斷顯示文字
+    // 取得小段自己的管線資料（優先用 smallSegmentDetails，否則繼承大段）
+    let smallDiameter = segment.diameter || '未設定';
+    let smallPipeType = segment.pipeType || '未設定';
+    let smallMethod = segment.method || '未設定';
+    
+    if (segment.smallSegmentDetails && segment.smallSegmentDetails[smallIndex]) {
+        const detail = segment.smallSegmentDetails[smallIndex];
+        smallDiameter = detail.diameter || segment.diameter || '未設定';
+        smallPipeType = detail.pipe_type || segment.pipeType || '未設定';
+        smallMethod = detail.method || segment.method || '未設定';
+    }
+    
     let statusText = '未完工';
     if (isCompleted) {
         if (statusValue === '1') {
@@ -232,9 +242,9 @@ function showSmallSegmentPopup(latlng, segment, smallIndex, smallStart, smallEnd
         .setContent(`
             <div class="popup-title">小段 #${smallIndex + 1}</div>
             <div class="popup-info">📍 位置：${smallStart}m - ${smallEnd}m (${smallEnd - smallStart}m)</div>
-            <div class="popup-info">🔧 管徑：${segment.diameter || '未設定'}</div>
-            <div class="popup-info">🔩 管種：${segment.pipeType || '未設定'}</div>
-            <div class="popup-info">⚙️ 施工方式：${segment.method || '未設定'}</div>
+            <div class="popup-info">🔧 管徑：${smallDiameter}</div>
+            <div class="popup-info">🔩 管種：${smallPipeType}</div>
+            <div class="popup-info">⚙️ 施工方式：${smallMethod}</div>
             <div class="popup-info">📊 狀態：${statusText} ${statusIcon}</div>
             <div style="font-size: 11px; color: #666; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
                 所屬段落：段落${segment.segmentNumber} (${segment.startDistance}-${segment.endDistance}m)
@@ -242,9 +252,105 @@ function showSmallSegmentPopup(latlng, segment, smallIndex, smallStart, smallEnd
             <button class="popup-button" onclick="toggleSmallSegment(&quot;${segment.segmentNumber}&quot;, ${smallIndex}, ${!isCompleted})">
                 ${isCompleted ? '❌ 標記未完工' : '✓ 標記完工'}
             </button>
+            <button class="popup-button" style="background:#ff9800;margin-top:4px;" onclick="editSmallSegmentInfo(&quot;${segment.segmentNumber}&quot;, ${smallIndex}, &quot;${smallDiameter}&quot;, &quot;${smallPipeType}&quot;, &quot;${smallMethod}&quot;)">
+                ✏️ 編輯管線資料
+            </button>
         `)
         .openOn(map);
 }
+
+// 編輯小段管線資料
+window.editSmallSegmentInfo = function(segmentNumber, smallIndex, currentDiameter, currentPipeType, currentMethod) {
+    map.closePopup();
+    
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    
+    overlay.innerHTML = `
+        <div style="background:white;padding:24px;border-radius:12px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+            <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#333;">✏️ 編輯小段 #${smallIndex + 1} 管線資料</div>
+            
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">管徑</label>
+                <input type="text" id="editSmallDiameter" value="${currentDiameter !== '未設定' ? currentDiameter : ''}" placeholder="例如：2200" 
+                    style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+            </div>
+            
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">管種</label>
+                <select id="editSmallPipeType" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;background:white;">
+                    <option value="DIP" ${currentPipeType === 'DIP' ? 'selected' : ''}>DIP</option>
+                    <option value="PVC" ${currentPipeType === 'PVC' ? 'selected' : ''}>PVC</option>
+                    <option value="HDPE" ${currentPipeType === 'HDPE' ? 'selected' : ''}>HDPE</option>
+                    <option value="鋼管" ${currentPipeType === '鋼管' ? 'selected' : ''}>鋼管</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom:20px;">
+                <label style="display:block;font-size:13px;color:#555;margin-bottom:4px;">施工方式</label>
+                <select id="editSmallMethod" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;background:white;">
+                    <option value="埋設" ${currentMethod === '埋設' ? 'selected' : ''}>埋設</option>
+                    <option value="推進" ${currentMethod === '推進' ? 'selected' : ''}>推進</option>
+                    <option value="水管橋" ${currentMethod === '水管橋' ? 'selected' : ''}>水管橋</option>
+                    <option value="潛鑽" ${currentMethod === '潛鑽' ? 'selected' : ''}>潛鑽</option>
+                    <option value="潛盾" ${currentMethod === '潛盾' ? 'selected' : ''}>潛盾</option>
+                    <option value="隧道" ${currentMethod === '隧道' ? 'selected' : ''}>隧道</option>
+                    <option value="其他" ${currentMethod === '其他' ? 'selected' : ''}>其他</option>
+                </select>
+            </div>
+            
+            <div style="display:flex;gap:10px;">
+                <button onclick="submitEditSmallSegmentInfo('${segmentNumber}', ${smallIndex})" 
+                    style="flex:1;padding:10px;background:#4CAF50;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                    💾 儲存
+                </button>
+                <button onclick="this.closest('div').parentElement.remove()" 
+                    style="padding:10px 16px;background:#f5f5f5;border:none;border-radius:6px;cursor:pointer;">
+                    取消
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+};
+
+window.submitEditSmallSegmentInfo = async function(segmentNumber, smallIndex) {
+    const diameter = document.getElementById('editSmallDiameter').value.trim();
+    const pipeType = document.getElementById('editSmallPipeType').value;
+    const method = document.getElementById('editSmallMethod').value;
+    
+    if (!diameter) {
+        showToast('請輸入管徑', 'warning');
+        return;
+    }
+    
+    try {
+        const result = await apiCall('updateSmallSegmentInfo', {
+            pipelineId: currentPipeline.id,
+            segmentNumber: segmentNumber,
+            smallIndex: smallIndex,
+            diameter: diameter,
+            pipeType: pipeType,
+            method: method,
+        });
+        
+        if (result.success) {
+            // 更新本地資料
+            const seg = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));
+            if (seg && seg.smallSegmentDetails && seg.smallSegmentDetails[smallIndex]) {
+                seg.smallSegmentDetails[smallIndex].diameter = diameter;
+                seg.smallSegmentDetails[smallIndex].pipe_type = pipeType;
+                seg.smallSegmentDetails[smallIndex].method = method;
+            }
+            document.querySelector('div[style*="inset:0"]')?.remove();
+            showToast('小段資料已更新', 'success');
+        }
+    } catch (error) {
+        showToast('更新失敗：' + error.message, 'error');
+    }
+};
 
 // 切換小段狀態
 window.toggleSmallSegment = async function(segmentNumber, smallIndex, newStatus) {
