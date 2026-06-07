@@ -188,13 +188,28 @@ const color = getColorForMethodKey(methodKey);
                                 }
                             }
                             
-                            const diameter = segment.diameter || '';
-                            const pipeType = segment.pipeType || '';
-                            const method = segment.method || '';
-                            const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
-                            const color = getColorForMethodKey(methodKey);
-                            const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
-                            const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
+// 標籤：統計這個段落裡各工法的長度，取最多的那個來顯示
+const methodLengths = {};
+for (let j = 0; j < numSmallSegments; j++) {
+    let d = segment.diameter || '';
+    let pt = segment.pipeType || '';
+    let m = segment.method || '';
+    if (segment.smallSegmentDetails && segment.smallSegmentDetails[j]) {
+        const sd = segment.smallSegmentDetails[j];
+        d = sd.diameter || d;
+        pt = sd.pipe_type || pt;
+        m = sd.method || m;
+    }
+    const mk = [d, pt, m].filter(Boolean).join(' ');
+    const sl = Math.min(10, segLength - j * 10);
+    methodLengths[mk] = (methodLengths[mk] || 0) + sl;
+}
+// 取長度最長的工法作為標籤代表
+const dominantMethod = Object.entries(methodLengths).sort((a, b) => b[1] - a[1])[0];
+const methodLabel = dominantMethod ? dominantMethod[0] : [segment.diameter, segment.pipeType, segment.method].filter(Boolean).join(' ');
+const methodKeyForColor = methodLabel.split(' ').filter(Boolean).join('-');
+const color = getColorForMethodKey(methodKeyForColor);
+const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segLength)}m`;
                             
                             const label = L.marker(midLatLng, {
                                 icon: L.divIcon({
@@ -488,8 +503,26 @@ const color = getColorForMethodKey(methodKey);
                     }
                 }
                 
-                const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
-                const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segmentLength)}m`;
+// 標籤：統計這個段落裡各工法的長度，取最多的那個來顯示
+const methodLengths = {};
+for (let j = 0; j < numSmallSegments; j++) {
+    let d = segment.diameter || '';
+    let pt = segment.pipeType || '';
+    let m = segment.method || '';
+    if (segment.smallSegmentDetails && segment.smallSegmentDetails[j]) {
+        const sd = segment.smallSegmentDetails[j];
+        d = sd.diameter || d;
+        pt = sd.pipe_type || pt;
+        m = sd.method || m;
+    }
+    const mk = [d, pt, m].filter(Boolean).join(' ');
+    const sl = Math.min(10, segmentLength - j * 10);
+    methodLengths[mk] = (methodLengths[mk] || 0) + sl;
+}
+const dominantMethod = Object.entries(methodLengths).sort((a, b) => b[1] - a[1])[0];
+const methodLabel = dominantMethod ? dominantMethod[0] : [segment.diameter, segment.pipeType, segment.method].filter(Boolean).join(' ');
+const labelColor = getColorForMethodKey(methodLabel.split(' ').filter(Boolean).join('-'));
+const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(segmentLength)}m`;
                 
                 // 將顏色轉為半透明
                 const hexToRgba = (hex, alpha) => {
