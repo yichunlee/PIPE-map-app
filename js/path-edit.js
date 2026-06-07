@@ -1267,6 +1267,7 @@ async function savePathEdits() {
             // 更新本地資料
             currentPipeline.linestring = linestring;
             currentPipeline.segments = []; // 清空本地段落資料
+            currentPipeline._progressLoaded = false; // 強制下次重新從後端載入
             
             // 退出編輯模式（靜默模式）
             cancelEditMode(true);
