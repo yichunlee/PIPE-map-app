@@ -237,7 +237,7 @@ const labelText = `${methodLabel} ${Math.round(completedLength)}m/${Math.round(s
                                 })
                             }).addTo(map);
                             
-                            segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color, methodLabel, segLength });
+                            segmentLabels.push({ marker: label, segmentNumber: segment.segmentNumber, color: labelColor, methodLabel, segLength });
                             
                             // 節點標記：在段落起點放節點標記
                             if (segment.nodeRange && segment.nodeRange.trim()) {
