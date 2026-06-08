@@ -229,12 +229,12 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
         svg += `<rect x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="none" stroke="#ccc" stroke-width="1"/>`;
         
         // 游標
+        svg += `<rect id="hitArea" x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="transparent"/>`;  
         svg += `<line id="cursorLine" x1="0" y1="${PAD.top}" x2="0" y2="${H-PAD.bottom}" stroke="#e74c3c" stroke-width="1.5" stroke-dasharray="4,3" opacity="0" pointer-events="none"/>`;
         svg += `<circle id="cursorDot" cx="0" cy="0" r="5" fill="#e74c3c" opacity="0" pointer-events="none"/>`;
         svg += `<rect id="cursorBg" x="0" y="0" width="90" height="20" fill="white" rx="3" opacity="0" pointer-events="none"/>`;
         svg += `<text id="cursorText" x="0" y="0" font-size="11" fill="#e74c3c" opacity="0" pointer-events="none"></text>`;
-        svg += `<rect id="hitArea" x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="transparent"/>`;
-        
+      
         return { svg, distToX, elevToY, globalMaxD, globalMinE, globalRange };
     }
     
