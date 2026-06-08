@@ -184,7 +184,8 @@ function renderElevationChartInWindow(win, samples, nodeAnnotations) {
             if (pts.length < 2) return;
             let line = `M${distToX(pts[0].dist)},${elevToY(pts[0].elevation)}`;
             pts.forEach(p => { line += ` L${distToX(p.dist)},${elevToY(p.elevation)}`; });
-            svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.25" style="cursor:pointer"/>`;
+svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.25"/>`;
+svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" stroke="transparent" stroke-width="20" style="cursor:pointer"/>`;  
         });
         
         // 畫 active 分支（粗亮）
