@@ -1278,11 +1278,14 @@ const branchLengths = branchStructure ? branchStructure.branches.map((branch, id
 }) : [{ branchIndex: 0, length: newLength }];
 
 try {
-    const initResult = await apiCall('initSmallSegments', {
+const initResult = await apiCall('initSmallSegments', {}, {
+    body: {
+        action: 'initSmallSegments',
         pipelineId: currentPipeline.id,
         totalLength: newLength,
         branchLengths: JSON.stringify(branchLengths),
-    });
+    }
+});
     console.log('✅ 小段初始化完成，共', initResult.count, '個小段');
 } catch(e) {
     console.warn('⚠️ 小段初始化失敗:', e.message);
