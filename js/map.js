@@ -284,7 +284,6 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
 function drawBranchLabel(branch, branchIndex, smallSegs) {
     if (!smallSegs || smallSegs.length === 0) return;
     
-    // 統計各工法的長度
     const methodLengths = {};
     const methodCompleted = {};
     smallSegs.forEach(seg => {
@@ -302,42 +301,48 @@ function drawBranchLabel(branch, branchIndex, smallSegs) {
     
     if (Object.keys(methodLengths).length === 0) return;
     
-    // 取主導工法
-    const dominant = Object.entries(methodLengths).sort((a, b) => b[1] - a[1])[0];
-    const methodLabel = dominant[0];
-    const labelColor = getColorForMethodKey(methodLabel.split(' ').filter(Boolean).join('-'));
-    const domCompleted = methodCompleted[methodLabel] || 0;
-    const domTotal = methodLengths[methodLabel];
-    const labelText = `${methodLabel} ${Math.round(domCompleted)}m/${Math.round(domTotal)}m`;
-    
-    // 取分支中間點
-    const midDist = domTotal / 2;
-    const midCoords = getSegmentCoordsFromBranch(branch.coords, midDist - 5, midDist + 5);
-    if (!midCoords || midCoords.length === 0) return;
-    
-    const midLatLng = midCoords[Math.floor(midCoords.length / 2)];
-    
-    const label = L.marker(midLatLng, {
-        icon: L.divIcon({
-            className: 'segment-label',
-            html: `<div style="
-                background: transparent;
-                color: ${labelColor};
-                padding: 3px 6px;
-                border-radius: 3px;
-                font-size: 10px;
-                font-weight: 700;
-                white-space: nowrap;
-                border: none;
-                pointer-events: none;
-                text-shadow: -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white;
-            ">${labelText}</div>`,
-            iconSize: null,
-            iconAnchor: [-5, 20]
-        })
-    }).addTo(map);
-    
-    segmentLabels.push({ marker: label, segmentNumber: `B${branchIndex}`, color: labelColor, methodLabel });
+    // 每個工法都顯示一個標籤
+    Object.entries(methodLengths).forEach(([methodLabel, total]) => {
+        const labelColor = getColorForMethodKey(methodLabel.split(' ').filter(Boolean).join('-'));
+        const completed = methodCompleted[methodLabel] || 0;
+        const labelText = `${methodLabel} ${Math.round(completed)}m/${Math.round(total)}m`;
+        
+        // 找這個工法的小段中間點
+        const methodSegs = smallSegs.filter(seg => {
+            const mk = [seg.diameter||'', seg.pipeType||'', seg.method||''].filter(Boolean).join(' ');
+            return mk === methodLabel;
+        });
+        if (methodSegs.length === 0) return;
+        
+        const midSeg = methodSegs[Math.floor(methodSegs.length / 2)];
+        const midDist = (midSeg.startDistance + midSeg.endDistance) / 2;
+        const midCoords = getSegmentCoordsFromBranch(branch.coords, midDist - 5, midDist + 5);
+        if (!midCoords || midCoords.length === 0) return;
+        
+        const midLatLng = midCoords[Math.floor(midCoords.length / 2)];
+        
+        const label = L.marker(midLatLng, {
+            icon: L.divIcon({
+                className: 'segment-label',
+                html: `<div style="
+                    background: transparent;
+                    color: ${labelColor};
+                    padding: 3px 6px;
+                    border-radius: 3px;
+                    font-size: 10px;
+                    font-weight: 700;
+                    white-space: nowrap;
+                    border: none;
+                    pointer-events: none;
+                    text-shadow: -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white;
+                ">${labelText}</div>`,
+                iconSize: null,
+                iconAnchor: [-5, 20]
+            })
+        }).addTo(map);
+        
+        segmentLabels.push({ marker: label, segmentNumber: `B${branchIndex}`, color: labelColor, methodLabel });
+    });
 }
 
 // ========== 新架構：點擊小段處理 ==========
@@ -424,6 +429,8 @@ window.toggleNewSmallSegment = async function(branchIndex, smallIndex) {
         }
         showToast(newStatus !== '0' ? '✅ 已標記完工' : '已標記未完工', 'success');
         showStatsPanel();
+        currentPipeline._progressLoaded = false;
+        showPipelineDetail(currentPipeline.id, true);
     } catch(e) {
         showToast('更新失敗：' + e.message, 'error');
     }
