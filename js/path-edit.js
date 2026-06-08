@@ -1123,18 +1123,14 @@ async function savePathEdits() {
         segmentInfo = '\n📍 路徑為單一段落';
     }
     
-    const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
-    
-新路徑將更新至 Google Sheets
+const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
+
+新路徑將更新，小段資料將自動重新產生。
 
 ⚠️ 重要提醒：
-• 施工進度段落資料將被清空
-• 小段狀態將被重設
-• 地圖備註、工作井、路權範圍不受影響
-
-您需要重新設定：
-1. 在「施工進度」表手動新增段落
-2. 設定起始/結束距離、管徑、施工方式等
+- 已設定的管徑/管材/施工方式將保留（不重設）
+- 新增的小段預設為空白，需重新設定屬性
+- 地圖備註、工作井、路權範圍不受影響
 
 確定要繼續嗎？`;
     
@@ -1260,8 +1256,7 @@ async function savePathEdits() {
             } else if (segmentBreakPoints.length > 0) {
                 successMsg += `\n\n✂️ 路徑已分為 ${segmentBreakPoints.length + 1} 段`;
             }
-            successMsg += '\n\n施工進度段落資料已清空，請重新在 Google Sheets 設定。';
-            
+                      
             showToast(successMsg, 'success');
             
             // 更新本地資料
