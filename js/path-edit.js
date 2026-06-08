@@ -1268,7 +1268,25 @@ async function savePathEdits() {
             currentPipeline.linestring = linestring;
             currentPipeline.segments = []; // 清空本地段落資料
             currentPipeline._progressLoaded = false; // 強制下次重新從後端載入
-            
+            // 自動初始化小段
+const branchLengths = branchStructure ? branchStructure.branches.map((branch, idx) => {
+    let len = 0;
+    for (let i = 0; i < branch.coords.length - 1; i++) {
+        len += getDistance(branch.coords[i], branch.coords[i + 1]);
+    }
+    return { branchIndex: idx, length: Math.round(len) };
+}) : [{ branchIndex: 0, length: newLength }];
+
+try {
+    const initResult = await apiCall('initSmallSegments', {
+        pipelineId: currentPipeline.id,
+        totalLength: newLength,
+        branchLengths: JSON.stringify(branchLengths),
+    });
+    console.log('✅ 小段初始化完成，共', initResult.count, '個小段');
+} catch(e) {
+    console.warn('⚠️ 小段初始化失敗:', e.message);
+}
             // 退出編輯模式（靜默模式）
             cancelEditMode(true);
             
