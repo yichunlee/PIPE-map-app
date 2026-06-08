@@ -32,7 +32,7 @@ async function showElevationProfile() {
     // 收集資料
     const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
     const branchData = isMULTI ? parseLineStringWithBranches(currentPipeline.linestring) : null;
-    const SAMPLE_INTERVAL = 50;
+    const SAMPLE_INTERVAL = 10;
     const allSamples = [];
     const nodeAnnotations = [];
     
