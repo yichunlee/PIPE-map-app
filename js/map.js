@@ -401,10 +401,7 @@ window.handleNewSmallSegmentClick = function(e, branchIndex, smallIndex, smallSt
                 onclick="startRangeSelect(${branchIndex}, ${smallIndex}); map.closePopup();">
                 📏 設定範圍屬性（此段為起點）
             </button>
-            <button class="popup-button" style="background:#ff9800;margin-top:4px;" 
-                onclick="editNewSmallSegmentInfo(${branchIndex}, ${smallIndex}, '${seg.diameter||''}', '${seg.pipeType||''}', '${seg.method||''}')">
-                ✏️ 編輯此段屬性
-            </button>
+
         `)
         .openOn(map);
 };
@@ -702,9 +699,7 @@ window.showNewSmallSegmentContextMenu = function(e, branchIndex, smallIndex, seg
         <div class="rcm-item" onclick="startRangeSelect(${branchIndex}, ${smallIndex})">
             📏 設定範圍屬性（此段為起點）
         </div>
-        <div class="rcm-item" onclick="editNewSmallSegmentInfo(${branchIndex}, ${smallIndex}, '${seg.diameter||''}', '${seg.pipeType||''}', '${seg.method||''}')">
-            ✏️ 編輯此段屬性
-        </div>
+
     `;
     
     document.body.appendChild(menu);
