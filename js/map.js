@@ -123,6 +123,25 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
                         
                         const trackingKey = `${branchKey}-${i}`;
                         smallSegmentPolylines[trackingKey] = { polyline, seg, branchIndex, smallIndex: i, color };
+                        // 繪製節點標記
+if (seg.nodeName && seg.nodeName.trim()) {
+    const nodeCoords = getSegmentCoordsFromBranch(branch.coords, smallStart, smallStart + 1);
+    if (nodeCoords && nodeCoords.length > 0) {
+        const nodeMarker = L.marker(nodeCoords[0], {
+            icon: L.divIcon({
+                className: '',
+                html: `<div style="position:relative;width:10px;height:10px;">
+                    <div style="width:10px;height:10px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                    <div style="position:absolute;left:14px;top:-4px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:1px 4px;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.15);">${seg.nodeName}</div>
+                </div>`,
+                iconSize: [10, 10],
+                iconAnchor: [5, 5]
+            }),
+            zIndexOffset: 600
+        }).addTo(map);
+        allPolylines.push(nodeMarker);
+    }
+}
                         successCount++;
                     });
                     console.log(`   ✅ 成功繪製 ${successCount}/${smallSegs.length} 個小段`);
@@ -383,27 +402,60 @@ window.handleNewSmallSegmentClick = function(e, branchIndex, smallIndex, smallSt
         }
     }
     
-    map.closePopup();
-    
-    const popup = L.popup()
-        .setLatLng(e.latlng)
-        .setContent(`
-            <div class="popup-title">小段 #${smallIndex + 1}</div>
-            <div class="popup-info">📍 位置：${smallStart}m - ${smallEnd}m</div>
-            <div class="popup-info">🔧 管徑：${diameter}</div>
-            <div class="popup-info">🔩 管種：${pipeType}</div>
-            <div class="popup-info">⚙️ 施工方式：${method}</div>
-            <div class="popup-info">📊 狀態：${statusText} ${statusIcon}</div>
-            <button class="popup-button" onclick="toggleNewSmallSegment(${branchIndex}, ${smallIndex})">
-                ${isCompleted ? '❌ 標記未完工' : '✓ 標記完工'}
-            </button>
-            <button class="popup-button" style="background:#2196F3;margin-top:4px;" 
-                onclick="startRangeSelect(${branchIndex}, ${smallIndex}); map.closePopup();">
-                📏 設定範圍屬性（此段為起點）
-            </button>
+const popup = L.popup()
+    .setLatLng(e.latlng)
+    .setContent(`
+        <div class="popup-title">小段 #${smallIndex + 1}</div>
+        <div class="popup-info">📍 位置：${smallStart}m - ${smallEnd}m</div>
+        <div class="popup-info">🔧 管徑：${diameter}</div>
+        <div class="popup-info">🔩 管種：${pipeType}</div>
+        <div class="popup-info">⚙️ 施工方式：${method}</div>
+        <div class="popup-info">📊 狀態：${statusText} ${statusIcon}</div>
+        <div style="margin:8px 0;">
+            <label style="font-size:12px;color:#555;">🔖 節點名稱</label>
+            <div style="display:flex;gap:6px;margin-top:4px;">
+                <input type="text" id="nodeNameInput" value="${seg.nodeName||''}" placeholder="例如：節點1"
+                    style="flex:1;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <button onclick="saveNodeName(${branchIndex}, ${smallIndex})"
+                    style="padding:6px 10px;background:#4CAF50;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;">
+                    儲存
+                </button>
+            </div>
+        </div>
+        <button class="popup-button" onclick="toggleNewSmallSegment(${branchIndex}, ${smallIndex})">
+            ${isCompleted ? '❌ 標記未完工' : '✓ 標記完工'}
+        </button>
+        <button class="popup-button" style="background:#2196F3;margin-top:4px;" 
+            onclick="startRangeSelect(${branchIndex}, ${smallIndex}); map.closePopup();">
+            📏 設定範圍屬性（此段為起點）
+        </button>
+    `)
+    .openOn(map);
+};
 
-        `)
-        .openOn(map);
+window.saveNodeName = async function(branchIndex, smallIndex) {
+    const branchKey = `B${branchIndex}`;
+    const seg = (currentPipeline.branches[branchKey] || []).find(s => s.smallIndex === smallIndex);
+    if (!seg) return;
+    
+    const nodeName = document.getElementById('nodeNameInput')?.value.trim() || '';
+    
+    try {
+        await apiCall('updateSmallSegmentInfo', {
+            pipelineId: currentPipeline.id,
+            segmentNumber: branchKey,
+            smallIndex: smallIndex,
+            nodeName: nodeName,
+        });
+        seg.nodeName = nodeName;
+        map.closePopup();
+        showToast('節點名稱已儲存', 'success');
+        // 重新繪製以更新節點標記
+        currentPipeline._progressLoaded = false;
+        showPipelineDetail(currentPipeline.id, true);
+    } catch(e) {
+        showToast('儲存失敗：' + e.message, 'error');
+    }
 };
 
 // 標記完工/未完工
