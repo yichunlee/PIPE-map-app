@@ -71,7 +71,7 @@
     <!-- 編輯模式工具列 -->
     <div id="editModeToolbar" class="edit-mode-toolbar">
         <div class="edit-mode-info">🎯 編輯模式：拖曳節點調整路徑 | 點擊線段新增節點 | 右鍵節點刪除</div>
-        <button class="edit-mode-btn save" onclick="savePathEdits()">💾 儲存</button>
+      <button class="edit-mode-btn save" onclick="this.disabled=true;this.textContent='⏳ 儲存中...';savePathEdits().finally(()=>{this.disabled=false;this.textContent='💾 儲存'})">💾 儲存</button>
         <button class="edit-mode-btn cancel" onclick="cancelEditMode()">✕ 取消</button>
     </div>
     
