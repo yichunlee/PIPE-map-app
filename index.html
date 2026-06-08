@@ -182,6 +182,12 @@
                 <span>✏️</span>
                 <span>編輯工程</span>
             </div>
+
+<div class="tool-item" onclick="showElevationProfile();toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px;">
+    <span>📈</span>
+    <span>高程剖面圖</span>
+</div>
+            
             <div id="dxfToolItem" class="tool-item" onclick="exportDXF(); toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; display:none;">
                 <span>📐</span>
                 <span>匯出 DXF</span>
@@ -238,5 +244,6 @@
     <script src="js/branch-edit.js"></script>
     <script src="js/pipeline-crud.js"></script>
     <script src="js/dxf-export.js"></script>
+    <script src="js/elevation.js"></script>
 </body>
 </html>
