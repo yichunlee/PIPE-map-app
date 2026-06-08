@@ -17,7 +17,7 @@ async function showElevationProfile() {
     
     const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
     const branchData = isMULTI ? parseLineStringWithBranches(currentPipeline.linestring) : null;
-    const SAMPLE_INTERVAL = 10;
+    const SAMPLE_INTERVAL = 20;
     const allSamples = [];
     const nodeAnnotations = [];
     
