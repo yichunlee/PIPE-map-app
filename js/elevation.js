@@ -69,8 +69,6 @@ async function showElevationProfile() {
             #header { background:linear-gradient(135deg,#1565C0,#1976D2); color:white; padding:12px 16px; font-size:15px; font-weight:bold; }
             #content { padding:16px; }
             #status { color:#666; text-align:center; padding:40px; font-size:14px; }
-            #stats { display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; padding:10px 14px; background:white; border-radius:8px; font-size:13px; box-shadow:0 1px 4px rgba(0,0,0,0.1); }
-            #hint { text-align:center; font-size:11px; color:#999; margin-top:6px; }
             svg { cursor:crosshair; display:block; background:white; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.1); }
         </style>
     </head><body>
@@ -132,7 +130,6 @@ function renderElevationChartInWindow(win, samples, nodeAnnotations) {
     const branchColors = {};
     branches.forEach((b, i) => { branchColors[b] = COLORS[i % COLORS.length]; });
     
-    // 預設選中分支 0
     let activeBranch = branches[0];
     
     const W = 900, H = 380;
@@ -140,26 +137,15 @@ function renderElevationChartInWindow(win, samples, nodeAnnotations) {
     const chartW = W - PAD.left - PAD.right;
     const chartH = H - PAD.top - PAD.bottom;
     
-    function getChartRange(branchIdx) {
-        const pts = samples.filter(s => s.branchIndex === branchIdx);
-        const minE = Math.min(...pts.map(s => s.elevation));
-        const maxE = Math.max(...pts.map(s => s.elevation));
-        const maxD = Math.max(...pts.map(s => s.dist));
-        return { minE, maxE, elevRange: maxE - minE || 10, maxD };
-    }
+    const globalMinE = Math.min(...samples.map(s => s.elevation));
+    const globalMaxE = Math.max(...samples.map(s => s.elevation));
+    const globalRange = globalMaxE - globalMinE || 10;
+    const globalMaxD = Math.max(...samples.map(s => s.dist));
     
-    function buildSVG(activeBranch) {
-        const { minE, maxE, elevRange, maxD } = getChartRange(activeBranch);
-        
-        // 全局範圍（所有分支）
-        const globalMinE = Math.min(...samples.map(s => s.elevation));
-        const globalMaxE = Math.max(...samples.map(s => s.elevation));
-        const globalRange = globalMaxE - globalMinE || 10;
-        const globalMaxD = Math.max(...samples.map(s => s.dist));
-        
-        const distToX = d => PAD.left + (d / globalMaxD) * chartW;
-        const elevToY = e => PAD.top + chartH - ((e - globalMinE) / globalRange) * chartH;
-        
+    const distToX = d => PAD.left + (d / globalMaxD) * chartW;
+    const elevToY = e => PAD.top + chartH - ((e - globalMinE) / globalRange) * chartH;
+    
+    function buildSVG() {
         let svg = '';
         
         // 格線
@@ -176,7 +162,7 @@ function renderElevationChartInWindow(win, samples, nodeAnnotations) {
             svg += `<text x="${x}" y="${H-PAD.bottom+14}" text-anchor="middle" font-size="10" fill="#777">${Math.round(d)}</text>`;
         }
         
-        // 先畫非active分支（淡化）
+        // 非 active 分支（淡化）
         branches.forEach(b => {
             if (b === activeBranch) return;
             const color = branchColors[b];
@@ -184,11 +170,10 @@ function renderElevationChartInWindow(win, samples, nodeAnnotations) {
             if (pts.length < 2) return;
             let line = `M${distToX(pts[0].dist)},${elevToY(pts[0].elevation)}`;
             pts.forEach(p => { line += ` L${distToX(p.dist)},${elevToY(p.elevation)}`; });
-svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.25"/>`;
-svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" stroke="transparent" stroke-width="20" style="cursor:pointer"/>`;  
+            svg += `<path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.25"/>`;
         });
         
-        // 畫 active 分支（粗亮）
+        // active 分支（面積+粗線）
         const activePts = samples.filter(s => s.branchIndex === activeBranch);
         const activeColor = branchColors[activeBranch];
         if (activePts.length >= 2) {
@@ -200,10 +185,10 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
             });
             area += ` L${distToX(activePts[activePts.length-1].dist)},${H-PAD.bottom} Z`;
             svg += `<path d="${area}" fill="${activeColor}" fill-opacity="0.15"/>`;
-            svg += `<path class="branch-line" data-branch="${activeBranch}" d="${line}" fill="none" stroke="${activeColor}" stroke-width="3" style="cursor:pointer"/>`;
+            svg += `<path d="${line}" fill="none" stroke="${activeColor}" stroke-width="3"/>`;
         }
         
-        // 節點（只顯示 active 分支的）
+        // 節點
         nodeAnnotations.filter(n => n.branchIndex === activeBranch).forEach((node, ni) => {
             const color = branchColors[node.branchIndex] || '#333';
             const x = distToX(node.dist);
@@ -219,27 +204,29 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
             const isActive = b === activeBranch;
             const lx = PAD.left + i * 130;
             const ly = H - 10;
-            svg += `<line x1="${lx}" y1="${ly}" x2="${lx+18}" y2="${ly}" stroke="${color}" stroke-width="${isActive ? 3 : 1.5}" opacity="${isActive ? 1 : 0.4}"/>`;
-            svg += `<text x="${lx+22}" y="${ly+4}" font-size="11" fill="${isActive ? color : '#aaa'}" font-weight="${isActive ? 'bold' : 'normal'}">分支 ${b}${isActive ? ' ✓' : ''}</text>`;
+            svg += `<line x1="${lx}" y1="${ly}" x2="${lx+18}" y2="${ly}" stroke="${color}" stroke-width="${isActive?3:1.5}" opacity="${isActive?1:0.4}"/>`;
+            svg += `<text x="${lx+22}" y="${ly+4}" font-size="11" fill="${isActive?color:'#aaa'}" font-weight="${isActive?'bold':'normal'}">分支 ${b}${isActive?' ✓':''}</text>`;
         });
         
-        // 軸標題
+        // 軸標題 & 邊框
         svg += `<text x="${W/2}" y="${H-2}" text-anchor="middle" font-size="11" fill="#555">水平距離 (m)</text>`;
         svg += `<text x="13" y="${PAD.top+chartH/2}" text-anchor="middle" font-size="11" fill="#555" transform="rotate(-90,13,${PAD.top+chartH/2})">高程 (m)</text>`;
         svg += `<rect x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="none" stroke="#ccc" stroke-width="1"/>`;
         
-        // 游標
-        svg += `<rect id="hitArea" x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="transparent"/>`;  
+        // 游標元素（最上層）
         svg += `<line id="cursorLine" x1="0" y1="${PAD.top}" x2="0" y2="${H-PAD.bottom}" stroke="#e74c3c" stroke-width="1.5" stroke-dasharray="4,3" opacity="0" pointer-events="none"/>`;
         svg += `<circle id="cursorDot" cx="0" cy="0" r="5" fill="#e74c3c" opacity="0" pointer-events="none"/>`;
         svg += `<rect id="cursorBg" x="0" y="0" width="90" height="20" fill="white" rx="3" opacity="0" pointer-events="none"/>`;
         svg += `<text id="cursorText" x="0" y="0" font-size="11" fill="#e74c3c" opacity="0" pointer-events="none"></text>`;
-      
-        return { svg, distToX, elevToY, globalMaxD, globalMinE, globalRange };
+        
+        // hitArea 最後畫（在游標元素下面，接收 mousemove）
+        // 但要讓非active分支可以點擊，所以用 click 事件在 hitArea 裡判斷
+        svg += `<rect id="hitArea" x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="transparent"/>`;
+        
+        return svg;
     }
     
     function render() {
-        const { svg, distToX, elevToY, globalMaxD, globalMinE, globalRange } = buildSVG(activeBranch);
         const activePts = samples.filter(s => s.branchIndex === activeBranch);
         const activeStats = {
             maxD: Math.max(...activePts.map(s => s.dist)),
@@ -248,9 +235,9 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
         };
         
         win.document.getElementById('content').innerHTML = `
-            <svg id="elevSvg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;">${svg}</svg>
-            <div id="hint" style="text-align:center;font-size:11px;color:#999;margin-top:4px;">💡 點擊其他分支線條可切換顯示</div>
-            <div id="stats" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;padding:10px 14px;background:white;border-radius:8px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,0.1);">
+            <svg id="elevSvg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;">${buildSVG()}</svg>
+            <div style="text-align:center;font-size:11px;color:#999;margin-top:4px;">💡 點擊圖表上的淡色線條可切換分支</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;padding:10px 14px;background:white;border-radius:8px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,0.1);">
                 <span>📏 分支長：<b>${Math.round(activeStats.maxD)}m</b></span>
                 <span>⛰️ 最高：<b>${Math.round(activeStats.maxE)}m</b></span>
                 <span>🏔️ 最低：<b>${Math.round(activeStats.minE)}m</b></span>
@@ -268,18 +255,7 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
         const cursorText = win.document.getElementById('cursorText');
         const hitArea = win.document.getElementById('hitArea');
         
-        // 點擊分支線條切換
-        svgEl.querySelectorAll('.branch-line').forEach(el => {
-            el.addEventListener('click', function(e) {
-                const b = parseInt(this.getAttribute('data-branch'));
-                if (b !== activeBranch) {
-                    activeBranch = b;
-                    render();
-                }
-            });
-        });
-        
-        // 游標互動
+        // hitArea mousemove：顯示游標 + 廣播地圖紅點
         hitArea.addEventListener('mousemove', function(e) {
             const rect = svgEl.getBoundingClientRect();
             const scaleX = W / rect.width;
@@ -287,7 +263,6 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
             const dist = ((mouseX - PAD.left) / chartW) * globalMaxD;
             if (dist < 0 || dist > globalMaxD) return;
             
-            // 只在 active 分支找最近點
             const activePts = samples.filter(s => s.branchIndex === activeBranch);
             let nearest = null, minGap = Infinity;
             activePts.forEach(s => {
@@ -296,18 +271,17 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
             });
             if (!nearest) return;
             
-            const x = PAD.left + (nearest.dist / globalMaxD) * chartW;
-            const y = PAD.top + chartH - ((nearest.elevation - globalMinE) / globalRange) * chartH;
+            const x = distToX(nearest.dist);
+            const y = elevToY(nearest.elevation);
             
             cursorLine.setAttribute('x1', x); cursorLine.setAttribute('x2', x); cursorLine.setAttribute('opacity', '0.8');
             cursorDot.setAttribute('cx', x); cursorDot.setAttribute('cy', y); cursorDot.setAttribute('opacity', '1');
             
             const label = `${Math.round(nearest.dist)}m, ${Math.round(nearest.elevation)}m`;
             const labelX = x + 8 > W - PAD.right - 95 ? x - 98 : x + 8;
-            cursorBg.setAttribute('x', labelX); cursorBg.setAttribute('y', y - 14); cursorBg.setAttribute('opacity', '0.9');
-            cursorText.setAttribute('x', labelX + 4); cursorText.setAttribute('y', y); cursorText.setAttribute('opacity', '1');
+            cursorBg.setAttribute('x', labelX); cursorBg.setAttribute('y', y-14); cursorBg.setAttribute('opacity', '0.9');
+            cursorText.setAttribute('x', labelX+4); cursorText.setAttribute('y', y); cursorText.setAttribute('opacity', '1');
             cursorText.textContent = label;
-            
             channel.postMessage({ lat: nearest.lat, lng: nearest.lng });
         });
         
@@ -317,6 +291,38 @@ svg += `<path class="branch-line" data-branch="${b}" d="${line}" fill="none" str
             cursorBg.setAttribute('opacity', '0');
             cursorText.setAttribute('opacity', '0');
             channel.postMessage({ lat: null, lng: null });
+        });
+        
+        // hitArea click：判斷點擊位置最近的非active分支，切換
+        hitArea.addEventListener('click', function(e) {
+            const rect = svgEl.getBoundingClientRect();
+            const scaleX = W / rect.width;
+            const scaleY = H / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+            const dist = ((mouseX - PAD.left) / chartW) * globalMaxD;
+            
+            let closestBranch = null;
+            let minYGap = 25; // 25px 容忍範圍
+            
+            branches.forEach(b => {
+                if (b === activeBranch) return;
+                const pts = samples.filter(s => s.branchIndex === b);
+                let nearest = null, minDist = Infinity;
+                pts.forEach(s => {
+                    const gap = Math.abs(s.dist - dist);
+                    if (gap < minDist) { minDist = gap; nearest = s; }
+                });
+                if (!nearest) return;
+                const y = elevToY(nearest.elevation);
+                const yGap = Math.abs(mouseY - y);
+                if (yGap < minYGap) { minYGap = yGap; closestBranch = b; }
+            });
+            
+            if (closestBranch !== null) {
+                activeBranch = closestBranch;
+                render();
+            }
         });
     }
     
