@@ -314,12 +314,24 @@ function drawBranchLabel(branch, branchIndex, smallSegs) {
         });
         if (methodSegs.length === 0) return;
         
-        const midSeg = methodSegs[Math.floor(methodSegs.length / 2)];
-        const midDist = (midSeg.startDistance + midSeg.endDistance) / 2;
-        const midCoords = getSegmentCoordsFromBranch(branch.coords, midDist - 5, midDist + 5);
-        if (!midCoords || midCoords.length === 0) return;
-        
-        const midLatLng = midCoords[Math.floor(midCoords.length / 2)];
+const midSeg = methodSegs[Math.floor(methodSegs.length / 2)];
+const midDist = (midSeg.startDistance + midSeg.endDistance) / 2;
+let midLatLng = null;
+const midCoords = getSegmentCoordsFromBranch(branch.coords, midDist - 5, midDist + 5);
+if (midCoords && midCoords.length > 0) {
+    midLatLng = midCoords[Math.floor(midCoords.length / 2)];
+} else {
+    // fallback：直接用分支座標插值
+    const branchLen = branch.coords.length;
+    if (branchLen >= 2) {
+        const ratio = midDist / (methodSegs[methodSegs.length-1].endDistance || 1);
+        const idx = Math.min(Math.floor(ratio * (branchLen-1)), branchLen-2);
+        const p1 = branch.coords[idx];
+        const p2 = branch.coords[idx+1];
+        midLatLng = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2];
+    }
+}
+if (!midLatLng) return;
         
         const label = L.marker(midLatLng, {
             icon: L.divIcon({
