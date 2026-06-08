@@ -13,8 +13,15 @@ async function showPipelineDetail(pipelineId, keepView = false) {
     if (!keepView) {
         allMarkersVisible = true;
     }
+
+
     
     // 載入小段資料（新架構）
+// 確保使用新架構資料
+if (currentPipeline._progressLoaded && !currentPipeline.branches) {
+    currentPipeline._progressLoaded = false;
+}
+    
     if (!currentPipeline._progressLoaded) {
         showLoading(true);
         try {
