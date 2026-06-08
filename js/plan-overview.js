@@ -114,6 +114,8 @@ async function _loadProjectProgressBackground(pipelines) {
             const data = await apiCall('getProgress', { pipelineId: pipeline.id });
             pipeline.segments = parseBranchIndexFromSegments(data.segments || []);
             pipeline._progressLoaded = true;
+            pipeline.branches = undefined; // 確保下次進入工程時重新載入新架構資料
+            
             const idx = allPipelines.findIndex(p => p.id === pipeline.id);
             if (idx !== -1) allPipelines[idx].segments = pipeline.segments;
         } catch (e) {
