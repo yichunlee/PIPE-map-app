@@ -755,8 +755,9 @@ if (!hitMap.has(segKey)) {
         const entries = [];
         const skipped = [];
         for (const e of hitMap.values()) {
+const segNum = e.segmentNumber || (e.segment && e.segment.segmentNumber);
 const { minIdx, maxIdx, conflicts } = getUnoccupiedRange(
-    e.segmentNumber || e.segment.segmentNumber, e.minIdx, e.maxIdx
+    segNum, e.minIdx, e.maxIdx
 );
             if (minIdx === null) {
                 skipped.push({ seg: e.segment, conflicts });
@@ -788,7 +789,9 @@ const { minIdx, maxIdx, conflicts } = getUnoccupiedRange(
 
         if (entries.length === 1) {
             const e = entries[0];
-            openGanttPanelForSegment(e.segment.segmentNumber, e.minIdx, e.maxIdx);
+           const sn = e.segmentNumber || e.segment.segmentNumber;
+           openGanttPanelForSegment(sn, e.minIdx, e.maxIdx);
+           
         } else {
             showGanttSegmentPicker(entries);
         }
