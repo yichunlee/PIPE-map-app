@@ -2266,17 +2266,30 @@ function getSegmentCompletionRate(seg) {
 
 
 function showGanttForm(item, isEdit) {
-    const segments = currentPipeline.segments || [];
-    const inputStyle = 'width:100%;padding:5px 7px;border:1px solid #ddd;border-radius:4px;margin-bottom:5px;box-sizing:border-box;font-size:12px;';
-    
-    const segOptions = segments.map(seg => {
+// 新架構：從 branches 產生段落選項
+const branches = currentPipeline.branches || {};
+const hasBranches = Object.keys(branches).length > 0;
+const segments = currentPipeline.segments || [];
+
+const segOptions = hasBranches
+    ? Object.entries(branches).map(([branchKey, segs]) => {
+        if (!segs || segs.length === 0) return '';
+        const first = segs.find(s => s.diameter || s.pipeType || s.method) || segs[0];
+        const diameter = first.diameter || '';
+        const pipeType = first.pipeType || '';
+        const method = first.method || '';
+        const numSmall = segs.length;
+        const label = [diameter, pipeType, method].filter(Boolean).join(' ') + ` - ${branchKey}（${numSmall}小段）`;
+        return `<option value="${branchKey}" data-num="${numSmall}" data-method="${method}" data-diameter="${diameter}" data-pipetype="${pipeType}">${label}</option>`;
+    }).join('')
+    : segments.map(seg => {
+        // 舊架構原本的程式碼
         const method = seg.method || '';
         const diameter = seg.diameter || '';
         const pipeType = seg.pipeType || '';
         const numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
         const label = [diameter, pipeType, method].filter(Boolean).join(' ') + ' - 段落' + seg.segmentNumber + '（'+numSmall+'小段）';
-        const rate = Math.round(getSegmentCompletionRate(seg) * 100);
-        return `<option value="${seg.segmentNumber}" data-num="${numSmall}" data-method="${method}" data-diameter="${diameter}" data-pipetype="${pipeType}" data-rate="${rate}">${label}</option>`;
+        return `<option value="${seg.segmentNumber}" data-num="${numSmall}" data-method="${method}" data-diameter="${diameter}" data-pipetype="${pipeType}">${label}</option>`;
     }).join('');
     
     // 如果是編輯模式，從 label 解析出段落和小段範圍
