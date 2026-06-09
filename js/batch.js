@@ -762,10 +762,17 @@ const { minIdx, maxIdx, conflicts } = getUnoccupiedRange(
             if (minIdx === null) {
                 skipped.push({ seg: e.segment, conflicts });
             } else {
-                entries.push({ segment: e.segment, minIdx, maxIdx, conflicts });
+            
+                entries.push({ segment: e.segment, segmentNumber: e.segmentNumber, minIdx, maxIdx, conflicts });
             }
         }
-        entries.sort((a, b) => a.segment.startDistance - b.segment.startDistance);
+        
+
+        entries.sort((a, b) => {
+    const aStart = a.segment ? a.segment.startDistance : 0;
+    const bStart = b.segment ? b.segment.startDistance : 0;
+    return aStart - bStart;
+});
 
         if (entries.length === 0) {
             const detail = skipped.map(s =>
