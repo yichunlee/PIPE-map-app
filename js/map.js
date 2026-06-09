@@ -263,7 +263,7 @@ iconAnchor: [5, 5]
     }
     
     showStatsPanel();
-    displayMapNotes();
+    await loadMapNotes();
     loadPanels();
     loadShafts();
     loadPermitZones();
