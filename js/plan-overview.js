@@ -130,6 +130,7 @@ async function _loadProjectProgressBackground(pipelines) {
 
 // 顯示計畫統計面板（整個計畫的多個工程）
 function showProjectStatsPanel(pipelines) {
+    if (!currentProject) return;
     const existingPanel = document.querySelector('.stats-panel');
     if (existingPanel) existingPanel.remove();
     
