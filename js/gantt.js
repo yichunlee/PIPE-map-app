@@ -2267,7 +2267,7 @@ function getSegmentCompletionRate(seg) {
 
 function showGanttForm(item, isEdit) {
     const inputStyle = 'width:100%;padding:5px 7px;border:1px solid #ddd;border-radius:4px;margin-bottom:5px;box-sizing:border-box;font-size:12px;';
-// 新架構：從 branches 產生段落選項
+    // 新架構：從 branches 產生段落選項
 const branches = currentPipeline.branches || {};
 const hasBranches = Object.keys(branches).length > 0;
 const segments = currentPipeline.segments || [];
