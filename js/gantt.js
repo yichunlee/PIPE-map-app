@@ -2153,7 +2153,14 @@ function highlightGanttSegment(item) {
     // 掃描 smallSegmentPolylines 找出符合的 polylines
     const matched = [];
     for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
-        if (String(entry.segment.segmentNumber) !== segNum) continue;
+       
+
+const entrySeg = entry.segment || entry.seg;
+const entrySegNum = entry.segment 
+    ? String(entry.segment.segmentNumber) 
+    : `B${entry.branchIndex}`;
+if (entrySegNum !== segNum) continue;
+        
         if (fromIdx !== null && (entry.smallIndex < fromIdx || entry.smallIndex > toIdx)) continue;
         matched.push(entry);
     }
