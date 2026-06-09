@@ -787,10 +787,9 @@ const { minIdx, maxIdx, conflicts } = getUnoccupiedRange(
             if (msgs.length) showToast(msgs.join('\n'), 'warning');
         }
 
-        if (entries.length === 1) {
-            const e = entries[0];
-           const sn = e.segmentNumber || e.segment.segmentNumber;
-           openGanttPanelForSegment(sn, e.minIdx, e.maxIdx);
+if (entries.length === 1) {
+    const e = entries[0];
+    openGanttPanelForSegment(e.segmentNumber || (e.segment && e.segment.segmentNumber), e.minIdx, e.maxIdx);
            
         } else {
             showGanttSegmentPicker(entries);
