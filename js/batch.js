@@ -691,15 +691,20 @@ function finishGanttRectSelect(bounds) {
                     bounds.contains(midpoint);
         if (!hit) continue;
 
-        const segKey = String(entry.segment.segmentNumber);
-        const idx1based = entry.smallIndex + 1;
-        if (!hitMap.has(segKey)) {
-            hitMap.set(segKey, { segment: entry.segment, minIdx: idx1based, maxIdx: idx1based });
-        } else {
-            const cur = hitMap.get(segKey);
-            cur.minIdx = Math.min(cur.minIdx, idx1based);
-            cur.maxIdx = Math.max(cur.maxIdx, idx1based);
-        }
+// 兼容新舊架構
+const segObj = entry.segment || entry.seg;
+if (!segObj) continue;
+const segKey = entry.segment 
+    ? String(entry.segment.segmentNumber)
+    : `B${entry.branchIndex}`;
+const idx1based = entry.smallIndex + 1;
+if (!hitMap.has(segKey)) {
+    hitMap.set(segKey, { segment: segObj, segmentNumber: segKey, minIdx: idx1based, maxIdx: idx1based });
+} else {
+    const cur = hitMap.get(segKey);
+    cur.minIdx = Math.min(cur.minIdx, idx1based);
+    cur.maxIdx = Math.max(cur.maxIdx, idx1based);
+}
     }
 
     if (hitMap.size === 0) {
@@ -750,9 +755,9 @@ function finishGanttRectSelect(bounds) {
         const entries = [];
         const skipped = [];
         for (const e of hitMap.values()) {
-            const { minIdx, maxIdx, conflicts } = getUnoccupiedRange(
-                e.segment.segmentNumber, e.minIdx, e.maxIdx
-            );
+const { minIdx, maxIdx, conflicts } = getUnoccupiedRange(
+    e.segmentNumber || e.segment.segmentNumber, e.minIdx, e.maxIdx
+);
             if (minIdx === null) {
                 skipped.push({ seg: e.segment, conflicts });
             } else {
