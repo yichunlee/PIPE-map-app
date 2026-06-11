@@ -676,41 +676,56 @@ function cancelGanttRectSelect() {
 function finishGanttRectSelect(bounds) {
     cancelGanttRectSelect();
 
-    // 找出在範圍內的 segments + 記錄命中的小段範圍（min/max smallIndex，1-based）
-    const hitMap = new Map(); // segmentNumber → { segment, minIdx, maxIdx }
-    for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
-        const latlngs = entry.polyline.getLatLngs();
-        const midpoint = latlngs.length >= 2
-            ? L.latLng(
-                (latlngs[0].lat + latlngs[latlngs.length - 1].lat) / 2,
-                (latlngs[0].lng + latlngs[latlngs.length - 1].lng) / 2
-              )
-            : latlngs[0];
-        const hit = bounds.contains(latlngs[0]) ||
-                    bounds.contains(latlngs[latlngs.length - 1]) ||
-                    bounds.contains(midpoint);
-        if (!hit) continue;
-
-// 兼容新舊架構
-const segObj = entry.segment || entry.seg;
-if (!segObj) continue;
-const segKey = entry.segment 
-    ? String(entry.segment.segmentNumber)
-    : `B${entry.branchIndex}`;
-const idx1based = entry.smallIndex + 1;
-if (!hitMap.has(segKey)) {
-    hitMap.set(segKey, { segment: segObj, segmentNumber: segKey, minIdx: idx1based, maxIdx: idx1based });
-} else {
-    const cur = hitMap.get(segKey);
-    cur.minIdx = Math.min(cur.minIdx, idx1based);
-    cur.maxIdx = Math.max(cur.maxIdx, idx1based);
-}
+    // 找出框選範圍內的節點 marker
+    const hitNodes = [];
+    for (const marker of nodeMarkers) {
+        if (!marker.nodeData) continue;
+        const latlng = marker.getLatLng();
+        if (bounds.contains(latlng)) {
+            hitNodes.push(marker.nodeData);
+        }
     }
 
-    if (hitMap.size === 0) {
-        showToast('框選範圍內沒有找到管線段落', 'warning');
+    if (hitNodes.length < 2) {
+        showToast('請至少框選到 2 個節點', 'warning');
         return;
     }
+
+    // 依分支分組
+    const branchGroups = {};
+    for (const node of hitNodes) {
+        const b = node.branchIndex;
+        if (!branchGroups[b]) branchGroups[b] = [];
+        branchGroups[b].push(node);
+    }
+
+    // 每個分支找 min/max smallIndex，建立甘特圖
+    const entries = [];
+    for (const [branchIndex, nodes] of Object.entries(branchGroups)) {
+        nodes.sort((a, b) => a.smallIndex - b.smallIndex);
+        const minIdx = nodes[0].smallIndex;
+        const maxIdx = nodes[nodes.length - 1].smallIndex;
+        // 1-based 給甘特圖
+        entries.push({
+            segmentNumber: `B${branchIndex}`,
+            minIdx: minIdx + 1,
+            maxIdx: maxIdx + 1,
+            conflicts: []
+        });
+    }
+
+    if (entries.length === 0) {
+        showToast('框選範圍內沒有找到節點', 'warning');
+        return;
+    }
+
+    if (entries.length === 1) {
+        const e = entries[0];
+        openGanttPanelForSegment(e.segmentNumber, e.minIdx, e.maxIdx);
+    } else {
+        showGanttSegmentPicker(entries);
+    }
+}
 
     // 取得最新甘特項目清單（ganttItemsCache 在每次甘特變更後都會更新）
     // 若還沒載入過，先非同步抓一次再執行
