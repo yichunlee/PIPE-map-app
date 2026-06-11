@@ -967,14 +967,20 @@ if (itemEnd < today) return; // 已完全結束的才不顯示
         if (!showAllLabels && index % 2 === 1) return; // 縮放小時跳過一半標籤
         
         const label = item.label || '';
-        const segMatch = label.match(/段落([\w-]+)/);  // 🔧 支援 B0-1 格式
-        const rangeMatch = label.match(/#(\d+)～#(\d+)/);
-        
-        if (!segMatch || !rangeMatch) return;
-        
-        const segmentNumber = segMatch[1];  // 🔧 保持為字串
-        const fromSmall = parseInt(rangeMatch[1]) - 1;
-        const toSmall = parseInt(rangeMatch[2]) - 1;
+// 優先用新欄位，fallback 用 label 解析
+let segmentNumber, fromSmall, toSmall;
+if (item.segmentNumber) {
+    segmentNumber = item.segmentNumber;
+    fromSmall = item.fromSmall || 0;
+    toSmall = item.toSmall || 0;
+} else {
+    const segMatch = label.match(/段落([\w-]+)/);
+    const rangeMatch = label.match(/#(\d+)～#(\d+)/);
+    if (!segMatch || !rangeMatch) return;
+    segmentNumber = segMatch[1];
+    fromSmall = parseInt(rangeMatch[1]) - 1;
+    toSmall = parseInt(rangeMatch[2]) - 1;
+}
         
 // 新架構：從 branches 取得小段資料
 const branchSegs = (currentPipeline.branches || {})[segmentNumber] || [];
