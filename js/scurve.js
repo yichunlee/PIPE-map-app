@@ -602,21 +602,21 @@ function closeUnitPriceManager() {
 
 function renderUnitPriceManager() {
     const body = document.getElementById('unitPriceModalBody');
-    // 取得目前工程的所有 methodKey（從 segments）
+    // 取得目前工程的所有 methodKey
     const methodKeys = new Set();
-if (currentPipeline && currentPipeline.branches) {
-    Object.values(currentPipeline.branches).forEach(segs => {
-        segs.forEach(seg => {
-            const k = [seg.diameter||'', seg.pipeType||'', seg.method||''].filter(Boolean).join(' ');
+    if (currentPipeline && currentPipeline.branches) {
+        Object.values(currentPipeline.branches).forEach(segs => {
+            segs.forEach(seg => {
+                const k = [seg.diameter||'', seg.pipeType||'', seg.method||''].filter(Boolean).join(' ');
+                if (k) methodKeys.add(k);
+            });
+        });
+    } else if (currentPipeline && currentPipeline.segments) {
+        currentPipeline.segments.forEach(seg => {
+            const k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
             if (k) methodKeys.add(k);
         });
-    });
-} else if (currentPipeline && currentPipeline.segments) {
-    currentPipeline.segments.forEach(seg => {
-        const k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
-        if (k) methodKeys.add(k);
-    });
-}
+    }
 
     const projectName = currentProject ? (currentProject.name || '') : '';
     const inputStyle = 'width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:13px;';
