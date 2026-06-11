@@ -2457,12 +2457,14 @@ const label = `${prefix} - ${fromNode}至${toNode}（${totalLen}m）`;
 };
 
 function getGanttFormData() {
-    // 從 label 反推 methodKey，查 unitPricesCache 取得單價
     const label = document.getElementById('gt_label') ? document.getElementById('gt_label').value.trim() : '';
     const dashIdx = label.lastIndexOf(' - 段落');
     const prefix = dashIdx > 0 ? label.substring(0, dashIdx) : '';
     const matched = prefix ? unitPricesCache.find(p => p.methodKey === prefix) : null;
     const depEl = document.getElementById('gt_dependsOn');
+    const segSel = document.getElementById('gt_segSelect');
+    const fromSel = document.getElementById('gt_smallFrom');
+    const toSel = document.getElementById('gt_smallTo');
     return {
         label,
         startDate: document.getElementById('gt_startDate').value,
@@ -2470,7 +2472,10 @@ function getGanttFormData() {
         status: '',
         notes: document.getElementById('gt_notes').value.trim(),
         unitPrice: matched ? String(matched.unitPrice) : '',
-        dependsOn: depEl ? (depEl.value || '') : ''
+        dependsOn: depEl ? (depEl.value || '') : '',
+        segmentNumber: segSel ? (segSel.value || '') : '',
+        fromSmall: fromSel ? (parseInt(fromSel.value) - 1) : 0,
+        toSmall: toSel ? (parseInt(toSel.value) - 1) : 0,
     };
 }
 
@@ -2479,12 +2484,15 @@ async function saveGanttNew() {
     if (!data.label) { showToast('請輸入施工項目', 'warning'); return; }
     if (!data.startDate || !data.endDate) { showToast('請填入開始和完成日期', 'warning'); return; }
     try {
-        const result = await apiCall('addGanttItem', {
-            pipelineId: currentPipeline.id, label: data.label,
-            startDate: data.startDate, endDate: data.endDate,
-            status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
-            dependsOn: data.dependsOn || ''
-        });
+const result = await apiCall('addGanttItem', {
+    pipelineId: currentPipeline.id, label: data.label,
+    startDate: data.startDate, endDate: data.endDate,
+    status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
+    dependsOn: data.dependsOn || '',
+    segmentNumber: data.segmentNumber || '',
+    fromSmall: data.fromSmall,
+    toSmall: data.toSmall,
+});
         if (result.success) { 
             map.closePopup();
             showToast('已新增，正在更新甘特圖…', 'success');
@@ -2505,12 +2513,15 @@ async function saveGanttEdit(id) {
     const data = getGanttFormData();
     if (!data.label) { showToast('請輸入施工項目', 'warning'); return; }
     try {
-        const result = await apiCall('updateGanttItem', {
-            itemId: id, label: data.label,
-            startDate: data.startDate, endDate: data.endDate,
-            status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
-            dependsOn: data.dependsOn || ''
-        });
+const result = await apiCall('updateGanttItem', {
+    itemId: id, label: data.label,
+    startDate: data.startDate, endDate: data.endDate,
+    status: data.status, notes: data.notes, unitPrice: data.unitPrice || '',
+    dependsOn: data.dependsOn || '',
+    segmentNumber: data.segmentNumber || '',
+    fromSmall: data.fromSmall,
+    toSmall: data.toSmall,
+});
         if (result.success) { 
             map.closePopup();
             showToast('已更新，正在重整甘特圖…', 'success');
