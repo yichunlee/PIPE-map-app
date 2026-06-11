@@ -714,6 +714,40 @@ function finishGanttRectSelect(bounds) {
         });
     }
 
+    // 排除已建立過的範圍
+    const existingItems = typeof ganttItemsCache !== 'undefined' ? ganttItemsCache : [];
+    const filteredEntries = [];
+    const skippedEntries = [];
+    
+    for (const entry of entries) {
+        const segNum = entry.segmentNumber;
+        const minIdx = entry.minIdx;
+        const maxIdx = entry.maxIdx;
+        
+        // 檢查是否與現有項目完全重疊
+        const isFullyCovered = existingItems.some(item => {
+            const sMatch = (item.label || '').match(/段落([A-Za-z0-9\-]+)/);
+            const rMatch = (item.label || '').match(/#(\d+)～#(\d+)/);
+            if (!sMatch || !rMatch) return false;
+            return String(sMatch[1]) === String(segNum) &&
+                parseInt(rMatch[1]) <= minIdx &&
+                parseInt(rMatch[2]) >= maxIdx;
+        });
+        
+        if (isFullyCovered) {
+            skippedEntries.push(entry);
+        } else {
+            filteredEntries.push(entry);
+        }
+    }
+    
+    if (skippedEntries.length > 0) {
+        showToast(`已略過 ${skippedEntries.length} 個已建立的範圍`, 'warning');
+    }
+    
+    entries.length = 0;
+    filteredEntries.forEach(e => entries.push(e));
+
     if (entries.length === 0) {
         showToast('框選範圍內沒有找到節點', 'warning');
         return;
