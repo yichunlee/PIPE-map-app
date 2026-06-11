@@ -2406,7 +2406,18 @@ function updateGanttLabelFromRange() {
     const from = fromSel ? fromSel.value : '1';
     const to = toSel ? toSel.value : from;
     const prefix = [diameter, pipeType, method].filter(Boolean).join(' ');
-    const label = `${prefix} - 段落${segNum} #${from}～#${to}`;
+  
+
+// 找起點和終點的節點名稱
+const branchSegs = (currentPipeline.branches || {})[segNum] || [];
+const fromSeg = branchSegs.find(s => s.smallIndex === parseInt(from) - 1);
+const toSeg = branchSegs.find(s => s.smallIndex === parseInt(to) - 1);
+const fromNode = fromSeg?.nodeName || `#${from}`;
+const toNode = toSeg?.nodeName || `#${to}`;
+const totalLen = (parseInt(to) - parseInt(from) + 1) * 10;
+const label = `${prefix} - ${fromNode}至${toNode}（${totalLen}m）`;
+
+    
     const labelEl = document.getElementById('gt_label');
     if (labelEl) labelEl.value = label;
     
