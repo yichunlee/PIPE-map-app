@@ -976,18 +976,27 @@ function showDateLabels() {
         const fromSmall = parseInt(rangeMatch[1]) - 1;
         const toSmall = parseInt(rangeMatch[2]) - 1;
         
-        const segment = currentPipeline.segments.find(s => String(s.segmentNumber) === String(segmentNumber));  // 🔧 字串比對
-        if (!segment) return;
-        
-        const segmentLength = segment.endDistance - segment.startDistance;
-        const numSmallSegments = Math.ceil(segmentLength / 10);
-        
-        const validFrom = Math.max(0, Math.min(fromSmall, numSmallSegments - 1));
-        const validTo = Math.max(0, Math.min(toSmall, numSmallSegments - 1));
-        
-        // 計算起點和終點的實際距離
-        const startDistance = segment.startDistance + (validFrom * 10);
-        const endDistance = segment.startDistance + Math.min((validTo + 1) * 10, segmentLength);
+// 新架構：從 branches 取得小段資料
+const branchSegs = (currentPipeline.branches || {})[segmentNumber] || [];
+let startDistance, endDistance;
+
+if (branchSegs.length > 0) {
+    const fromSeg = branchSegs.find(s => s.smallIndex === fromSmall);
+    const toSeg = branchSegs.find(s => s.smallIndex === toSmall);
+    if (!fromSeg || !toSeg) return;
+    startDistance = fromSeg.startDistance;
+    endDistance = toSeg.endDistance;
+} else {
+    // 舊架構 fallback
+    const segment = (currentPipeline.segments || []).find(s => String(s.segmentNumber) === String(segmentNumber));
+    if (!segment) return;
+    const segmentLength = segment.endDistance - segment.startDistance;
+    const numSmallSegments = Math.ceil(segmentLength / 10);
+    const validFrom = Math.max(0, Math.min(fromSmall, numSmallSegments - 1));
+    const validTo = Math.max(0, Math.min(toSmall, numSmallSegments - 1));
+    startDistance = segment.startDistance + (validFrom * 10);
+    endDistance = segment.startDistance + Math.min((validTo + 1) * 10, segmentLength);
+}
         
         // 🔧 取得管線座標(支援MULTILINESTRING)
         const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
@@ -996,8 +1005,8 @@ function showDateLabels() {
         if (isMULTI) {
             // MULTILINESTRING: 從 branchIndex 獲取分支座標
             const branchData = parseLineStringWithBranches(currentPipeline.linestring);
-            const branchIndex = segment.branchIndex !== undefined ? segment.branchIndex : 0;
-            const branch = branchData.branches[branchIndex];
+            const branchIndexNum = parseInt(segmentNumber.replace('B', '')) || 0;
+            const branch = branchData.branches[branchIndexNum];
             
             if (branch) {
                 startCoord = getCoordAtDistanceFromBranch(branch.coords, startDistance);
@@ -1055,7 +1064,8 @@ function showDateLabels() {
         const pipelineLength = Math.round(endDistance - startDistance);
         
         // 取得施工方式
-        const method = segment.method || '未設定';
+       const firstSeg = branchSegs.length > 0 ? branchSegs[fromSmall] : null;
+       const method = firstSeg?.method || '未設定';
         
         const rangeStr = `#${validFrom + 1}~#${validTo + 1}`;
         const dateStr = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
