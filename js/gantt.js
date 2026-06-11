@@ -2278,6 +2278,7 @@ window.showUnitPriceManager = async function() {
     panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9950;display:flex;align-items:center;justify-content:center;';
     
     function renderContent() {
+        console.log('renderContent called, methodKeys:', [...methodKeys], 'unitPrices:', unitPrices);
         const tableRows = unitPrices.map((p, idx) => `
             <tr>
                 <td style="padding:8px;border:1px solid #eee;">${p.methodKey}</td>
