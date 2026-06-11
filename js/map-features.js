@@ -1073,7 +1073,7 @@ if (branchSegs.length > 0) {
        const firstSeg = branchSegs.length > 0 ? branchSegs[fromSmall] : null;
        const method = firstSeg?.method || '未設定';
         
-        const rangeStr = `#${validFrom + 1}~#${validTo + 1}`;
+        const rangeStr = `#${fromSmall + 1}~#${toSmall + 1}`;
         const dateStr = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
         
         // 判斷時間狀態
