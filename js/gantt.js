@@ -2109,7 +2109,9 @@ function renderGanttChart() {
     body.innerHTML = headerHtml + '<div class="gantt-chart" id="ganttChartInner" style="position:relative;">' + rowsHtml + '</div>';
     
     // 畫依賴箭頭（延遲確保 DOM 已渲染）
+   if (typeof drawInPageDependencyArrows === 'function') {
     setTimeout(drawInPageDependencyArrows, 80);
+}
     
     // 使用事件委派處理點擊
     const chart = body.querySelector('.gantt-chart');
