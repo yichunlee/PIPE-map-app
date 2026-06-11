@@ -1,3 +1,5 @@
+let nodeMarkers = [];
+
 async function showPipelineDetail(pipelineId, keepView = false) {
     currentPipeline = allPipelines.find(p => p.id === pipelineId);
 
@@ -49,7 +51,8 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
     
     console.log('顯示工程:', currentPipeline.name);
     
-    clearMap();
+   nodeMarkers = [];
+   clearMap();
     
     const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
     const branchData = isMULTI ? parseLineStringWithBranches(currentPipeline.linestring) : null;
@@ -125,22 +128,31 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
                         smallSegmentPolylines[trackingKey] = { polyline, seg, branchIndex, smallIndex: i, color };
                         // 繪製節點標記
 if (seg.nodeName && seg.nodeName.trim()) {
-    const nodeCoords = getSegmentCoordsFromBranch(branch.coords, smallStart, smallStart + 1);
-    if (nodeCoords && nodeCoords.length > 0) {
-        const nodeMarker = L.marker(nodeCoords[0], {
-            icon: L.divIcon({
-                className: '',
-html: `<div style="position:relative;width:10px;height:10px;">
-    <div style="width:10px;height:10px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-    <div style="position:absolute;left:14px;top:-28px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:3px 8px;border-radius:4px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,0.2);">${seg.nodeName}</div>
-</div>`,
-iconSize: [10, 10],
-iconAnchor: [5, 5]
-            }),
-            zIndexOffset: 600
-        }).addTo(map);
-        allPolylines.push(nodeMarker);
-    }
+const nodeCoords = getSegmentCoordsFromBranch(branch.coords, smallStart, smallStart + 1);
+if (nodeCoords && nodeCoords.length > 0) {
+    const nodeMarker = L.marker(nodeCoords[0], {
+        icon: L.divIcon({
+            className: '',
+            html: `<div style="position:relative;width:10px;height:10px;">
+                <div style="width:10px;height:10px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                <div style="position:absolute;left:14px;top:-28px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:3px 8px;border-radius:4px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,0.2);">${seg.nodeName}</div>
+            </div>`,
+            iconSize: [10, 10],
+            iconAnchor: [5, 5]
+        }),
+        zIndexOffset: 600
+    }).addTo(map);
+    
+    nodeMarker.nodeData = {
+        branchIndex: branchIndex,
+        smallIndex: i,
+        nodeName: seg.nodeName,
+        startDistance: seg.startDistance
+    };
+    
+    allPolylines.push(nodeMarker);
+    nodeMarkers.push(nodeMarker);
+   }
 }
                         successCount++;
                     });
