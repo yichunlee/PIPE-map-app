@@ -1070,10 +1070,20 @@ if (branchSegs.length > 0) {
         const pipelineLength = Math.round(endDistance - startDistance);
         
         // 取得施工方式
-       const firstSeg = branchSegs.length > 0 ? branchSegs[fromSmall] : null;
-       const method = firstSeg?.method || '未設定';
+const firstSeg = branchSegs.length > 0 ? branchSegs[fromSmall] : null;
+const lastSeg = branchSegs.length > 0 ? branchSegs[toSmall] : null;
+const method = firstSeg?.method || '';
+const diameter = firstSeg?.diameter || '';
+const pipeType = firstSeg?.pipeType || '';
+const methodStr = [diameter, pipeType, method].filter(Boolean).join(' ');
+
+// 找起終點節點名稱
+const fromNodeSeg = branchSegs.find(s => s.smallIndex === fromSmall);
+const toNodeSeg = branchSegs.find(s => s.smallIndex === toSmall);
+const fromNodeName = fromNodeSeg?.nodeName || `#${fromSmall + 1}`;
+const toNodeName = toNodeSeg?.nodeName || `#${toSmall + 1}`;
+const rangeStr = `${fromNodeName}至${toNodeName}`;
         
-        const rangeStr = `#${fromSmall + 1}~#${toSmall + 1}`;
         const dateStr = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
         
         // 判斷時間狀態
@@ -1108,7 +1118,7 @@ if (branchSegs.length > 0) {
                 pointer-events: none;
                 text-shadow: 0 0 4px white, 0 0 4px white;
             ">
-                ${notesPrefix}${rangeStr} (${pipelineLength}m ${method}) ${dateStr} (${days}天)
+                ${notesPrefix}${rangeStr} (${pipelineLength}m ${methodStr}) ${dateStr} (${days}天)
             </div>
         `;
         
