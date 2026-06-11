@@ -2255,7 +2255,127 @@ window.showGanttPopup = function(idx) {
     body.appendChild(delBtn);
     body.appendChild(sCurveBtn);
 };
-
+window.showUnitPriceManager = async function() {
+    const old = document.getElementById('_upMgrInPage');
+    if (old) { old.remove(); return; }
+    
+    const projName = currentProject ? (currentProject.name || '') : '';
+    const upResult = await apiCall('getUnitPrices', { pipelineId: currentPipeline.id, projectName: projName });
+    let unitPrices = upResult.prices || [];
+    
+    // 取得工法清單
+    const branches = currentPipeline.branches || {};
+    const methodKeys = new Set();
+    Object.values(branches).forEach(segs => {
+        segs.forEach(seg => {
+            const k = [seg.diameter||'', seg.pipeType||'', seg.method||''].filter(Boolean).join(' ');
+            if (k) methodKeys.add(k);
+        });
+    });
+    
+    const panel = document.createElement('div');
+    panel.id = '_upMgrInPage';
+    panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9950;display:flex;align-items:center;justify-content:center;';
+    
+    function renderContent() {
+        const tableRows = unitPrices.map((p, idx) => `
+            <tr>
+                <td style="padding:8px;border:1px solid #eee;">${p.methodKey}</td>
+                <td style="padding:8px;border:1px solid #eee;text-align:right;">
+                    <input type="number" id="up_${idx}" value="${p.unitPrice}" style="width:90px;padding:3px;border:1px solid #ddd;border-radius:3px;">
+                </td>
+                <td style="padding:8px;border:1px solid #eee;text-align:center;">
+                    <button onclick="saveUpInPage(${idx})" style="padding:3px 8px;background:#00695C;color:white;border:none;border-radius:3px;cursor:pointer;">💾</button>
+                    <button onclick="delUpInPage(${idx})" style="padding:3px 8px;background:#e53935;color:white;border:none;border-radius:3px;cursor:pointer;margin-left:4px;">🗑️</button>
+                </td>
+            </tr>
+        `).join('');
+        
+        const newKeyOpts = ['<option value="">-- 選擇工法 --</option>',
+            ...Array.from(methodKeys).filter(k => !unitPrices.find(p => p.methodKey === k))
+                .map(k => `<option value="${k}">${k}</option>`)
+        ].join('');
+        
+        panel.querySelector('#_upMgrBody').innerHTML = `
+            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">
+                <thead><tr style="background:#e8f5e9;">
+                    <th style="padding:8px;text-align:left;border:1px solid #c8e6c9;">施工方式</th>
+                    <th style="padding:8px;text-align:right;border:1px solid #c8e6c9;">單價（元/m）</th>
+                    <th style="padding:8px;text-align:center;border:1px solid #c8e6c9;">操作</th>
+                </tr></thead>
+                <tbody>${tableRows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#aaa;">尚無資料</td></tr>'}</tbody>
+            </table>
+            <div style="background:#f9f9f9;border-radius:6px;padding:12px;border:1px solid #eee;">
+                <div style="font-size:13px;font-weight:bold;margin-bottom:8px;">＋ 新增單價</div>
+                <select id="up_newKey" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;">${newKeyOpts}</select>
+                <input id="up_newKeyManual" placeholder="或手動輸入工法名稱" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:6px;box-sizing:border-box;">
+                <input id="up_newPrice" type="number" placeholder="單價（元/m）" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;box-sizing:border-box;">
+                <button onclick="addUpInPage()" style="width:100%;padding:8px;background:#00695C;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:bold;">＋ 新增</button>
+            </div>
+        `;
+    }
+    
+    panel.innerHTML = `
+        <div style="background:white;border-radius:10px;width:88%;max-width:580px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;">
+            <div style="background:#00695C;color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-weight:bold;">⚙️ 施工單價管理</div>
+                    <div style="font-size:11px;opacity:0.8;">📍 ${currentPipeline.name}（單價為本工程專屬）</div>
+                </div>
+                <button onclick="document.getElementById('_upMgrInPage').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:15px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>
+            </div>
+            <div id="_upMgrBody" style="overflow:auto;flex:1;padding:16px;"></div>
+        </div>
+    `;
+    document.body.appendChild(panel);
+    panel.addEventListener('click', e => { if (e.target === panel) panel.remove(); });
+    renderContent();
+    
+    window.saveUpInPage = async function(idx) {
+        const p = unitPrices[idx];
+        const el = document.getElementById('up_' + idx);
+        if (!el) return;
+        const unitPrice = parseFloat(el.value);
+        if (isNaN(unitPrice)) { showToast('請輸入有效單價', 'warning'); return; }
+        try {
+            await apiCall('saveUnitPrice', { methodKey: p.methodKey, pipelineId: currentPipeline.id, projectName: projName, unitPrice, unit: 'm' });
+            unitPrices[idx].unitPrice = unitPrice;
+            unitPricesCache = unitPrices;
+            showToast('已儲存', 'success');
+            renderContent();
+        } catch(e) { showToast(e.message, 'error'); }
+    };
+    
+    window.delUpInPage = async function(idx) {
+        const p = unitPrices[idx];
+        if (!await showConfirm({ title: '刪除單價', message: `確定刪除 [${p.methodKey}] 的單價？`, okText: '刪除', danger: true })) return;
+        try {
+            await apiCall('deleteUnitPrice', { methodKey: p.methodKey, pipelineId: currentPipeline.id });
+            unitPrices.splice(idx, 1);
+            unitPricesCache = unitPrices;
+            showToast('已刪除', 'success');
+            renderContent();
+        } catch(e) { showToast(e.message, 'error'); }
+    };
+    
+    window.addUpInPage = async function() {
+        const selKey = document.getElementById('up_newKey').value;
+        const manualKey = document.getElementById('up_newKeyManual').value.trim();
+        const methodKey = manualKey || selKey;
+        const unitPrice = parseFloat(document.getElementById('up_newPrice').value);
+        if (!methodKey) { showToast('請選擇或輸入施工方式', 'warning'); return; }
+        if (isNaN(unitPrice) || unitPrice <= 0) { showToast('請輸入有效單價', 'warning'); return; }
+        try {
+            await apiCall('saveUnitPrice', { methodKey, pipelineId: currentPipeline.id, projectName: projName, unitPrice, unit: 'm' });
+            const existing = unitPrices.findIndex(p => p.methodKey === methodKey);
+            if (existing >= 0) unitPrices[existing].unitPrice = unitPrice;
+            else unitPrices.push({ methodKey, unitPrice, unit: 'm' });
+            unitPricesCache = unitPrices;
+            showToast('已新增', 'success');
+            renderContent();
+        } catch(e) { showToast(e.message, 'error'); }
+    };
+};
 window.showAddGanttForm = function() { showGanttForm({}, false); };
 window.showEditGanttForm = function(id) {
     const item = ganttData.find(x => x.id === id);
