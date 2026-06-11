@@ -960,8 +960,8 @@ function showDateLabels() {
 
     ganttItemsCache.forEach((item, index) => {
         // 只顯示尚未開始的項目（開始日期 > 今天）
-        const itemStart = new Date(item.startDate);
-        if (itemStart <= today) return;
+const itemEnd = new Date(item.endDate);
+if (itemEnd < today) return; // 已完全結束的才不顯示
 
         // 智能密度控制：低縮放時只顯示部分標籤
         if (!showAllLabels && index % 2 === 1) return; // 縮放小時跳過一半標籤
