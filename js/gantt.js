@@ -2317,13 +2317,14 @@ const segOptions = hasBranches
     
     document.getElementById('ganttSidebarTitle').textContent = isEdit ? '✏️ 編輯項目' : '＋ 新增項目';
     const body = document.getElementById('ganttSidebarBody');
-    body.innerHTML = [
-        `<div style="font-size:10px;color:#666;margin-bottom:2px;">選取段落</div>`,
-        `<select id="gt_segSelect" onchange="onGanttSegSelect()" style="${inputStyle}"><option value="">-- 選取段落 --</option>${segOptions}</select>`,
-        `<div style="display:flex;gap:4px;margin-bottom:5px;" id="gt_smallRange">
-            <div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">起始小段</div><select id="gt_smallFrom" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></select></div>
-            <div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">迄止小段</div><select id="gt_smallTo" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></select></div>
-        </div>`,
+    
+body.innerHTML = [
+    `<div style="display:none;"><div style="font-size:10px;color:#666;margin-bottom:2px;">選取段落</div>`,
+    `<select id="gt_segSelect" onchange="onGanttSegSelect()" style="${inputStyle}"><option value="">-- 選取段落 --</option>${segOptions}</select>`,
+    `<div style="display:flex;gap:4px;margin-bottom:5px;" id="gt_smallRange">
+        <div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">起始小段</div><select id="gt_smallFrom" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></select></div>
+        <div style="flex:1;"><div style="font-size:10px;color:#666;margin-bottom:2px;">迄止小段</div><select id="gt_smallTo" style="width:100%;padding:5px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;font-size:12px;"></select></div>
+    </div></div>`,
         `<div style="font-size:10px;color:#666;margin-bottom:2px;">項目名稱</div>`,
         `<input id="gt_label" placeholder="施工項目名稱" value="${esc(item.label||'')}" style="${inputStyle}">`,
         `<div style="display:flex;gap:4px;margin-bottom:5px;">`,
