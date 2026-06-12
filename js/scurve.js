@@ -18,9 +18,10 @@ async function showProjectSCurve() {
                 pipeline: pl,
                 items: ganttRes.items || [],
                 unitPrices: upRes.prices || [],
-                segments: segRes.segments || []
+                segments: segRes.segments || [],
+                branches: pl.branches || segRes.branches || {}
             };
-        } catch(e) { return { pipeline: pl, items: [], unitPrices: [], segments: [] }; }
+        } catch(e) { return { pipeline: pl, items: [], unitPrices: [], segments: [], branches: {} }; }
     }));
 
     // 計算每條工程的月度預算
@@ -28,11 +29,56 @@ async function showProjectSCurve() {
     const YEAR_COLORS = { 2024:'rgba(158,158,158,0.12)', 2025:'rgba(56,142,60,0.12)', 2026:'rgba(25,118,210,0.12)', 2027:'rgba(229,57,53,0.12)', 2028:'rgba(255,152,0,0.12)' };
     const YEAR_TEXT = { 2024:'#9e9e9e', 2025:'#388e3c', 2026:'#1976d2', 2027:'#e53935', 2028:'#ff9800' };
 
-    function getItemProgressLocal(item, segments) {
+    function getItemProgressLocal(item, segments, branches) {
         if (item.status && item.status.toString().startsWith('custom:')) {
             var r = parseFloat(item.status.toString().split(':')[1]) / 100;
             return { rate: isNaN(r) ? 0 : Math.min(1, Math.max(0, r)), isCustom: true };
         }
+        // 新架構：branches
+        const hasBranches = branches && Object.keys(branches).length > 0;
+        if (hasBranches) {
+            const branchKey = item.segmentNumber;
+            const segs = branchKey && branches[branchKey] ? branches[branchKey] : null;
+            if (segs) {
+                const from = item.fromSmall != null ? Number(item.fromSmall) : 0;
+                const to   = item.toSmall   != null ? Number(item.toSmall)   : segs.length - 1;
+                let done = 0, total = 0;
+                segs.forEach(seg => {
+                    if (seg.smallIndex < from || seg.smallIndex > to) return;
+                    const len = seg.endDistance - seg.startDistance;
+                    total += len;
+                    if (seg.status && seg.status !== '0' && seg.status.trim() !== '') done += len;
+                });
+                return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
+            }
+            // fallback：prefix 比對
+            const label = item.label || '';
+            const dashIdx = label.lastIndexOf(' - ');
+            const prefix = dashIdx >= 0 ? label.substring(0, dashIdx).trim() : '';
+            const nodeMatch = label.match(/- (.+)至(.+)（/);
+            const fromNode = nodeMatch ? nodeMatch[1].trim() : null;
+            const toNode   = nodeMatch ? nodeMatch[2].trim() : null;
+            let done = 0, total = 0, found = false;
+            Object.values(branches).forEach(bsegs => {
+                const first = bsegs.find(s => s.diameter || s.pipeType || s.method);
+                if (!first) return;
+                const bp = [first.diameter||'', first.pipeType||'', first.method||''].filter(Boolean).join(' ');
+                if (bp !== prefix) return;
+                let fi = 0, ti = bsegs.length - 1;
+                if (fromNode) { const x = bsegs.findIndex(s => s.nodeName === fromNode); if (x >= 0) fi = bsegs[x].smallIndex; }
+                if (toNode)   { const x = bsegs.findIndex(s => s.nodeName === toNode);   if (x >= 0) ti = bsegs[x].smallIndex; }
+                bsegs.forEach(seg => {
+                    if (seg.smallIndex < fi || seg.smallIndex > ti) return;
+                    const len = seg.endDistance - seg.startDistance;
+                    total += len;
+                    if (seg.status && seg.status !== '0' && seg.status.trim() !== '') done += len;
+                    found = true;
+                });
+            });
+            if (!found) return null;
+            return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
+        }
+        // 舊架構：segments
         const label = item.label || '';
         const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
         const rangeMatch = label.match(/#(\d+)～#(\d+)/);
@@ -63,10 +109,10 @@ async function showProjectSCurve() {
         return match ? +match.unitPrice : 0;
     }
 
-    function computeMonthly(items, unitPrices, segments) {
+    function computeMonthly(items, unitPrices, segments, branches) {
         const map = {};
         items.forEach(item => {
-            const prog = getItemProgressLocal(item, segments);
+            const prog = getItemProgressLocal(item, segments, branches);
             const up = getEffectiveUnitPriceLocal(item, unitPrices);
             let totalYen = 0;
             if (item.status && item.status.toString().startsWith('custom:') && up) {
@@ -97,7 +143,7 @@ async function showProjectSCurve() {
 
     // 每條工程的曲線資料
     const pipelineRows = fetchResults.map((r, idx) => {
-        const rows = computeMonthly(r.items, r.unitPrices, r.segments);
+        const rows = computeMonthly(r.items, r.unitPrices, r.segments, r.branches);
         const hue = Math.round((idx / fetchResults.length) * 300); // 避開最後的紅色
         return { name: r.pipeline.name || r.pipeline.id, rows, color: 'hsl(' + hue + ',70%,45%)' };
     }).filter(r => r.rows.length > 0);
@@ -192,7 +238,7 @@ async function showProjectSCurve() {
     const todayCum = todayCumRow.length ? todayCumRow[todayCumRow.length - 1].cumulative : 0;
     const actualDone = fetchResults.reduce((sum, r) => {
         return sum + r.items.reduce((s2, item) => {
-            const prog = getItemProgressLocal(item, r.segments);
+            const prog = getItemProgressLocal(item, r.segments, r.branches);
             const up = getEffectiveUnitPriceLocal(item, r.unitPrices);
             if (!prog || !up) return s2;
             if (item.status && item.status.toString().startsWith('custom:')) return s2 + up * prog.rate;
