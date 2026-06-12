@@ -2255,7 +2255,7 @@ window.showGanttPopup = function(idx) {
     body.appendChild(delBtn);
     body.appendChild(sCurveBtn);
 };
-window.showUnitPriceManager = async function() {
+window.showUnitPriceManagerNew = async function() {
     const old = document.getElementById('_upMgrInPage');
     if (old) { old.remove(); return; }
     
@@ -2556,7 +2556,7 @@ const label = `${prefix} - ${fromNode}至${toNode}（${totalLen}m）`;
                 displayEl.innerHTML = `施工單價：<b style="color:#00695C;">${match.unitPrice.toLocaleString()} 元/m</b> <span style="font-size:10px;color:#888;">（由⚙️單價管理設定）</span>`;
                 displayEl.style.color = '#333';
             } else {
-                displayEl.innerHTML = `施工單價：<span style="color:#e57373;">尚未設定</span> <a href="#" onclick="showUnitPriceManager();return false;" style="font-size:10px;color:#1976d2;">→ 前往⚙️設定</a>`;
+                displayEl.innerHTML = `施工單價：<span style="color:#e57373;">尚未設定</span> <a href="#" onclick="showUnitPriceManagerInPage();return false;" style="font-size:10px;color:#1976d2;">→ 前往⚙️設定</a>`;
             }
         } else {
             displayEl.textContent = '施工單價：（選取段落後顯示）';
