@@ -592,7 +592,16 @@ function renderSCurve() {
 }
 
 // ========== 施工單價管理 ==========
-
+function showUnitPriceManager() {
+    document.getElementById('unitPriceBackdrop').style.display = 'block';
+    document.getElementById('unitPriceModal').style.display = 'flex';
+    const sub = document.getElementById('unitPriceModalSubtitle');
+    if (sub) {
+        const pname = currentPipeline ? (currentPipeline.name || currentPipeline.id) : '—';
+        sub.textContent = '📍 ' + pname + '　（單價為本工程專屬）';
+    }
+    renderUnitPriceManager();
+}
 
 
 function closeUnitPriceManager() {
