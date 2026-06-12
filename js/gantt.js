@@ -2255,7 +2255,7 @@ window.showGanttPopup = function(idx) {
     body.appendChild(delBtn);
     body.appendChild(sCurveBtn);
 };
-window.showUnitPriceManagerNew = async function() {
+window.showUnitPriceManagerInPage = async function() {
     const old = document.getElementById('_upMgrInPage');
     if (old) { old.remove(); return; }
     
