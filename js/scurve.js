@@ -387,15 +387,32 @@ function closeSCurvePanel() {
 }
 
 // 計算每月累積預算（S 曲線）
+// 從 unitPricesCache 取得有效單價（管線項目查工法表，自訂項目用 item.unitPrice）
+function getEffectiveUnitPriceInPage(item) {
+    if (item.status && String(item.status).startsWith('custom:')) {
+        return (item.unitPrice && item.unitPrice > 0) ? +item.unitPrice : 0;
+    }
+    const label = item.label || '';
+    const match = (unitPricesCache || []).find(p => label.indexOf(p.methodKey) >= 0);
+    return match ? +match.unitPrice : 0;
+}
+
 function computeMonthlyCumulative() {
     // monthMap: { 'YYYY-MM': totalYen }
     const monthMap = {};
     ganttData.forEach(item => {
+        const isCustom = item.status && String(item.status).startsWith('custom:');
         const prog = getItemProgress(item);
-        const totalLen = prog ? prog.total : 0;
-        const unitPrice = item.unitPrice || 0;
-        if (!totalLen || !unitPrice) return;
-        const totalYen = totalLen * unitPrice;
+        const unitPrice = getEffectiveUnitPriceInPage(item);
+        if (!unitPrice) return;
+        let totalYen = 0;
+        if (isCustom) {
+            totalYen = unitPrice;
+        } else {
+            const totalLen = prog ? prog.total : 0;
+            if (!totalLen) return;
+            totalYen = totalLen * unitPrice;
+        }
 
         const start = new Date(item.startDate);
         const end = new Date(item.endDate);
@@ -448,11 +465,18 @@ function renderSCurve() {
     const todayRow = rows.filter(r => r.month <= todayStr);
     const todayCum = todayRow.length > 0 ? todayRow[todayRow.length - 1].cumulative : 0;
 
-    // 計算實際完成金額（用 progress rate × 總金額）
+    // 計算實際完成金額（用 progress rate × 總金額，單價從 unitPricesCache 查）
     let actualDone = 0;
     ganttData.forEach(item => {
-        const prog = getItemProgress(item);
-        if (prog && item.unitPrice) actualDone += prog.done * item.unitPrice;
+        const up = getEffectiveUnitPriceInPage(item);
+        if (!up) return;
+        if (item.status && String(item.status).startsWith('custom:')) {
+            const r = parseFloat(String(item.status).split(':')[1]) / 100 || 0;
+            actualDone += up * r;
+        } else {
+            const prog = getItemProgress(item);
+            if (prog) actualDone += prog.done * up;
+        }
     });
 
     // 統計卡
@@ -506,8 +530,9 @@ function renderSCurve() {
         const actualMonthMap = {};
         ganttData.forEach(item => {
             const prog = getItemProgress(item);
-            if (!prog || !item.unitPrice) return;
-            const done = prog.done * item.unitPrice;
+            const up = getEffectiveUnitPriceInPage(item);
+            if (!prog || !up) return;
+            const done = prog.done * up;
             if (done <= 0) return;
             // 假設已完成部分均勻分布在施工期間到今天
             const start = new Date(item.startDate);
@@ -802,4 +827,3 @@ window.addNewUnitPrice = async function(projectName) {
 // ========== 施工里程碑功能 ==========
 
 // ========== 施工里程碑功能結束 ==========
-
