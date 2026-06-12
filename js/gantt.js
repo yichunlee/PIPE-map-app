@@ -1,11 +1,43 @@
-// v20260406_0206
+// v20260612_fix_branches
 // ========== 甘特圖功能 ==========
 window.ganttData = []; // 全域，讓 batch.js 可存取已建立的甘特項目
 let ganttPanelOpen = false;
 let unitPricesCache = []; // 施工單價快取
 
-// 從 label 解析段落+小段範圍，計算完工進度
+// 從 label 解析段落+小段範圍，計算完工進度（支援新架構 branches 和舊架構 segments）
 function getItemProgress(item) {
+    if (!item) return null;
+
+    // 自訂項目（custom:N）走 getCustomProgress
+    if (item.status && String(item.status).startsWith('custom:')) return null;
+
+    const branches = currentPipeline && currentPipeline.branches;
+    const hasBranches = branches && Object.keys(branches).length > 0;
+
+    // ── 新架構：從 item.segmentNumber（branchKey）+ fromSmall/toSmall 計算 ──
+    if (hasBranches) {
+        // item 有存 segmentNumber（= branchKey, e.g. "B0"）和 fromSmall/toSmall（0-based）
+        const branchKey = item.segmentNumber;
+        if (!branchKey || !branches[branchKey]) {
+            // fallback：用 label 的 prefix 比對所有 branch 取第一個 match
+            return _getItemProgressByLabelBranch(item, branches);
+        }
+        const segs = branches[branchKey];
+        const from = item.fromSmall != null ? Number(item.fromSmall) : 0;
+        const to   = item.toSmall   != null ? Number(item.toSmall)   : segs.length - 1;
+        let done = 0, total = 0;
+        segs.forEach(seg => {
+            const idx = seg.smallIndex;
+            if (idx < from || idx > to) return;
+            const len = seg.endDistance - seg.startDistance;
+            total += len;
+            const isCompleted = seg.status && seg.status !== '0' && seg.status.trim() !== '';
+            if (isCompleted) done += len;
+        });
+        return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
+    }
+
+    // ── 舊架構：從 label 解析段落號 + #N～#N ──
     const label = item.label || '';
     const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
     const rangeMatch = label.match(/#(\d+)～#(\d+)/);
@@ -16,13 +48,58 @@ function getItemProgress(item) {
     const segLen = seg.endDistance - seg.startDistance;
     const numSmall = Math.ceil(segLen / 10);
     const from = rangeMatch ? parseInt(rangeMatch[1]) - 1 : 0;
-    const to = rangeMatch ? parseInt(rangeMatch[2]) - 1 : numSmall - 1;
+    const to   = rangeMatch ? parseInt(rangeMatch[2]) - 1 : numSmall - 1;
     let done = 0, total = 0;
     for (let i = from; i <= to; i++) {
         const smallLen = Math.min(10, segLen - i * 10);
         total += smallLen;
         if (arr[i] && arr[i] !== '0' && arr[i].trim() !== '') done += smallLen;
     }
+    return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
+}
+
+// 新架構 fallback：用 label prefix 比對 branch，取所有符合 prefix 的小段
+function _getItemProgressByLabelBranch(item, branches) {
+    const label = item.label || '';
+    // label 格式："200 DIP 埋設 - A節點至B節點（100m）"
+    const dashIdx = label.lastIndexOf(' - ');
+    if (dashIdx < 0) return null;
+    const prefix = label.substring(0, dashIdx).trim(); // e.g. "200 DIP 埋設"
+
+    // 找 label 中的 fromNode/toNode
+    const nodeMatch = label.match(/- (.+)至(.+)（/);
+    const fromNodeName = nodeMatch ? nodeMatch[1].trim() : null;
+    const toNodeName   = nodeMatch ? nodeMatch[2].trim() : null;
+
+    let done = 0, total = 0, found = false;
+    Object.values(branches).forEach(segs => {
+        // 確認此 branch 的 prefix 一致
+        const first = segs.find(s => s.diameter || s.pipeType || s.method);
+        if (!first) return;
+        const branchPrefix = [first.diameter||'', first.pipeType||'', first.method||''].filter(Boolean).join(' ');
+        if (branchPrefix !== prefix) return;
+
+        // 確定 from/to 範圍（用 nodeName 或全段）
+        let fromIdx = 0, toIdx = segs.length - 1;
+        if (fromNodeName) {
+            const fi = segs.findIndex(s => s.nodeName === fromNodeName);
+            if (fi >= 0) fromIdx = fi;
+        }
+        if (toNodeName) {
+            const ti = segs.findIndex(s => s.nodeName === toNodeName);
+            if (ti >= 0) toIdx = ti;
+        }
+        segs.forEach(seg => {
+            const idx = seg.smallIndex;
+            if (idx < fromIdx || idx > toIdx) return;
+            const len = seg.endDistance - seg.startDistance;
+            total += len;
+            const isCompleted = seg.status && seg.status !== '0' && seg.status.trim() !== '';
+            if (isCompleted) done += len;
+            found = true;
+        });
+    });
+    if (!found) return null;
     return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
 }
 
@@ -1666,11 +1743,22 @@ function showUnitPriceMgr() {
     var old = document.getElementById('_upMgr');
     if (old) old.remove();
 
+    // 支援新架構 branches 和舊架構 segments
     var methodKeys = new Set();
-    segments.forEach(function(seg) {
-var k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
-if (k) methodKeys.add(k);
-    });
+    var hasBranches = pipeline.branches && Object.keys(pipeline.branches).length > 0;
+    if (hasBranches) {
+        Object.values(pipeline.branches).forEach(function(segs) {
+            segs.forEach(function(seg) {
+                var k = [seg.diameter||'', seg.pipeType||'', seg.method||''].filter(Boolean).join(' ');
+                if (k) methodKeys.add(k);
+            });
+        });
+    } else {
+        segments.forEach(function(seg) {
+            var k = [seg.diameter, seg.pipeType, seg.method].filter(Boolean).join(' ');
+            if (k) methodKeys.add(k);
+        });
+    }
 
     var panel = document.createElement('div');
     panel.id = '_upMgr';
@@ -2143,28 +2231,65 @@ function highlightGanttSegment(item) {
     clearGanttHighlight();
     if (!item || !item.label) return;
 
-    // 解析 label：「xxx - 段落{segNum} #{from}～#{to}」
-    const sMatch = item.label.match(/段落([A-Za-z0-9\-]+)/);
-    const rMatch = item.label.match(/#(\d+)～#(\d+)/);
-    if (!sMatch) return;
-
-    const segNum = String(sMatch[1]);
-    const fromIdx = rMatch ? parseInt(rMatch[1]) - 1 : null; // 轉 0-based
-    const toIdx   = rMatch ? parseInt(rMatch[2]) - 1 : null;
-
-    // 掃描 smallSegmentPolylines 找出符合的 polylines
+    const hasBranches = currentPipeline && currentPipeline.branches && Object.keys(currentPipeline.branches).length > 0;
     const matched = [];
-    for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
-       
 
-const entrySeg = entry.segment || entry.seg;
-const entrySegNum = entry.segment 
-    ? String(entry.segment.segmentNumber) 
-    : `B${entry.branchIndex}`;
-if (entrySegNum !== segNum) continue;
-        
-        if (fromIdx !== null && (entry.smallIndex < fromIdx || entry.smallIndex > toIdx)) continue;
-        matched.push(entry);
+    if (hasBranches) {
+        // ── 新架構：用 item.segmentNumber（branchKey）+ fromSmall/toSmall ──
+        const branchKey = item.segmentNumber;
+        const fromIdx = item.fromSmall != null ? Number(item.fromSmall) : null;
+        const toIdx   = item.toSmall   != null ? Number(item.toSmall)   : null;
+
+        if (branchKey) {
+            for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
+                if (`B${entry.branchIndex}` !== branchKey) continue;
+                if (fromIdx !== null && (entry.smallIndex < fromIdx || entry.smallIndex > toIdx)) continue;
+                matched.push(entry);
+            }
+        } else {
+            // fallback：從 label prefix 和節點名稱比對
+            const label = item.label || '';
+            const dashIdx = label.lastIndexOf(' - ');
+            const prefix = dashIdx >= 0 ? label.substring(0, dashIdx).trim() : '';
+            const nodeMatch = label.match(/- (.+)至(.+)（/);
+            const fromNodeName = nodeMatch ? nodeMatch[1].trim() : null;
+            const toNodeName   = nodeMatch ? nodeMatch[2].trim() : null;
+
+            let resolvedFrom = null, resolvedTo = null, resolvedBranchKey = null;
+            for (const [bk, segs] of Object.entries(currentPipeline.branches)) {
+                const first = segs.find(s => s.diameter || s.pipeType || s.method);
+                if (!first) continue;
+                const bp = [first.diameter||'', first.pipeType||'', first.method||''].filter(Boolean).join(' ');
+                if (bp !== prefix) continue;
+                resolvedBranchKey = bk;
+                resolvedFrom = 0; resolvedTo = segs.length - 1;
+                if (fromNodeName) { const fi = segs.findIndex(s => s.nodeName === fromNodeName); if (fi >= 0) resolvedFrom = segs[fi].smallIndex; }
+                if (toNodeName)   { const ti = segs.findIndex(s => s.nodeName === toNodeName);   if (ti >= 0) resolvedTo   = segs[ti].smallIndex; }
+                break;
+            }
+            if (resolvedBranchKey) {
+                for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
+                    if (`B${entry.branchIndex}` !== resolvedBranchKey) continue;
+                    if (entry.smallIndex < resolvedFrom || entry.smallIndex > resolvedTo) continue;
+                    matched.push(entry);
+                }
+            }
+        }
+    } else {
+        // ── 舊架構：解析 label「xxx - 段落{segNum} #{from}～#{to}」──
+        const sMatch = item.label.match(/段落([A-Za-z0-9\-]+)/);
+        const rMatch = item.label.match(/#(\d+)～#(\d+)/);
+        if (sMatch) {
+            const segNum  = String(sMatch[1]);
+            const fromIdx = rMatch ? parseInt(rMatch[1]) - 1 : null;
+            const toIdx   = rMatch ? parseInt(rMatch[2]) - 1 : null;
+            for (const [key, entry] of Object.entries(smallSegmentPolylines)) {
+                const entrySegNum = entry.segment ? String(entry.segment.segmentNumber) : `B${entry.branchIndex}`;
+                if (entrySegNum !== segNum) continue;
+                if (fromIdx !== null && (entry.smallIndex < fromIdx || entry.smallIndex > toIdx)) continue;
+                matched.push(entry);
+            }
+        }
     }
 
     if (matched.length === 0) return;
