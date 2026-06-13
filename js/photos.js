@@ -290,7 +290,7 @@ window.togglePhotoLayer = async function() {
         _clearPhotoMarkers();
 
         Object.values(groups).forEach(g => {
-            // 找小段中點座標
+            // 從管線座標找小段中點
             const bi = parseInt((g.segmentNumber || 'B0').replace('B','')) || 0;
             const branches = currentPipeline.branches || {};
             const segs = branches[g.segmentNumber] || [];
@@ -298,7 +298,6 @@ window.togglePhotoLayer = async function() {
 
             let latlng = null;
             if (seg) {
-                // 從管線座標找中點
                 const isMULTI = currentPipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
                 let allBranches = isMULTI
                     ? parseLineStringWithBranches(currentPipeline.linestring).branches
@@ -311,7 +310,7 @@ window.togglePhotoLayer = async function() {
                 }
             }
 
-            // 若無法從管線算座標，用照片 GPS
+            // fallback：用照片 GPS
             if (!latlng && g.lat && g.lng) latlng = [parseFloat(g.lat), parseFloat(g.lng)];
             if (!latlng) return;
 

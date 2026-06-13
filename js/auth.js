@@ -14,6 +14,9 @@ function showUserInfo() {
         if (userName) userName.textContent = currentUser.name || '';
         if (userRole) userRole.textContent = getRoleLabel(currentUser.role);
         userInfoDiv.style.display = 'flex';
+        // 管理員才顯示成員管理按鈕
+        const _mgmtBtn = document.getElementById('userMgmtToolItem');
+        if (_mgmtBtn) _mgmtBtn.style.display = currentUser.role === 'admin' ? 'flex' : 'none';
     } else {
         // 訪客模式：顯示登入按鈕
         if (userAvatar) userAvatar.src = '';
@@ -38,47 +41,56 @@ function showUserInfo() {
 // 角色等級數值（用於比較）
 function getRoleLevel(role) {
     switch(role) {
-        case 'admin': return 3;
-        case 'supervisor': return 2;
-        case 'user': return 1;
-        default: return 0;
+        case 'admin':      return 4;
+        case 'supervisor': return 3;
+        case 'contractor': return 2;
+        case 'viewer':     return 1;
+        case 'user':       return 2; // 舊角色相容
+        default:           return 1;
     }
 }
 
 // 角色中文名稱
 function getRoleLabel(role) {
     switch(role) {
-        case 'admin': return '👑 管理員';
-        case 'supervisor': return '🔧 監造單位';
-        case 'user': return '👤 一般使用者';
-        default: return '👁️ 訪客';
+        case 'admin':      return '👑 管理員';
+        case 'supervisor': return '🔍 監工';
+        case 'contractor': return '🔨 施工單位';
+        case 'viewer':     return '👁️ 設計單位';
+        case 'user':       return '👤 一般使用者';
+        default:           return '👁️ 訪客';
     }
 }
-
-// 檢查登入狀態 - 用於 user 等級操作（標記完工、備註、面板、人孔、路證）
-// 回傳 true = 已登入可繼續；false = 未登入已提示
+// ── 權限檢查函數 ────────────────────────────────────────────
+// contractor(2) 以上：標記完工、上傳照片
 function requireLogin() {
-    if (currentUser) return true;
-    showToast('請先登入 Google 帳號', 'warning');
-    setTimeout(() => { window.location.href = 'login.html'; }, 1500);
-    return false;
-}
-
-// 檢查監造權限 - 用於 supervisor 等級操作（段落、分支、甘特圖、里程碑）
-function requireSupervisor() {
     if (!currentUser) {
         showToast('請先登入 Google 帳號', 'warning');
         setTimeout(() => { window.location.href = 'login.html'; }, 1500);
         return false;
     }
     if (getRoleLevel(currentUser.role) < 2) {
-        showToast('此功能需要「監造單位」以上權限（目前：' + currentUser.role + '）', 'warning');
+        showToast('此功能需要「施工單位」以上權限', 'warning');
         return false;
     }
     return true;
 }
 
-// 檢查管理員權限 - 用於 admin 等級操作（工程 CRUD）
+// supervisor(3) 以上：甘特圖、里程碑、段落管理
+function requireSupervisor() {
+    if (!currentUser) {
+        showToast('請先登入 Google 帳號', 'warning');
+        setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+        return false;
+    }
+    if (getRoleLevel(currentUser.role) < 3) {
+        showToast('此功能需要「監工」以上權限', 'warning');
+        return false;
+    }
+    return true;
+}
+
+// admin(4)：刪除工程、刪除 WGIS、成員管理
 function requireAdmin() {
     if (!currentUser) {
         showToast('請先登入 Google 帳號', 'warning');
@@ -86,7 +98,17 @@ function requireAdmin() {
         return false;
     }
     if (currentUser.role !== 'admin') {
-        showToast('此功能需要「管理員」權限（目前：' + currentUser.role + '）', 'warning');
+        showToast('此功能需要「管理員」權限', 'warning');
+        return false;
+    }
+    return true;
+}
+
+// viewer(1) 以上（登入即可）：匯出 DXF/SVG
+function requireViewer() {
+    if (!currentUser) {
+        showToast('請先登入 Google 帳號', 'warning');
+        setTimeout(() => { window.location.href = 'login.html'; }, 1500);
         return false;
     }
     return true;
@@ -495,6 +517,9 @@ async function verifyUserAccess(payload) {
             
             // 顯示使用者資訊
             showUserInfo();
+            // 管理員才顯示成員管理按鈕
+            const userMgmtBtn = document.getElementById('userMgmtToolItem');
+            if (userMgmtBtn) userMgmtBtn.style.display = currentUser.role === 'admin' ? 'flex' : 'none';
             
             // 隱藏登入畫面,顯示主介面
             document.getElementById('loginScreen').style.display = 'none';

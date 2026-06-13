@@ -34,6 +34,10 @@ function toggleToolsDrawer() {
         return;
     }
     
+    // 管理員才顯示成員管理按鈕
+    const mgmtBtn = document.getElementById('userMgmtToolItem');
+    if (mgmtBtn) mgmtBtn.style.display = currentUser.role === 'admin' ? 'flex' : 'none';
+
     // 管理員權限驗證通過，展開抽屜
     drawer.classList.add('active');
 }
