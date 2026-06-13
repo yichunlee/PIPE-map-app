@@ -111,13 +111,26 @@ async function _loadProjectProgressBackground(pipelines) {
     
     for (const pipeline of needLoad) {
         try {
-            const data = await apiCall('getProgress', { pipelineId: pipeline.id });
-            pipeline.segments = parseBranchIndexFromSegments(data.segments || []);
+            // 同時抓舊架構 segments 和新架構 branches
+            const [progressData, smallData] = await Promise.all([
+                apiCall('getProgress', { pipelineId: pipeline.id }),
+                apiCall('getAllSmallSegments', { pipelineId: pipeline.id })
+            ]);
+            pipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
+            // 新架構：有 branches 就用 branches，並清空 segments 避免重複計算
+            if (smallData.branches && Object.keys(smallData.branches).length > 0) {
+                pipeline.branches = smallData.branches;
+                pipeline.segments = []; // 清空避免新舊架構重複計算
+            } else {
+                pipeline.branches = undefined;
+            }
             pipeline._progressLoaded = true;
-            pipeline.branches = undefined; // 確保下次進入工程時重新載入新架構資料
-            
+
             const idx = allPipelines.findIndex(p => p.id === pipeline.id);
-            if (idx !== -1) allPipelines[idx].segments = pipeline.segments;
+            if (idx !== -1) {
+                allPipelines[idx].segments = pipeline.segments;
+                allPipelines[idx].branches = pipeline.branches;
+            }
         } catch (e) {
             console.warn('載入進度失敗:', pipeline.name, e);
         }
@@ -140,42 +153,76 @@ function showProjectStatsPanel(pipelines) {
     const methodStats = {}; // {工法: {total: 長度, completed: 完工長度}}
     
 pipelines.forEach(pipeline => {
-    (pipeline.segments || []).forEach(segment => {
-        const segLength = segment.endDistance - segment.startDistance;
-        const smallSegmentsStatus = segment.smallSegments || '';
-        const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
-        const numSmallSegments = Math.ceil(segLength / 10);
+    const hasBranches = pipeline.branches && Object.keys(pipeline.branches).length > 0;
 
-        for (let i = 0; i < numSmallSegments; i++) {
-            const smallLength = Math.min(10, segLength - (i * 10));
-            totalLength += smallLength;
+    if (hasBranches) {
+        // ── 新架構：從 branches 計算 ──
+        // 只取主分支（B0, B1, B2...），忽略子分支（B0-1, B0-2...）避免重複計算
+        const mainBranchEntries = Object.entries(pipeline.branches)
+            .filter(([key]) => /^B\d+$/.test(key));
+        // 如果沒有純主分支，就取所有（相容舊資料）
+        const branchEntries = mainBranchEntries.length > 0 
+            ? mainBranchEntries 
+            : Object.entries(pipeline.branches);
+        branchEntries.forEach(([, segs]) => {
+            segs.forEach(seg => {
+                const smallLength = seg.endDistance - seg.startDistance;
+                totalLength += smallLength;
 
-            const statusValue = statusArray[i] || '0';
-            const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
-            if (isCompleted) completedLength += smallLength;
+                const isCompleted = seg.status && seg.status !== '0' && seg.status.trim() !== '';
+                if (isCompleted) completedLength += smallLength;
 
-            // 🆕 優先用小段自己的管徑/工法，否則繼承大段
-            let diameter = segment.diameter || '';
-            let pipeType = segment.pipeType || '';
-            let method = segment.method || '未設定';
+                const diameter = seg.diameter || '';
+                const pipeType = seg.pipeType || '';
+                const method = seg.method || '未設定';
+                const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
+                const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
 
-            if (segment.smallSegmentDetails && segment.smallSegmentDetails[i]) {
-                const d = segment.smallSegmentDetails[i];
-                diameter = d.diameter || diameter;
-                pipeType = d.pipe_type || pipeType;
-                method = d.method || method;
+                if (!methodStats[methodKey]) {
+                    methodStats[methodKey] = { total: 0, completed: 0, label: methodLabel };
+                }
+                methodStats[methodKey].total += smallLength;
+                if (isCompleted) methodStats[methodKey].completed += smallLength;
+            });
+        });
+    } else {
+        // ── 舊架構：從 segments 計算 ──
+        (pipeline.segments || []).forEach(segment => {
+            const segLength = segment.endDistance - segment.startDistance;
+            const smallSegmentsStatus = segment.smallSegments || '';
+            const statusArray = smallSegmentsStatus.split(',').map(s => s.trim());
+            const numSmallSegments = Math.ceil(segLength / 10);
+
+            for (let i = 0; i < numSmallSegments; i++) {
+                const smallLength = Math.min(10, segLength - (i * 10));
+                totalLength += smallLength;
+
+                const statusValue = statusArray[i] || '0';
+                const isCompleted = statusValue !== '0' && statusValue.trim() !== '';
+                if (isCompleted) completedLength += smallLength;
+
+                let diameter = segment.diameter || '';
+                let pipeType = segment.pipeType || '';
+                let method = segment.method || '未設定';
+
+                if (segment.smallSegmentDetails && segment.smallSegmentDetails[i]) {
+                    const d = segment.smallSegmentDetails[i];
+                    diameter = d.diameter || diameter;
+                    pipeType = d.pipe_type || pipeType;
+                    method = d.method || method;
+                }
+
+                const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
+                const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
+
+                if (!methodStats[methodKey]) {
+                    methodStats[methodKey] = { total: 0, completed: 0, label: methodLabel };
+                }
+                methodStats[methodKey].total += smallLength;
+                if (isCompleted) methodStats[methodKey].completed += smallLength;
             }
-
-            const methodKey = [diameter, pipeType, method].filter(Boolean).join('-');
-            const methodLabel = [diameter, pipeType, method].filter(Boolean).join(' ');
-
-            if (!methodStats[methodKey]) {
-                methodStats[methodKey] = { total: 0, completed: 0, label: methodLabel };
-            }
-            methodStats[methodKey].total += smallLength;
-            if (isCompleted) methodStats[methodKey].completed += smallLength;
-        }
-    });
+        });
+    }
 });
     
     const overallPercent = totalLength > 0 ? Math.round((completedLength / totalLength) * 100) : 0;

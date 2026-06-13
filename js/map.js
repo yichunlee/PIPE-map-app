@@ -441,6 +441,10 @@ const popup = L.popup()
             onclick="startRangeSelect(${branchIndex}, ${smallIndex}); map.closePopup();">
             📏 設定範圍屬性（此段為起點）
         </button>
+        <button class="popup-button" style="background:#ff9800;margin-top:4px;"
+            onclick="openPhotoPanel('${currentPipeline.id}', 'B${branchIndex}', ${smallIndex}); map.closePopup();">
+            📷 施工照片
+        </button>
     `)
     .openOn(map);
 };

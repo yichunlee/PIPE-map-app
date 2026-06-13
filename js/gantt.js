@@ -554,24 +554,70 @@ backdrop.addEventListener('click', e => { if (e.target === backdrop) close(false
 
 // 確保 methodData 是物件而不是字串
 function getItemProgress(item) {
-    const label = item.label || '';
-    const segMatch = label.match(/段落([A-Za-z0-9\-]+)/);
-    const rangeMatch = label.match(/#(\\d+)～#(\\d+)/);
-    if (!segMatch) return null;
-    const seg = segments.find(s => String(s.segmentNumber) === segMatch[1]);
-    if (!seg) return null;
-    const arr = (seg.smallSegments || '').split(',').map(s => s.trim());
-    const segLen = seg.endDistance - seg.startDistance;
-    const numSmall = Math.ceil(segLen / 10);
-    const from = rangeMatch ? parseInt(rangeMatch[1]) - 1 : 0;
-    const to = rangeMatch ? parseInt(rangeMatch[2]) - 1 : numSmall - 1;
-    let done = 0, total = 0;
-    for (let i = from; i <= to; i++) {
-const smallLen = Math.min(10, segLen - i * 10);
-total += smallLen;
-if (arr[i] && arr[i] !== '0' && arr[i].trim() !== '') done += smallLen;
+    if (!item) return null;
+    if (item.status && String(item.status).startsWith('custom:')) return null;
+    var hasBranches = pipeline.branches && Object.keys(pipeline.branches).length > 0;
+    if (hasBranches) {
+        var branchKey = item.segmentNumber;
+        var bsegs = branchKey && pipeline.branches[branchKey] ? pipeline.branches[branchKey] : null;
+        if (bsegs) {
+            var fromIdx = item.fromSmall != null ? Number(item.fromSmall) : 0;
+            var toIdx   = item.toSmall   != null ? Number(item.toSmall)   : bsegs.length - 1;
+            var doneLen = 0, totalLen = 0;
+            bsegs.forEach(function(seg) {
+                if (seg.smallIndex < fromIdx || seg.smallIndex > toIdx) return;
+                var len = seg.endDistance - seg.startDistance;
+                totalLen += len;
+                if (seg.status && seg.status !== '0' && seg.status.trim() !== '') doneLen += len;
+            });
+            return { done: Math.round(doneLen), total: Math.round(totalLen), rate: totalLen > 0 ? doneLen / totalLen : 0 };
+        }
+        // fallback：prefix + 節點名稱比對
+        var itemLabel = item.label || '';
+        var dashIdx = itemLabel.lastIndexOf(' - ');
+        var prefix = dashIdx >= 0 ? itemLabel.substring(0, dashIdx).trim() : '';
+        var nodeMatch = itemLabel.match(/- (.+)至(.+)（/);
+        var fromNode = nodeMatch ? nodeMatch[1].trim() : null;
+        var toNode   = nodeMatch ? nodeMatch[2].trim() : null;
+        var doneLen2 = 0, totalLen2 = 0, found = false;
+        Object.values(pipeline.branches).forEach(function(bsegs2) {
+            var first = bsegs2.find(function(s){ return s.diameter || s.pipeType || s.method; });
+            if (!first) return;
+            var bp = [first.diameter||'', first.pipeType||'', first.method||''].filter(Boolean).join(' ');
+            if (bp !== prefix) return;
+            var fi = 0, ti = bsegs2.length - 1;
+            if (fromNode) { var xi = bsegs2.findIndex(function(s){ return s.nodeName === fromNode; }); if (xi >= 0) fi = bsegs2[xi].smallIndex; }
+            if (toNode)   { var yi = bsegs2.findIndex(function(s){ return s.nodeName === toNode; });   if (yi >= 0) ti = bsegs2[yi].smallIndex; }
+            bsegs2.forEach(function(seg) {
+                if (seg.smallIndex < fi || seg.smallIndex > ti) return;
+                var len = seg.endDistance - seg.startDistance;
+                totalLen2 += len;
+                if (seg.status && seg.status !== '0' && seg.status.trim() !== '') doneLen2 += len;
+                found = true;
+            });
+        });
+        if (!found) return null;
+        return { done: Math.round(doneLen2), total: Math.round(totalLen2), rate: totalLen2 > 0 ? doneLen2 / totalLen2 : 0 };
     }
-    return { done: Math.round(done), total: Math.round(total), rate: total > 0 ? done / total : 0 };
+    // 舊架構：segments
+    var label2 = item.label || '';
+    var segMatch = label2.match(/段落([A-Za-z0-9\-]+)/);
+    var rangeMatch = label2.match(/#(\\d+)～#(\\d+)/);
+    if (!segMatch) return null;
+    var seg2 = segments.find(function(s){ return String(s.segmentNumber) === segMatch[1]; });
+    if (!seg2) return null;
+    var arr = (seg2.smallSegments || '').split(',').map(function(s){ return s.trim(); });
+    var segLen = seg2.endDistance - seg2.startDistance;
+    var numSmall = Math.ceil(segLen / 10);
+    var fromOld = rangeMatch ? parseInt(rangeMatch[1]) - 1 : 0;
+    var toOld = rangeMatch ? parseInt(rangeMatch[2]) - 1 : numSmall - 1;
+    var doneOld = 0, totalOld = 0;
+    for (var i = fromOld; i <= toOld; i++) {
+        var smallLen = Math.min(10, segLen - i * 10);
+        totalOld += smallLen;
+        if (arr[i] && arr[i] !== '0' && arr[i].trim() !== '') doneOld += smallLen;
+    }
+    return { done: Math.round(doneOld), total: Math.round(totalOld), rate: totalOld > 0 ? doneOld / totalOld : 0 };
 }
 
 // 自訂項目（非管線）的完成率，從 status 欄位解析 "custom:75"

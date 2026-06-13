@@ -77,16 +77,22 @@ function showLoading(show) {
 // ══════════════════════════════════════════════
 function setMapContext(context, projectPipelines) {
     const ids = {
-        layer:    document.getElementById('layerSwitchButton'),
-        roadwork: document.getElementById('roadworkButton'),
-        eye:      document.getElementById('permitZoneButton'),
-        measure:  document.getElementById('measureButton'),
-        date:     document.getElementById('dateLabelButton'),
+        layer:     document.getElementById('layerSwitchButton'),
+        roadwork:  document.getElementById('roadworkButton'),
+        eye:       document.getElementById('permitZoneButton'),
+        measure:   document.getElementById('measureButton'),
+        date:      document.getElementById('dateLabelButton'),
+        elevation: document.getElementById('elevationButton'),
+        photo:     document.getElementById('photoLayerButton'),
     };
+    const leftDrawerToggle = document.getElementById('leftDrawerToggle');
+    const leftDrawer = document.getElementById('leftDrawer');
 
     if (context === 'none') {
         // 計畫選擇畫面：全部隱藏
         Object.values(ids).forEach(el => { if (el) el.style.display = 'none'; });
+        if (leftDrawerToggle) leftDrawerToggle.style.display = 'none';
+        if (leftDrawer) leftDrawer.style.display = 'none';
         var dxfBtn0 = document.getElementById('dxfToolItem');
         if (dxfBtn0) dxfBtn0.style.display = 'none';
         var scBtn0 = document.getElementById('projectSCurveBtn');
@@ -96,14 +102,19 @@ function setMapContext(context, projectPipelines) {
 
     if (context === 'project') {
         // 中地圖（計畫總覽）：🗺️ 🚧 👁️ 📐 全顯示，📅 隱藏
+        if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
         var dxfBtn1 = document.getElementById('dxfToolItem');
         if (dxfBtn1) dxfBtn1.style.display = 'none';
+        var svgBtn1 = document.getElementById('svgToolItem');
+        if (svgBtn1) svgBtn1.style.display = 'none';
         var scBtn = document.getElementById('projectSCurveBtn');
         if (scBtn) scBtn.style.display = 'block';
-        if (ids.layer)    { ids.layer.style.display = 'flex'; }
-        if (ids.roadwork) { ids.roadwork.style.display = 'flex'; ids.roadwork.classList.remove('active'); }
-        if (ids.measure)  { ids.measure.style.display = 'flex'; }
-        if (ids.date)     { ids.date.style.display = 'none'; ids.date.classList.remove('active'); }
+        if (ids.layer)     { ids.layer.style.display = 'flex'; }
+        if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; ids.roadwork.classList.remove('active'); }
+        if (ids.measure)   { ids.measure.style.display = 'flex'; }
+        if (ids.date)      { ids.date.style.display = 'none'; ids.date.classList.remove('active'); }
+        if (ids.elevation) { ids.elevation.style.display = 'none'; }
+        if (ids.photo)     { ids.photo.style.display = 'none'; }
         // 👁️ 改成「看路權」功能
         if (ids.eye) {
             ids.eye.style.display = 'flex';
@@ -117,14 +128,19 @@ function setMapContext(context, projectPipelines) {
 
     if (context === 'pipeline') {
         // 子工程地圖：全部顯示
+        if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
         var dxfBtn2 = document.getElementById('dxfToolItem');
         if (dxfBtn2) dxfBtn2.style.display = 'flex';
+        var svgBtn = document.getElementById('svgToolItem');
+        if (svgBtn) svgBtn.style.display = 'flex';
         var scBtn2 = document.getElementById('projectSCurveBtn');
         if (scBtn2) scBtn2.style.display = 'none';
-        if (ids.layer)    { ids.layer.style.display = 'flex'; }
-        if (ids.roadwork) { ids.roadwork.style.display = 'flex'; }
-        if (ids.measure)  { ids.measure.style.display = 'flex'; }
-        if (ids.date)     { ids.date.style.display = 'flex'; }
+        if (ids.layer)     { ids.layer.style.display = 'flex'; }
+        if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; }
+        if (ids.measure)   { ids.measure.style.display = 'flex'; }
+        if (ids.date)      { ids.date.style.display = 'flex'; }
+        if (ids.elevation) { ids.elevation.style.display = 'flex'; }
+        if (ids.photo)     { ids.photo.style.display = 'flex'; }
         // 👁️ 改成「看標記」功能
         if (ids.eye) {
             ids.eye.style.display = 'flex';

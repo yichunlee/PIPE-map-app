@@ -1,3 +1,25 @@
+
+/* 左側工具抽屜按鈕 */
+.left-drawer-btn {
+    padding: 10px;
+    cursor: pointer;
+    font-size: 20px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.15s;
+}
+.left-drawer-btn:last-child { border-bottom: none; }
+.left-drawer-btn:hover { background: #f4f4f4; }
+.left-drawer-btn.active { background: #00695C; color: white; }
+.left-drawer-btn.active-blue { background: #1565c0; color: white; }
+.left-drawer-btn.active-orange { background: #FF5722; color: white; }
+.left-drawer-btn.active-purple { background: #667eea; color: white; }
+.left-drawer-btn.hidden-markers { background: #7f8c8d; color: white; }
+
 /* ========== Toast 通知系統 ========== */
 #toast-container {
     position: fixed;
@@ -656,6 +678,25 @@
 }
 .date-label-button:hover { background: #f4f4f4; }
 .date-label-button.active { background: #00695C; color: white; }
+
+.elevation-button {
+    position: absolute;
+    top: 349px;
+    left: 10px;
+    z-index: 1000;
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    cursor: pointer;
+    font-size: 20px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.elevation-button:hover { background: #f4f4f4; }
 
 /* 施工日期標籤 - 簡化單行樣式 */
 .schedule-label-watermark {

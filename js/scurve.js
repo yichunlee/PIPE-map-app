@@ -1,25 +1,120 @@
+// ── 工程勾選面板（跨所有計畫，回傳 Promise<Set<id>> 或 null=取消）──
+function _showPipelineSelector(pipelines) {
+    return new Promise(resolve => {
+        const old = document.getElementById('_plSelector');
+        if (old) old.remove();
+
+        // 用 allPipelines（全部工程），按計畫分組
+        const allPl = (typeof allPipelines !== 'undefined' ? allPipelines : pipelines);
+        const groups = {};
+        allPl.forEach(pl => {
+            const proj = pl.projectName || '未分類';
+            if (!groups[proj]) groups[proj] = [];
+            groups[proj].push(pl);
+        });
+
+        // 預設：同計畫工程全勾，其他不勾
+        const currentProjName = currentProject ? (currentProject.name || '') : '';
+        let idx = 0;
+        let projIdx = 0;
+        const groupRows = Object.entries(groups).map(([projName, pls]) => {
+            const isCurrentProj = projName === currentProjName;
+            const gId = 'plGrp_' + (projIdx++);
+            const plRows = pls.map(pl => {
+                const i = idx++;
+                const checked = isCurrentProj ? 'checked' : '';
+                return `<label style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:6px;cursor:pointer;"
+                               onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
+                    <input type="checkbox" id="plChk_${i}" value="${pl.id}" ${checked}
+                           style="width:15px;height:15px;accent-color:#4a148c;cursor:pointer;">
+                    <span style="font-size:13px;color:#333;">${pl.name || pl.id}</span>
+                </label>`;
+            }).join('');
+            return `<div style="margin-bottom:10px;">
+                <div style="font-size:11px;font-weight:bold;color:#7b1fa2;padding:4px 12px 2px;letter-spacing:0.5px;display:flex;align-items:center;justify-content:space-between;">
+                    <span>📁 ${projName}</span>
+                    <span style="display:flex;gap:6px;">
+                        <span onclick="document.getElementById('${gId}').querySelectorAll('input').forEach(c=>c.checked=true)"
+                              style="font-size:10px;color:#1976d2;cursor:pointer;font-weight:normal;text-decoration:underline;">全選</span>
+                        <span onclick="document.getElementById('${gId}').querySelectorAll('input').forEach(c=>c.checked=false)"
+                              style="font-size:10px;color:#999;cursor:pointer;font-weight:normal;text-decoration:underline;">清除</span>
+                    </span>
+                </div>
+                <div id="${gId}" style="background:#fafafa;border-radius:8px;border:1px solid #eee;padding:4px 0;">
+                    ${plRows}
+                </div>
+            </div>`;
+        }).join('');
+
+        const backdrop = document.createElement('div');
+        backdrop.id = '_plSelector';
+        backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        backdrop.innerHTML = `
+            <div style="background:white;border-radius:12px;width:88%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;">
+                <div style="background:linear-gradient(135deg,#4a148c,#7b1fa2);color:white;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+                    <span style="font-size:15px;font-weight:bold;">📈 S 曲線 — 選擇工程</span>
+                    <button onclick="document.getElementById('_plSelector').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:16px;cursor:pointer;padding:2px 8px;border-radius:4px;">✕</button>
+                </div>
+                <div style="padding:8px 16px;border-bottom:1px solid #eee;display:flex;gap:8px;flex-shrink:0;">
+                    <button onclick="document.querySelectorAll('[id^=plChk_]').forEach(c=>c.checked=true)"
+                            style="flex:1;padding:6px;background:#f3e5f5;color:#4a148c;border:1px solid #ce93d8;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;">全選</button>
+                    <button onclick="document.querySelectorAll('[id^=plChk_]').forEach(c=>c.checked=false)"
+                            style="flex:1;padding:6px;background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:12px;">全不選</button>
+                </div>
+                <div style="overflow-y:auto;flex:1;padding:12px 14px;">
+                    ${groupRows}
+                </div>
+                <div style="padding:12px 16px;border-top:1px solid #eee;display:flex;gap:8px;flex-shrink:0;">
+                    <button id="_plCancelBtn" style="flex:1;padding:10px;background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px;">取消</button>
+                    <button id="_plConfirmBtn" style="flex:2;padding:10px;background:#4a148c;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">產生 S 曲線</button>
+                </div>
+            </div>`;
+
+        document.body.appendChild(backdrop);
+
+        document.getElementById('_plConfirmBtn').onclick = () => {
+            const checked = new Set(
+                Array.from(document.querySelectorAll('[id^=plChk_]:checked')).map(c => c.value)
+            );
+            backdrop.remove();
+            resolve(checked);
+        };
+        document.getElementById('_plCancelBtn').onclick = () => { backdrop.remove(); resolve(null); };
+        backdrop.addEventListener('click', e => { if (e.target === backdrop) { backdrop.remove(); resolve(null); } });
+    });
+}
+
 // ===== 計畫S曲線（跨工程彙整）=====
 async function showProjectSCurve() {
-    if (!currentProject) { showToast('請先選擇計畫', 'warning'); return; }
-    const projectPipelines = allPipelines.filter(p => p.projectName === currentProject.name);
-    if (!projectPipelines.length) { showToast('此計畫沒有工程', 'warning'); return; }
+    if (!allPipelines || !allPipelines.length) { showToast('尚無工程資料', 'warning'); return; }
+
+    // ── 先顯示工程勾選面板（跨所有計畫）──
+    const selectedIds = await _showPipelineSelector(allPipelines);
+    if (!selectedIds) return; // 使用者按取消
+    const selectedPipelines = allPipelines.filter(p => selectedIds.has(p.id));
+    if (!selectedPipelines.length) { showToast('請至少勾選一個工程', 'warning'); return; }
 
     showToast('載入中...', 'info');
 
-    // 平行抓取所有工程的甘特 + 單價
-    const fetchResults = await Promise.all(projectPipelines.map(async pl => {
+    // 平行抓取所有工程的甘特 + 單價 + 小段進度
+    const fetchResults = await Promise.all(selectedPipelines.map(async pl => {
         try {
-            const [ganttRes, upRes, segRes] = await Promise.all([
+            const [ganttRes, upRes, segRes, smallRes] = await Promise.all([
                 apiCall('getGanttItems', { pipelineId: pl.id }),
                 apiCall('getUnitPrices', { pipelineId: pl.id }),
-                apiCall('getProgress', { pipelineId: pl.id })
+                apiCall('getProgress', { pipelineId: pl.id }),
+                apiCall('getAllSmallSegments', { pipelineId: pl.id })
             ]);
+            // 新架構優先用 getAllSmallSegments 的 branches，舊架構用 getProgress 的 segments
+            const branches = smallRes.branches && Object.keys(smallRes.branches).length > 0
+                ? smallRes.branches
+                : (pl.branches || {});
             return {
                 pipeline: pl,
                 items: ganttRes.items || [],
                 unitPrices: upRes.prices || [],
                 segments: segRes.segments || [],
-                branches: pl.branches || segRes.branches || {}
+                branches
             };
         } catch(e) { return { pipeline: pl, items: [], unitPrices: [], segments: [], branches: {} }; }
     }));
@@ -329,7 +424,7 @@ async function showProjectSCurve() {
         '.body{padding:16px;}.legend{margin-bottom:8px;line-height:2;}' +
         '#tip{display:none;position:fixed;background:rgba(0,0,0,0.8);color:white;font-size:11px;padding:8px 12px;border-radius:6px;pointer-events:none;z-index:999;white-space:pre-line;max-width:260px;line-height:1.6;}' +
         '</style></head><body>' +
-        '<div class="hdr" style="display:flex;justify-content:space-between;align-items:center;"><span>📈 計畫S曲線 — ' + currentProject.name + '</span><button id="exportBtn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📥 匯出Excel</button></div>' +
+        '<div class="hdr" style="display:flex;justify-content:space-between;align-items:center;"><span>📈 S 曲線（' + selectedPipelines.length + ' 個工程）</span><button id="exportBtn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📥 匯出Excel</button></div>' +
         '<div class="body">' + statsHtml +
         '<div class="legend">' + legendHtml + '</div>' +
         '<div style="display:flex;">' +
@@ -378,7 +473,20 @@ async function showProjectSCurve() {
 function showSCurvePanel() {
     document.getElementById('sCurveBackdrop').style.display = 'block';
     document.getElementById('sCurvePanel').style.display = 'flex';
-    renderSCurve();
+    // 確保甘特資料和單價快取都已載入再渲染
+    const projName = currentProject ? (currentProject.name || '') : '';
+    Promise.all([
+        apiCall('getGanttItems', { pipelineId: currentPipeline.id })
+            .then(r => {
+                ganttData = window.ganttData = (r.items || []).sort((a, b) => {
+                    const oa = a.sortOrder != null ? a.sortOrder : 9999;
+                    const ob = b.sortOrder != null ? b.sortOrder : 9999;
+                    return oa !== ob ? oa - ob : new Date(a.startDate) - new Date(b.startDate);
+                });
+            }),
+        apiCall('getUnitPrices', { pipelineId: currentPipeline.id, projectName: projName })
+            .then(r => { unitPricesCache = r.prices || []; })
+    ]).then(() => renderSCurve()).catch(() => renderSCurve());
 }
 
 function closeSCurvePanel() {
@@ -827,3 +935,4 @@ window.addNewUnitPrice = async function(projectName) {
 // ========== 施工里程碑功能 ==========
 
 // ========== 施工里程碑功能結束 ==========
+
