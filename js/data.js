@@ -103,6 +103,8 @@ function setMapContext(context, projectPipelines) {
     if (context === 'project') {
         // 中地圖（計畫總覽）：🗺️ 🚧 👁️ 📐 全顯示，📅 隱藏
         if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
+        var accountingBtn1 = document.getElementById('accountingToolItem');
+        if (accountingBtn1) accountingBtn1.style.display = 'none';
         var dxfBtn1 = document.getElementById('dxfToolItem');
         if (dxfBtn1) dxfBtn1.style.display = 'none';
         var svgBtn1 = document.getElementById('svgToolItem');
@@ -129,6 +131,8 @@ function setMapContext(context, projectPipelines) {
     if (context === 'pipeline') {
         // 子工程地圖：全部顯示
         if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
+        var accountingBtn = document.getElementById('accountingToolItem');
+        if (accountingBtn) accountingBtn.style.display = 'flex';
         var dxfBtn2 = document.getElementById('dxfToolItem');
         if (dxfBtn2) dxfBtn2.style.display = 'flex';
         var svgBtn = document.getElementById('svgToolItem');

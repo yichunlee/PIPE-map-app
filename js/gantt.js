@@ -1658,13 +1658,25 @@ function fmtYen(v) {
 function closeSCWin() { var el=document.getElementById('_sCurvePanel'); if(el) el.remove(); }
 function closeUpMgrWin() { var el=document.getElementById('_upMgr'); if(el) el.remove(); }
 
-function showSCurveWindow() {
+async function showSCurveWindow() {
     // 移除舊面板
     var old = document.getElementById('_sCurvePanel');
     if (old) old.remove();
 
     var rows = computeMonthlyCumulative();
     var todayStr = new Date().toISOString().slice(0, 7);
+
+    // 取得核銷資料
+    var accMap = {}, accCumMap = {};
+    try {
+        var accRes = await fetch(API_URL + '?action=getAccounting&pipelineId=' + encodeURIComponent(pipeline.id));
+        var accData = await accRes.json();
+        (accData.records || []).forEach(function(r) { accMap[r.year_month] = (accMap[r.year_month] || 0) + r.amount; });
+        var accMonths = Object.keys(accMap).sort();
+        var cumAcc = 0;
+        accMonths.forEach(function(m) { cumAcc += accMap[m]; accCumMap[m] = cumAcc; });
+    } catch(e) {}
+    var hasAcc = Object.keys(accMap).length > 0;
 
     var panel = document.createElement('div');
     panel.id = '_sCurvePanel';
@@ -1694,23 +1706,88 @@ if (prog && up) actualDone += prog.done * up;
     '<div style="font-size:10px;color:#555;">' + (maxCum>0?Math.round(actualDone/maxCum*100):0) + '%</div></div>' +
 '</div>';
 
-    // SVG chart
+    // SVG chart：X 軸以「計畫月份 + 核銷月份」合集為基準
     var svgHtml = '';
-    if (rows.length >= 2) {
-var W = 680, H = 220;
-var PL = 64, PR = 16, PT = 16, PB = 36;
+    if (rows.length >= 2 || hasAcc) {
+// 合集月份排序
+var allXMonths = [];
+var xMonthSet = {};
+rows.forEach(function(r) { if (!xMonthSet[r.month]) { xMonthSet[r.month]=1; allXMonths.push(r.month); } });
+Object.keys(accMap).forEach(function(m) { if (!xMonthSet[m]) { xMonthSet[m]=1; allXMonths.push(m); } });
+allXMonths.sort();
+var W = 680, H = 240;
+var PL = 64, PR = hasAcc ? 64 : 16, PT = 16, PB = 36;
 var cW = W - PL - PR, cH = H - PT - PB;
-var yMax = maxCum * 1.08;
-var n = rows.length;
-var pts = rows.map(function(r, i) {
-    return { x: PL + (n > 1 ? i * cW / (n-1) : cW/2), y: PT + cH - (r.cumulative / yMax) * cH, month: r.month, cum: r.cumulative, mon: r.monthly };
+// Y軸最大值取計畫預算 和 累積核銷 的較大者
+var accCumMax = 0;
+Object.values(accCumMap).forEach(function(v) { if (v > accCumMax) accCumMax = v; });
+var yMax = Math.max(maxCum, accCumMax) * 1.08;
+if (yMax <= 0) yMax = 1;
+var nAll = allXMonths.length;
+// 每個月的 X 座標
+var monthX = {};
+allXMonths.forEach(function(m, i) {
+    monthX[m] = PL + (nAll > 1 ? i * cW / (nAll-1) : cW/2);
+});
+// S 曲線點（只在計畫月份）
+var pts = rows.map(function(r) {
+    return { x: monthX[r.month], y: PT + cH - (r.cumulative / yMax) * cH, month: r.month, cum: r.cumulative, mon: r.monthly };
 });
 // today line
 var todayIdx = -1;
 rows.forEach(function(r, i) { if (r.month <= todayStr) todayIdx = i; });
-var todayX = todayIdx >= 0 ? pts[todayIdx].x : -1;
+var todayX = todayIdx >= 0 ? pts[todayIdx].x : (monthX[todayStr] || -1);
 
-// Y ticks
+// 右Y軸：月核銷最大值
+var accMonthlyMax = 1;
+if (hasAcc) {
+    Object.values(accMap).forEach(function(v) { if (v > accMonthlyMax) accMonthlyMax = v; });
+    accMonthlyMax *= 1.15;
+}
+var yScaleR = function(v) { return PT + cH - (v / accMonthlyMax) * cH; };
+
+// 核銷累積折線 + 月柱狀圖
+var barsSvg = '';
+var accLineSvg = '';
+if (hasAcc) {
+    // 月柱狀圖（右Y軸）
+    var barW = Math.max(3, Math.min(14, (cW / nAll) * 0.55));
+    allXMonths.forEach(function(m) {
+        var monthly = accMap[m];
+        if (!monthly) return;
+        var bH = (monthly / accMonthlyMax) * cH;
+        var bY = PT + cH - bH;
+        var bX = monthX[m];
+        barsSvg += '<rect x="' + (bX - barW/2) + '" y="' + bY + '" width="' + barW + '" height="' + bH + '" fill="#e65100" opacity="0.3" rx="2"><title>' + m + ' 當月核銷：' + fmtYen(monthly) + '元</title></rect>';
+    });
+    // 累積核銷折線（左Y軸，對應計畫S曲線）
+    var accLinePts = [];
+    allXMonths.forEach(function(m) {
+        if (!accCumMap[m]) return;
+        var cx = monthX[m];
+        var cy = PT + cH - (accCumMap[m] / yMax) * cH;
+        accLinePts.push(cx + ',' + cy);
+    });
+    if (accLinePts.length >= 2) {
+        // 面積
+        var firstM = allXMonths.find(function(m){ return accCumMap[m]; });
+        var lastM = allXMonths.slice().reverse().find(function(m){ return accCumMap[m]; });
+        accLineSvg = '<path d="M ' + monthX[firstM] + ',' + (PT+cH) + ' ' +
+            allXMonths.filter(function(m){ return accCumMap[m]; }).map(function(m){ return 'L ' + monthX[m] + ',' + (PT+cH-(accCumMap[m]/yMax)*cH); }).join(' ') +
+            ' L ' + monthX[lastM] + ',' + (PT+cH) + ' Z" fill="#e65100" opacity="0.12"/>';
+        // 折線
+        accLineSvg += '<polyline points="' + accLinePts.join(' ') + '" fill="none" stroke="#e65100" stroke-width="2" stroke-dasharray="5,3"/>';
+        // 圓點
+        allXMonths.forEach(function(m) {
+            if (!accCumMap[m]) return;
+            var cx = monthX[m];
+            var cy = PT + cH - (accCumMap[m] / yMax) * cH;
+            accLineSvg += '<circle cx="' + cx + '" cy="' + cy + '" r="3" fill="#e65100" stroke="white" stroke-width="1"><title>' + m + '｜累積核銷：' + fmtYen(accCumMap[m]) + '元</title></circle>';
+        });
+    }
+}
+
+// Y ticks 左軸
 var yGrid = '', yLbl = '';
 for (var ti = 0; ti <= 4; ti++) {
     var v = yMax * ti / 4;
@@ -1718,14 +1795,26 @@ for (var ti = 0; ti <= 4; ti++) {
     yGrid += '<line x1="' + PL + '" y1="' + ty + '" x2="' + (W-PR) + '" y2="' + ty + '" stroke="#eee"/>';
     yLbl += '<text x="' + (PL-4) + '" y="' + (ty+4) + '" font-size="9" fill="#999" text-anchor="end">' + fmtYen(v) + '</text>';
 }
+// 右Y軸刻度（當月核銷月金額）
+var yLblR = '';
+if (hasAcc) {
+    for (var ri = 0; ri <= 4; ri++) {
+        var rv = accMonthlyMax * ri / 4;
+        var ry = yScaleR(rv);
+        yLblR += '<text x="' + (W-PR+4) + '" y="' + (ry+4) + '" font-size="9" fill="#e65100" text-anchor="start">' + fmtYen(rv) + '</text>';
+    }
+    yLblR += '<text x="' + (W-PR+4) + '" y="' + (PT-4) + '" font-size="8" fill="#e65100" text-anchor="start">月核銷</text>';
+}
 // X labels
 var xLbl = '';
-var step = n > 18 ? 3 : n > 9 ? 2 : 1;
-pts.forEach(function(p, i) {
-    if (i % step === 0) xLbl += '<text x="' + p.x + '" y="' + (H-PB+14) + '" font-size="8" fill="#888" text-anchor="middle">' + p.month.slice(5) + '</text>';
+var stepX = nAll > 24 ? 4 : nAll > 18 ? 3 : nAll > 9 ? 2 : 1;
+allXMonths.forEach(function(m, i) {
+    if (i % stepX === 0) xLbl += '<text x="' + monthX[m] + '" y="' + (H-PB+14) + '" font-size="8" fill="#888" text-anchor="middle">' + (i===0||m.slice(5)==='01' ? m : m.slice(5)) + '</text>';
 });
-// area path
-var areaPath = 'M ' + pts[0].x + ',' + (PT+cH) + ' ' + pts.map(function(p){ return 'L '+p.x+','+p.y; }).join(' ') + ' L ' + pts[pts.length-1].x + ',' + (PT+cH) + ' Z';
+// area path（只連計畫月份）
+var areaPath = pts.length >= 2
+    ? 'M ' + pts[0].x + ',' + (PT+cH) + ' ' + pts.map(function(p){ return 'L '+p.x+','+p.y; }).join(' ') + ' L ' + pts[pts.length-1].x + ',' + (PT+cH) + ' Z'
+    : '';
 var linePts = pts.map(function(p){ return p.x+','+p.y; }).join(' ');
 // actual done line (single point at today)
 var actualLine = '';
@@ -1739,28 +1828,54 @@ var todayLine = todayX > 0 ? '<line x1="' + todayX + '" y1="' + PT + '" x2="' + 
 var circles = pts.map(function(p) {
     return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#7b1fa2" stroke="white" stroke-width="1"><title>' + p.month + '｜當月：' + fmtYen(p.mon) + '｜累積：' + fmtYen(p.cum) + '</title></circle>';
 }).join('');
+// 右軸線
+var rightAxisLine = hasAcc ? '<line x1="' + (W-PR) + '" y1="' + PT + '" x2="' + (W-PR) + '" y2="' + (PT+cH) + '" stroke="#e65100" stroke-opacity="0.4" stroke-width="1"/>' : '';
+// 圖例
+var legend = '<rect x="' + (PL+4) + '" y="' + (PT+2) + '" width="12" height="4" fill="#7b1fa2" rx="2"/><text x="' + (PL+20) + '" y="' + (PT+7) + '" font-size="9" fill="#555">計畫累積</text>' +
+    (hasAcc ? '<rect x="' + (PL+4) + '" y="' + (PT+14) + '" width="12" height="8" fill="#e65100" opacity="0.65" rx="1"/><text x="' + (PL+20) + '" y="' + (PT+22) + '" font-size="9" fill="#e65100">當月核銷</text>' : '');
 
-svgHtml = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;margin-bottom:10px;">' +
+// 圖例
+var legend2 = '<rect x="' + (PL+4) + '" y="' + (PT+2) + '" width="14" height="4" fill="#7b1fa2" rx="2"/><text x="' + (PL+22) + '" y="' + (PT+7) + '" font-size="9" fill="#555">計畫累積</text>' +
+    (hasAcc ? '<line x1="' + (PL+4) + '" y1="' + (PT+16) + '" x2="' + (PL+18) + '" y2="' + (PT+16) + '" stroke="#e65100" stroke-width="2" stroke-dasharray="5,3"/><text x="' + (PL+22) + '" y="' + (PT+20) + '" font-size="9" fill="#e65100">累積核銷</text>' : '') +
+    (hasAcc ? '<rect x="' + (PL+4) + '" y="' + (PT+26) + '" width="14" height="6" fill="#e65100" opacity="0.3" rx="1"/><text x="' + (PL+22) + '" y="' + (PT+33) + '" font-size="9" fill="#e65100">當月核銷</text>' : '');
+
+svgHtml = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;margin-bottom:10px;overflow:visible;">' +
     '<defs><linearGradient id="scg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7b1fa2" stop-opacity="0.2"/><stop offset="100%" stop-color="#7b1fa2" stop-opacity="0.02"/></linearGradient></defs>' +
-    yGrid + '<path d="' + areaPath + '" fill="url(#scg2)"/>' +
-    '<polyline points="' + linePts + '" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>' +
-    actualLine + todayLine + circles + yLbl + xLbl +
+    yGrid + barsSvg + accLineSvg +
+    (areaPath ? '<path d="' + areaPath + '" fill="url(#scg2)"/>' : '') +
+    (linePts ? '<polyline points="' + linePts + '" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>' : '') +
+    actualLine + todayLine + circles + yLbl + yLblR + xLbl + rightAxisLine + legend2 +
     '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT+cH) + '" stroke="#ccc"/>' +
     '<line x1="' + PL + '" y1="' + (PT+cH) + '" x2="' + (W-PR) + '" y2="' + (PT+cH) + '" stroke="#ccc"/>' +
     '</svg>';
-    } else if (rows.length === 0) {
+    } else {
 svgHtml = '<div style="text-align:center;padding:30px;color:#aaa;">尚無含單價的甘特圖項目<br><small>請先設定施工單價</small></div>';
     }
 
-    // Table
-    var tableRows = rows.map(function(r) {
-var isToday = r.month === todayStr;
+    // Table：合併計畫月份 + 核銷月份
+    var allMonths = [];
+    var monthSet = {};
+    rows.forEach(function(r) { if (!monthSet[r.month]) { monthSet[r.month]=1; allMonths.push(r.month); } });
+    Object.keys(accMap).forEach(function(m) { if (!monthSet[m]) { monthSet[m]=1; allMonths.push(m); } });
+    allMonths.sort();
+    var rowMap = {};
+    rows.forEach(function(r) { rowMap[r.month] = r; });
+
+    var tableRows = allMonths.map(function(m) {
+var r = rowMap[m];
+var isToday = m === todayStr;
+var planCells = r
+    ? '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;">' + fmtYen(r.monthly) + ' 元</td>' +
+      '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;">' + fmtYen(r.cumulative) + ' 元</td>' +
+      '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#7b1fa2;">' + (maxCum>0?Math.round(r.cumulative/maxCum*100):0) + '%</td>'
+    : '<td colspan="3" style="padding:4px 8px;border:1px solid #eee;color:#ccc;text-align:center;">—</td>';
+var accCells = hasAcc
+    ? '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#e65100;">' + (accMap[m] ? fmtYen(accMap[m])+'元' : '-') + '</td>' +
+      '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;color:#bf360c;">' + (accCumMap[m] ? fmtYen(accCumMap[m])+'元' : '-') + '</td>'
+    : '';
 return '<tr style="background:' + (isToday?'#fff9c4':'') + ';">' +
-    '<td style="padding:4px 8px;border:1px solid #eee;' + (isToday?'font-weight:bold;color:#e65100;':'') + '">' + r.month + (isToday?' ◀':'') + '</td>' +
-    '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;">' + fmtYen(r.monthly) + ' 元</td>' +
-    '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;">' + fmtYen(r.cumulative) + ' 元</td>' +
-    '<td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#7b1fa2;">' + (maxCum>0?Math.round(r.cumulative/maxCum*100):0) + '%</td>' +
-    '</tr>';
+    '<td style="padding:4px 8px;border:1px solid #eee;' + (isToday?'font-weight:bold;color:#e65100;':'') + '">' + m + (isToday?' ◀':'') + '</td>' +
+    planCells + accCells + '</tr>';
     }).join('');
 
     panel.innerHTML = '<div style="background:white;border-radius:12px;width:90%;max-width:800px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.3);overflow:hidden;">' +
@@ -1777,7 +1892,9 @@ return '<tr style="background:' + (isToday?'#fff9c4':'') + ';">' +
     '<thead><tr style="background:#f3e5f5;"><th style="padding:5px 8px;text-align:left;border:1px solid #e1bee7;">月份</th>' +
     '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">當月預算</th>' +
     '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積預算</th>' +
-    '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積比例</th></tr></thead>' +
+    '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積比例</th>' +
+    (hasAcc ? '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;color:#e65100;">當月核銷</th><th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;color:#e65100;">累積核銷</th>' : '') +
+    '</tr></thead>' +
     '<tbody>' + tableRows + '</tbody></table>' : '') +
 '</div></div>';
     document.body.appendChild(panel);
@@ -1919,7 +2036,7 @@ try {
 }
 
 // ===== 預算進度圖 =====
-function renderBudgetChart() {
+async function renderBudgetChart() {
     var container = document.getElementById('budgetChart');
     if (!container) return;
 
@@ -1928,6 +2045,18 @@ function renderBudgetChart() {
 container.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;font-size:12px;">尚無含單價的甘特圖項目<br>請先設定施工單價</div>';
 return;
     }
+
+    // 取核銷資料
+    var accMonthlyMap = {}, accCumMap = {};
+    try {
+        var accRes = await fetch(API_URL + '?action=getAccounting&pipelineId=' + encodeURIComponent(pipeline.id));
+        var accData = await accRes.json();
+        (accData.records || []).forEach(function(r) { accMonthlyMap[r.year_month] = (accMonthlyMap[r.year_month] || 0) + r.amount; });
+        var accMonths = Object.keys(accMonthlyMap).sort();
+        var cumAcc = 0;
+        accMonths.forEach(function(m) { cumAcc += accMonthlyMap[m]; accCumMap[m] = cumAcc; });
+    } catch(e) {}
+    var hasAcc = Object.keys(accMonthlyMap).length > 0;
 
     // 取得與 renderChart 相同的時間範圍
     var dates = items.flatMap(function(item) { return [new Date(item.startDate), new Date(item.endDate)]; });
@@ -1938,7 +2067,10 @@ return;
     var totalRange = maxDate.getTime() - minDate.getTime();
 
     var maxCum = budgetRows[budgetRows.length-1].cumulative;
-    var yMax = maxCum * 1.1;
+    // Y軸最大值取計畫預算 和 累積核銷 的較大者
+    var accCumMax = 0;
+    Object.values(accCumMap).forEach(function(v) { if (v > accCumMax) accCumMax = v; });
+    var yMax = Math.max(maxCum, accCumMax) * 1.1;
     var actualDone = 0;
     items.forEach(function(item) {
 var prog = getItemProgress(item);
@@ -2056,6 +2188,30 @@ html += '<line x1="0" y1="' + ((1-f)*100).toFixed(1) + '" x2="1000" y2="' + ((1-
     });
     html += '<path d="' + areaPath + '" fill="url(#bg2)"/>';
     html += '<polyline points="' + svgPts + '" fill="none" stroke="#7b1fa2" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+    // 核銷：當月柱狀圖 + 累積折線
+    if (hasAcc) {
+        // 月柱 + 累積核銷折線（只畫在 minDate..maxDate 範圍內）
+        var accMonthlyMax = 0;
+        Object.values(accMonthlyMap).forEach(function(v) { if (v > accMonthlyMax) accMonthlyMax = v; });
+        accMonthlyMax *= 1.15;
+        var barWPct = Math.max(0.5, 1000 / Math.max(Object.keys(accMonthlyMap).length, 1) * 0.3);
+        var accLinePts = [];
+        Object.keys(accMonthlyMap).sort().forEach(function(m) {
+            var parts = m.split('-');
+            var midDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, 15);
+            if (midDate < minDate || midDate > maxDate) return; // 超出範圍不畫
+            var xPct = dateToPct(midDate) * 10;
+            // 月柱
+            var bH = (accMonthlyMap[m] / accMonthlyMax) * 100;
+            html += '<rect x="' + (xPct - barWPct/2).toFixed(1) + '" y="' + (100-bH).toFixed(1) + '" width="' + barWPct.toFixed(1) + '" height="' + bH.toFixed(1) + '" fill="#e65100" opacity="0.25" vector-effect="non-scaling-stroke"><title>' + m + ' 當月核銷：' + fmtYen(accMonthlyMap[m]) + '</title></rect>';
+            // 累積折線點
+            var yPct = ((1 - accCumMap[m]/yMax)*100).toFixed(1);
+            accLinePts.push(xPct.toFixed(1) + ',' + yPct);
+        });
+        if (accLinePts.length >= 2) {
+            html += '<polyline points="' + accLinePts.join(' ') + '" fill="none" stroke="#e65100" stroke-width="2" stroke-dasharray="5,3" vector-effect="non-scaling-stroke"/>';
+        }
+    }
     html += '<line x1="' + todayX + '" y1="0" x2="' + todayX + '" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
     html += '</svg>';
     // 圓點用 HTML div，避免 preserveAspectRatio="none" 造成橢圓
@@ -2071,6 +2227,17 @@ var actBottom = (actualDone / yMax * 100).toFixed(2);
 dotHtml += '<div style="position:absolute;left:' + actLeft + '%;bottom:' + actBottom + '%;width:9px;height:9px;border-radius:50%;background:#388e3c;border:2px solid white;transform:translate(-50%,50%);pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,0.3);" title="實際完成：' + fmtY(actualDone) + '元"></div>';
     }
     html += dotHtml;
+    // 累積核銷圓點（只畫範圍內）
+    if (hasAcc) {
+        Object.keys(accCumMap).sort().forEach(function(m) {
+            var parts = m.split('-');
+            var midDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, 15);
+            if (midDate < minDate || midDate > maxDate) return;
+            var left = dateToPct(midDate).toFixed(2);
+            var bottom = (accCumMap[m] / yMax * 100).toFixed(2);
+            html += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:5px;height:5px;border-radius:50%;background:#e65100;border:1.5px solid white;transform:translate(-50%,50%);pointer-events:none;" title="' + m + ' 累積核銷：' + fmtYen(accCumMap[m]) + '"></div>';
+        });
+    }
     html += '<div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:#ddd;"></div>';
     html += hoverDivs;
     html += '<div id="budgetTooltip" style="display:none;position:absolute;background:rgba(0,0,0,0.75);color:white;font-size:11px;padding:6px 10px;border-radius:6px;pointer-events:none;z-index:100;white-space:nowrap;"></div>';

@@ -96,14 +96,25 @@ async function showProjectSCurve() {
 
     showToast('載入中...', 'info');
 
+    // 同時抓取預算設定
+    let budgetData = {};
+    try {
+        const br = await apiCall('getAccountingBudget', {});
+        (br.budgets || []).forEach(b => {
+            const key = b.prefix + '_' + b.year;
+            budgetData[key] = b.amount;
+        });
+    } catch(e) {}
+
     // 平行抓取所有工程的甘特 + 單價 + 小段進度
     const fetchResults = await Promise.all(selectedPipelines.map(async pl => {
         try {
-            const [ganttRes, upRes, segRes, smallRes] = await Promise.all([
+            const [ganttRes, upRes, segRes, smallRes, accRes] = await Promise.all([
                 apiCall('getGanttItems', { pipelineId: pl.id }),
                 apiCall('getUnitPrices', { pipelineId: pl.id }),
                 apiCall('getProgress', { pipelineId: pl.id }),
-                apiCall('getAllSmallSegments', { pipelineId: pl.id })
+                apiCall('getAllSmallSegments', { pipelineId: pl.id }),
+                apiCall('getAccounting', { pipelineId: pl.id }).catch(() => ({ records: [] }))
             ]);
             // 新架構優先用 getAllSmallSegments 的 branches，舊架構用 getProgress 的 segments
             const branches = smallRes.branches && Object.keys(smallRes.branches).length > 0
@@ -114,9 +125,10 @@ async function showProjectSCurve() {
                 items: ganttRes.items || [],
                 unitPrices: upRes.prices || [],
                 segments: segRes.segments || [],
-                branches
+                branches,
+                accRecords: accRes.records || []
             };
-        } catch(e) { return { pipeline: pl, items: [], unitPrices: [], segments: [], branches: {} }; }
+        } catch(e) { return { pipeline: pl, items: [], unitPrices: [], segments: [], branches: {}, accRecords: [] }; }
     }));
 
     // 計算每條工程的月度預算
@@ -243,10 +255,8 @@ async function showProjectSCurve() {
         return { name: r.pipeline.name || r.pipeline.id, rows, color: 'hsl(' + hue + ',70%,45%)' };
     }).filter(r => r.rows.length > 0);
 
-    if (!pipelineRows.length) {
-        showToast('各工程尚未設定單價，無法繪製S曲線', 'warning');
-        return;
-    }
+    const hasPlan = pipelineRows.length > 0;
+    if (!hasPlan) showToast('各工程尚未設定單價，僅顯示核銷資料', 'info');
 
     // 合計曲線
     const totalMap = {};
@@ -257,16 +267,78 @@ async function showProjectSCurve() {
     let totalCum = 0;
     const totalRows = totalMonths.map(m => { totalCum += totalMap[m]; return { month: m, monthly: totalMap[m], cumulative: totalCum }; });
 
-    // 時間軸範圍
+    // 核銷資料：各工程分開（用於分色柱狀圖）+ 合計（用於累積折線）
+    const accByPipeline = fetchResults.map((r, idx) => {
+        const monthlyMap = {};
+        (r.accRecords || []).forEach(rec => {
+            monthlyMap[rec.year_month] = (monthlyMap[rec.year_month] || 0) + rec.amount;
+        });
+        return { name: r.pipeline.name || r.pipeline.id, monthlyMap, color: pipelineRows[idx] ? pipelineRows[idx].color : 'hsl(' + Math.round(idx/fetchResults.length*300) + ',70%,45%)' };
+    }).filter(p => Object.keys(p.monthlyMap).length > 0);
+
+    const accMonthlyMap = {}; // 合計：year_month -> 月金額
+    accByPipeline.forEach(p => {
+        Object.entries(p.monthlyMap).forEach(([m, v]) => {
+            accMonthlyMap[m] = (accMonthlyMap[m] || 0) + v;
+        });
+    });
+    const accSortedMonths = Object.keys(accMonthlyMap).sort();
+    let accCumTotal = 0;
+    const accCumMap = {}; // year_month -> 累積金額
+    accSortedMonths.forEach(m => { accCumTotal += accMonthlyMap[m]; accCumMap[m] = accCumTotal; });
+    const hasAcc = accSortedMonths.length > 0;
+
+    // 計算各前綴各年度的核銷加總（用於對比年度預算）
+    // prefix 從 accByPipeline 的 pipeline.id 前兩碼取得
+    const accByPrefixYear = {}; // prefix_year -> 累積金額
+    fetchResults.forEach(r => {
+        (r.accRecords || []).forEach(rec => {
+            // 從各工程的 accounting_codes 取前綴
+        });
+    });
+    // 改從 accByPipeline 取前綴（用工程名稱對應的code）
+    // 直接從 accounting_by_code 取（若有）—— 這裡用工程編號前綴
+    // 前綴 = accounting code 前兩碼（BT/BU/BV/WR...）
+    // accByPipeline 的 color/name 是工程名稱，不是 code
+    // 用 accMonthlyMap 月份金額對比 prefixYear budget
+    // 策略：從 accSortedMonths 的年份，搭配 accCumMap 找各年底累積值
+    const budgetYears = [...new Set(Object.keys(budgetData).map(k => parseInt(k.split('_')[1])))].sort();
+    // 各年度核銷合計（1月到12月）
+    const accByYear = {}; // year -> 當年核銷總額
+    accSortedMonths.forEach(m => {
+        const yr = parseInt(m.split('-')[0]);
+        accByYear[yr] = (accByYear[yr] || 0) + accMonthlyMap[m];
+    });
+    // 各前綴核銷：需從 accByPipeline 的工程核銷資料中取 code 前綴
+    // 先收集所有工程的 code (從 pipeline.id 或 accounting codes)
+    const prefixAccByYear = {}; // prefix -> year -> amount
+    fetchResults.forEach(r => {
+        const codes = r.pipeline.codes ? (typeof r.pipeline.codes === 'string' ? JSON.parse(r.pipeline.codes) : r.pipeline.codes) : [];
+        codes.forEach(code => {
+            const prefix = code.replace(/[0-9]/g,'').substring(0,2).toUpperCase();
+            if (!prefix) return;
+            (r.accRecords || []).forEach(rec => {
+                const yr = parseInt(rec.year_month.split('-')[0]);
+                if (!prefixAccByYear[prefix]) prefixAccByYear[prefix] = {};
+                prefixAccByYear[prefix][yr] = (prefixAccByYear[prefix][yr] || 0) + rec.amount;
+            });
+        });
+    });
+    const hasBudget = Object.keys(budgetData).length > 0;
+
+    // 時間軸範圍（含核銷月份）
     const allMonths = totalRows.map(r => r.month);
-    const minMonth = allMonths[0], maxMonth = allMonths[allMonths.length - 1];
+    const allRangeMonths = [...new Set([...allMonths, ...accSortedMonths])].sort();
+    const minMonth = allRangeMonths[0], maxMonth = allRangeMonths[allRangeMonths.length - 1];
     const [minY, minM] = minMonth.split('-').map(Number);
     const [maxY, maxM] = maxMonth.split('-').map(Number);
     const minDate = new Date(minY, minM - 2, 1);
     const maxDate = new Date(maxY, maxM + 1, 0);
     const totalRange = maxDate - minDate;
-    const grandTotal = totalRows[totalRows.length - 1].cumulative;
-    const yMax = grandTotal * 1.1;
+    const grandTotal = totalRows.length ? totalRows[totalRows.length - 1].cumulative : 0;
+    // Y軸最大值取計畫合計 和 累積核銷 的較大者
+    const accCumMax = hasAcc ? accCumMap[accSortedMonths[accSortedMonths.length-1]] : 0;
+    const yMax = Math.max(grandTotal, accCumMax, 1) * 1.1;
 
     function dateToPct(d) { return Math.max(0, Math.min(100, (d - minDate) / totalRange * 100)); }
     function midDate(m) { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 15); }
@@ -341,43 +413,145 @@ async function showProjectSCurve() {
         }, 0);
     }, 0);
 
+    // 計算當年度預算執行狀況
+    const curYear = new Date().getFullYear();
+    let totalBudgetCurYear = 0, totalAccCurYear = 0;
+    Object.keys(budgetData).forEach(k => {
+        const [prefix, yr] = k.split('_');
+        if (parseInt(yr) === curYear) {
+            totalBudgetCurYear += budgetData[k];
+            totalAccCurYear += (prefixAccByYear[prefix] && prefixAccByYear[prefix][curYear]) || 0;
+        }
+    });
+    const budgetExecPct = totalBudgetCurYear > 0 ? Math.round(totalAccCurYear / totalBudgetCurYear * 100) : null;
+    const budgetRemain = totalBudgetCurYear - totalAccCurYear;
+
     const statsHtml =
-        '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;align-items:center;font-size:13px;">' +
-        '<span><span style="color:#7b1fa2;">計畫總預算：</span><strong style="color:#4a148c;">' + fmtY(grandTotal) + ' 元</strong></span>' +
-        '<span style="color:#ccc;">|</span>' +
-        '<span><span style="color:#1976d2;">計畫累積至今：</span><strong style="color:#0d47a1;">' + fmtY(todayCum) + ' 元</strong></span>' +
-        '<span style="color:#ccc;">|</span>' +
-        '<span><span style="color:#388e3c;">實際完成金額：</span><strong style="color:#1b5e20;">' + fmtY(actualDone) + ' 元</strong></span>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;align-items:center;font-size:13px;">' +
+        (hasPlan ?
+            '<span><span style="color:#7b1fa2;">計畫總預算：</span><strong style="color:#4a148c;">' + fmtY(grandTotal) + ' 元</strong></span>' +
+            '<span style="color:#ccc;">|</span>' +
+            '<span><span style="color:#1976d2;">計畫累積至今：</span><strong style="color:#0d47a1;">' + fmtY(todayCum) + ' 元</strong></span>' +
+            '<span style="color:#ccc;">|</span>' +
+            '<span><span style="color:#388e3c;">實際完成金額：</span><strong style="color:#1b5e20;">' + fmtY(actualDone) + ' 元</strong></span>'
+        : '<span style="color:#e65100;">⚠️ 尚未設定施工單價，僅顯示核銷支用資料</span>') +
+        (hasAcc ? '<span style="color:#ccc;">|</span><span><span style="color:#e65100;">累積核銷：</span><strong style="color:#bf360c;">' + fmtY(accCumMax) + ' 元</strong></span>' : '') +
+        (budgetExecPct !== null ? '<span style="color:#ccc;">|</span><span><span style="color:#1565c0;">' + (curYear-1911) + '年預算執行：</span><strong style="color:#0d47a1;">' + budgetExecPct + '%</strong><span style="font-size:11px;color:#888;margin-left:4px;">（剩餘 ' + fmtY(Math.max(0,budgetRemain)) + ' 元）</span></span>' : '') +
         '</div>';
 
-    // 圖例
-    const legendHtml = pipelineRows.map(pr =>
+    // 圖例：有計畫S曲線的工程 + 有核銷但無計畫的工程
+    const planNames = new Set(pipelineRows.map(pr => pr.name));
+    const accOnlyEntries = accByPipeline.filter(p => !planNames.has(p.name));
+
+    const legendHtml =
+    // 有計畫的工程（折線圖示）
+    pipelineRows.map(pr =>
         '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;">' +
         '<span style="display:inline-block;width:20px;height:3px;background:' + pr.color + ';border-radius:2px;"></span>' +
         pr.name + '</span>'
     ).join('') +
-    '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;font-weight:bold;">' +
-    '<span style="display:inline-block;width:20px;height:4px;background:#4a148c;border-radius:2px;"></span>計畫合計</span>';
+    // 有核銷但無計畫的工程（柱狀圖示）
+    accOnlyEntries.map(p =>
+        '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;color:#555;">' +
+        '<span style="display:inline-block;width:12px;height:10px;background:' + p.color + ';opacity:0.6;border-radius:1px;"></span>' +
+        p.name + '</span>'
+    ).join('') +
+    // 計畫合計
+    (hasPlan ? '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;font-weight:bold;">' +
+    '<span style="display:inline-block;width:20px;height:4px;background:#4a148c;border-radius:2px;"></span>計畫合計</span>' : '') +
+    // 核銷圖例
+    (hasAcc ? '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;color:#e65100;">' +
+    '<span style="display:inline-block;width:20px;height:0;border-top:3px dashed #e65100;"></span>累積核銷</span>' +
+    '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;color:#e65100;">' +
+    '<span style="display:inline-block;width:12px;height:10px;background:#e65100;opacity:0.25;border-radius:1px;"></span>當月核銷</span>' : '');
 
     // SVG layers（只放面積、折線、格線、今日線 — 不放圓點，避免橢圓）
     const CHART_H = 260;
-    let svgLayers = '';
+    // 各層分開存，方便勾選控制
+    let planLayerSvg = '';
     // 各工程面積（半透明）
     pipelineRows.forEach(pr => {
-        svgLayers += '<path d="' + buildArea(pr.rows) + '" fill="' + pr.color + '" opacity="0.07"/>';
-        svgLayers += '<polyline points="' + buildPolyline(pr.rows) + '" fill="none" stroke="' + pr.color + '" stroke-width="1.5" vector-effect="non-scaling-stroke" opacity="0.7"/>';
+        planLayerSvg += '<path d="' + buildArea(pr.rows) + '" fill="' + pr.color + '" opacity="0.07"/>';
+        planLayerSvg += '<polyline points="' + buildPolyline(pr.rows) + '" fill="none" stroke="' + pr.color + '" stroke-width="1.5" vector-effect="non-scaling-stroke" opacity="0.7"/>';
     });
-    // 合計粗線
-    svgLayers += '<path d="' + buildArea(totalRows) + '" fill="#7b1fa2" opacity="0.12"/>';
-    svgLayers += '<polyline points="' + buildPolyline(totalRows) + '" fill="none" stroke="#4a148c" stroke-width="3" vector-effect="non-scaling-stroke"/>';
-    // 今日線
+    // 合計粗線（有計畫資料才畫）
+    if (hasPlan && totalRows.length) {
+        planLayerSvg += '<path d="' + buildArea(totalRows) + '" fill="#7b1fa2" opacity="0.12"/>';
+        planLayerSvg += '<polyline points="' + buildPolyline(totalRows) + '" fill="none" stroke="#4a148c" stroke-width="3" vector-effect="non-scaling-stroke"/>';
+    }
+    // 今日線 + 格線（固定顯示）
     const todayX = (todayPct * 10).toFixed(1);
-    svgLayers += '<line x1="' + todayX + '" y1="0" x2="' + todayX + '" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
-    // 水平格線
+    let yGridSvg = '<line x1="' + todayX + '" y1="0" x2="' + todayX + '" y2="100" stroke="#e53935" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
     yTickFracs.forEach(f => {
         const y = ((1 - f) * 100).toFixed(1);
-        svgLayers += '<line x1="0" y1="' + y + '" x2="1000" y2="' + y + '" stroke="#eee" stroke-width="0.5"/>';
+        yGridSvg += '<line x1="0" y1="' + y + '" x2="1000" y2="' + y + '" stroke="#eee" stroke-width="0.5"/>';
     });
+    let svgLayers = yGridSvg; // 先放格線
+    // 年度預算水平線（各前綴各年度，高度=累積預算）
+    // budgetLayerSvg 分開存，方便勾選控制
+    let budgetLayerSvg = '';
+    if (hasBudget) {
+        const prefixes = [...new Set(Object.keys(budgetData).map(k => k.split('_')[0]))].sort();
+        const budgetColors = ['#1565c0','#2e7d32','#6a1b9a','#e65100','#c62828','#00695c'];
+        prefixes.forEach((prefix, pi) => {
+            const color = budgetColors[pi % budgetColors.length];
+            // 計算累積預算（各年度加總）
+            let cumBudget = 0;
+            budgetYears.forEach(yr => {
+                const key = prefix + '_' + yr;
+                if (!budgetData[key]) return;
+                cumBudget += budgetData[key]; // 累積到此年度的總預算
+                const xStart = (dateToPct(new Date(yr, 0, 1)) * 10).toFixed(1);
+                const xEnd = (dateToPct(new Date(yr, 11, 31)) * 10).toFixed(1);
+                const yBudget = ((1 - cumBudget / yMax) * 100).toFixed(1);
+                const midX = ((parseFloat(xStart) + parseFloat(xEnd)) / 2).toFixed(1);
+                // 金額標籤（萬/億）
+                const amtLabel = cumBudget >= 1e8 ? (cumBudget/1e8).toFixed(2)+'億' : cumBudget>=1e4 ? Math.round(cumBudget/1e4)+'萬' : Math.round(cumBudget).toLocaleString();
+                budgetLayerSvg += '<line x1="' + xStart + '" y1="' + yBudget + '" x2="' + xEnd + '" y2="' + yBudget + '" stroke="' + color + '" stroke-width="1.5" stroke-dasharray="8,4" vector-effect="non-scaling-stroke" opacity="0.8"><title>' + prefix + ' 累積至' + (yr-1911) + '年 總預算：' + Math.round(cumBudget).toLocaleString() + '元</title></line>';
+                budgetLayerSvg += '<text x="' + (parseFloat(xEnd)-2) + '" y="' + (parseFloat(yBudget)-2) + '" font-size="7" fill="' + color + '" text-anchor="end" vector-effect="non-scaling-stroke">' + prefix + (yr-1911) + ' ' + amtLabel + '</text>';
+            });
+        });
+    }
+    svgLayers += budgetLayerSvg;
+    // 核銷：當月柱狀圖 + 累積折線（分層存）
+    let accBarsSvg = '', accLineSvg = '';
+    if (hasAcc) {
+        const accMonthlyMax = Math.max(...Object.values(accMonthlyMap)) * 1.15;
+        const barW = Math.max(0.5, 1000 / Math.max(accSortedMonths.length, 1) * 0.3);
+        const accLinePts = [];
+        accSortedMonths.forEach(m => {
+            const xPct = parseFloat((dateToPct(midDate(m)) * 10).toFixed(1));
+            let stackY = 100;
+            accByPipeline.forEach(pl => {
+                const v = pl.monthlyMap[m] || 0;
+                if (!v) return;
+                const bH = parseFloat((v / accMonthlyMax * 100).toFixed(2));
+                stackY -= bH;
+                accBarsSvg += '<rect x="' + (xPct - barW/2).toFixed(1) + '" y="' + stackY.toFixed(2) + '" width="' + barW.toFixed(1) + '" height="' + bH.toFixed(2) + '" fill="' + pl.color + '" opacity="0.55" vector-effect="non-scaling-stroke"><title>' + pl.name + ' ' + m + '：' + Math.round(v).toLocaleString() + '元</title></rect>';
+            });
+            const yPct = ((1 - accCumMap[m] / yMax) * 100).toFixed(1);
+            accLinePts.push(xPct.toFixed(1) + ',' + yPct);
+        });
+        if (accLinePts.length >= 2) {
+            accLineSvg = '<polyline points="' + accLinePts.join(' ') + '" fill="none" stroke="#e65100" stroke-width="2.5" stroke-dasharray="6,3" vector-effect="non-scaling-stroke"/>';
+        }
+    }
+    // 最終 SVG 組合（各層用 <g id> 包裝，JavaScript 可切換 display）
+    svgLayers = yGridSvg +
+        '<g id="scBarsLayer">' + accBarsSvg + '</g>' +
+        '<g id="scAccLine">' + accLineSvg + '</g>' +
+        '<g id="scBudgetLayer">' + budgetLayerSvg + '</g>' +
+        '<g id="scPlanLayer">' + planLayerSvg + '</g>';
+
+    // 核銷累積圓點
+    let accDotDivs = '';
+    if (hasAcc) {
+        accSortedMonths.forEach(m => {
+            const left = dateToPct(midDate(m)).toFixed(2);
+            const bottom = (accCumMap[m] / yMax * 100).toFixed(2);
+            accDotDivs += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:5px;height:5px;border-radius:50%;background:#e65100;border:1.5px solid white;transform:translate(-50%,50%);pointer-events:none;"></div>';
+        });
+    }
 
     // 圓點：用 HTML div 絕對定位，避免 preserveAspectRatio="none" 造成橢圓
     let dotDivs = '';
@@ -424,7 +598,15 @@ async function showProjectSCurve() {
         '.body{padding:16px;}.legend{margin-bottom:8px;line-height:2;}' +
         '#tip{display:none;position:fixed;background:rgba(0,0,0,0.8);color:white;font-size:11px;padding:8px 12px;border-radius:6px;pointer-events:none;z-index:999;white-space:pre-line;max-width:260px;line-height:1.6;}' +
         '</style></head><body>' +
-        '<div class="hdr" style="display:flex;justify-content:space-between;align-items:center;"><span>📈 S 曲線（' + selectedPipelines.length + ' 個工程）</span><button id="exportBtn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📥 匯出Excel</button></div>' +
+        '<div class="hdr" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<span>📈 S 曲線（' + selectedPipelines.length + ' 個工程）</span>' +
+        '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:normal;"><input type="checkbox" id="chkPlan" checked onchange="toggleLayer(\'scPlanLayer\',this.checked)"> S曲線</label>' +
+        (hasAcc ? '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:normal;"><input type="checkbox" id="chkAccLine" checked onchange="toggleLayer(\'scAccLine\',this.checked)"> 累積核銷</label>' : '') +
+        (hasAcc ? '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:normal;"><input type="checkbox" id="chkBars" checked onchange="toggleLayer(\'scBarsLayer\',this.checked)"> 當月核銷</label>' : '') +
+        (hasBudget ? '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:normal;"><input type="checkbox" id="chkBudget" checked onchange="toggleLayer(\'scBudgetLayer\',this.checked)"> 年度預算</label>' : '') +
+        '<button id="exportBtn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📥 匯出Excel</button>' +
+        '</div></div>' +
         '<div class="body">' + statsHtml +
         '<div class="legend">' + legendHtml + '</div>' +
         '<div style="display:flex;">' +
@@ -435,6 +617,7 @@ async function showProjectSCurve() {
         '<div style="position:relative;height:' + CHART_H + 'px;">' +
         '<svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="' + CHART_H + '" style="display:block;">' + svgLayers + '</svg>' +
         dotDivs +
+        accDotDivs +
         '<div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:#ccc;"></div>' +
         hoverDivs +
         '</div>' +
@@ -443,6 +626,7 @@ async function showProjectSCurve() {
         '<div id="tip"></div>' +
         '</div>' +
         '<script>' +
+        'function toggleLayer(id,show){var el=document.getElementById(id);if(el)el.style.display=show?"":"none";}' +
         'var tip=document.getElementById("tip");' +
         'document.querySelectorAll(".sc-hover").forEach(function(z){' +
         'z.addEventListener("mouseenter",function(){' +
@@ -470,6 +654,9 @@ async function showProjectSCurve() {
 
 // ========== S 曲線 / 施工單價管理功能 ==========
 
+// 核銷資料快取（供 renderSCurve 使用）
+window._accountingCache = []; let _accountingCache = window._accountingCache;
+
 function showSCurvePanel() {
     document.getElementById('sCurveBackdrop').style.display = 'block';
     document.getElementById('sCurvePanel').style.display = 'flex';
@@ -485,7 +672,10 @@ function showSCurvePanel() {
                 });
             }),
         apiCall('getUnitPrices', { pipelineId: currentPipeline.id, projectName: projName })
-            .then(r => { unitPricesCache = r.prices || []; })
+            .then(r => { unitPricesCache = r.prices || []; }),
+        apiCall('getAccounting', { pipelineId: currentPipeline.id })
+            .then(r => { _accountingCache = window._accountingCache = r.records || []; })
+            .catch(() => { _accountingCache = window._accountingCache = []; })
     ]).then(() => renderSCurve()).catch(() => renderSCurve());
 }
 
@@ -608,8 +798,19 @@ function renderSCurve() {
             </div>
         </div>`;
 
+    // ── 核銷資料整理 ──────────────────────────────────────────
+    // 依月份建立核銷 Map（累計）
+    const accMap = {}; // month -> amount
+    _accountingCache.forEach(r => { accMap[r.year_month] = (accMap[r.year_month] || 0) + r.amount; });
+    // 計算核銷累計
+    const accMonths = Object.keys(accMap).sort();
+    let accCum = 0;
+    const accCumMap = {}; // month -> 累計
+    accMonths.forEach(m => { accCum += accMap[m]; accCumMap[m] = accCum; });
+    const hasAcc = accMonths.length > 0;
+
     // SVG 圖表
-    const W = 740, H = 260, PAD = { top: 20, right: 20, bottom: 40, left: 72 };
+    const W = 740, H = 300, PAD = { top: 20, right: hasAcc ? 72 : 20, bottom: 40, left: 72 };
     const chartW = W - PAD.left - PAD.right;
     const chartH = H - PAD.top - PAD.bottom;
     const n = rows.length;
@@ -617,6 +818,10 @@ function renderSCurve() {
 
     const yMax = maxCum * 1.08;
     const yScale = v => chartH - (v / yMax) * chartH;
+
+    // 右 Y 軸：以核銷最大月份金額為基準
+    const accMonthlyMax = hasAcc ? Math.max(...accMonths.map(m => accMap[m])) * 1.15 : 1;
+    const yScaleR = v => chartH - (v / accMonthlyMax) * chartH;
 
     // 折線點
     const pts = rows.map((r, i) => ({
@@ -669,7 +874,7 @@ function renderSCurve() {
         }).filter(p => p.x !== null);
     }
 
-    // Y 軸刻度
+    // Y 軸刻度（左：計畫金額）
     const yTicks = 5;
     let yLabels = '';
     let yGrids = '';
@@ -680,6 +885,17 @@ function renderSCurve() {
         yGrids += `<line x1="${PAD.left}" y1="${y}" x2="${W-PAD.right}" y2="${y}" stroke="#eee" stroke-width="1"/>`;
         yLabels += `<text x="${PAD.left-6}" y="${y+4}" font-size="10" fill="#888" text-anchor="end">${label}</text>`;
     }
+    // 右 Y 軸刻度（核銷月金額）
+    let yLabelsR = '';
+    if (hasAcc) {
+        for (let i = 0; i <= yTicks; i++) {
+            const v = accMonthlyMax * i / yTicks;
+            const y = PAD.top + yScaleR(v);
+            const label = v >= 1e8 ? (v/1e8).toFixed(1)+'億' : v >= 1e4 ? (v/1e4).toFixed(0)+'萬' : Math.round(v);
+            yLabelsR += `<text x="${W-PAD.right+6}" y="${y+4}" font-size="10" fill="#e65100" text-anchor="start">${label}</text>`;
+        }
+        yLabelsR += `<text x="${W-PAD.right+6}" y="${PAD.top-6}" font-size="9" fill="#e65100" text-anchor="start">核銷(元)</text>`;
+    }
 
     // X 軸月份標籤
     let xLabels = '';
@@ -689,6 +905,22 @@ function renderSCurve() {
             xLabels += `<text x="${p.x}" y="${H-PAD.bottom+14}" font-size="9" fill="#888" text-anchor="middle">${p.month.slice(0,4)==(i>0?pts[i-1].month.slice(0,4):'') ? p.month.slice(5) : p.month}</text>`;
         }
     });
+
+    // 核銷柱狀圖（對應右Y軸）
+    let barsSvg = '';
+    if (hasAcc) {
+        const barW = Math.max(4, Math.min(18, (chartW / n) * 0.55));
+        pts.forEach(p => {
+            const monthly = accMap[p.month];
+            if (!monthly) return;
+            const bH = (monthly / accMonthlyMax) * chartH;
+            const bY = PAD.top + chartH - bH;
+            barsSvg += `<rect x="${p.x - barW/2}" y="${bY}" width="${barW}" height="${bH}"
+                fill="#e65100" opacity="0.65" rx="2">
+                <title>${p.month} 核銷：${fmt(monthly)}元</title>
+            </rect>`;
+        });
+    }
 
     // 計畫線面積
     const polyPts = pts.map(p => `${p.x},${p.y}`).join(' ');
@@ -720,23 +952,32 @@ function renderSCurve() {
                 </linearGradient>
             </defs>
             ${yGrids}
+            ${barsSvg}
             <path d="${areaPath}" fill="url(#scGrad)"/>
             <polyline points="${polyPts}" fill="none" stroke="#7b1fa2" stroke-width="2.5"/>
             ${actualLine}
             ${todayLine}
             ${circles}
             ${yLabels}
+            ${yLabelsR}
             ${xLabels}
             <line x1="${PAD.left}" y1="${PAD.top}" x2="${PAD.left}" y2="${PAD.top+chartH}" stroke="#ccc"/>
             <line x1="${PAD.left}" y1="${PAD.top+chartH}" x2="${W-PAD.right}" y2="${PAD.top+chartH}" stroke="#ccc"/>
+            ${hasAcc ? `<line x1="${W-PAD.right}" y1="${PAD.top}" x2="${W-PAD.right}" y2="${PAD.top+chartH}" stroke="#e65100" stroke-opacity="0.4" stroke-width="1"/>` : ''}
             <!-- 圖例 -->
-            <rect x="${W-PAD.right-160}" y="${PAD.top}" width="12" height="4" fill="#7b1fa2" rx="2"/>
-            <text x="${W-PAD.right-144}" y="${PAD.top+5}" font-size="10" fill="#555">計畫累積金額</text>
-            <line x1="${W-PAD.right-160}" y1="${PAD.top+14}" x2="${W-PAD.right-148}" y2="${PAD.top+14}" stroke="#388e3c" stroke-width="2" stroke-dasharray="4,2"/>
-            <text x="${W-PAD.right-144}" y="${PAD.top+18}" font-size="10" fill="#555">實際完成金額</text>
+            <rect x="${PAD.left+4}" y="${PAD.top+2}" width="12" height="4" fill="#7b1fa2" rx="2"/>
+            <text x="${PAD.left+20}" y="${PAD.top+7}" font-size="10" fill="#555">計畫累積</text>
+            <line x1="${PAD.left+4}" y1="${PAD.top+16}" x2="${PAD.left+16}" y2="${PAD.top+16}" stroke="#388e3c" stroke-width="2" stroke-dasharray="4,2"/>
+            <text x="${PAD.left+20}" y="${PAD.top+20}" font-size="10" fill="#555">實際完成</text>
+            ${hasAcc ? `<rect x="${PAD.left+4}" y="${PAD.top+26}" width="12" height="8" fill="#e65100" opacity="0.65" rx="1"/>
+            <text x="${PAD.left+20}" y="${PAD.top+34}" font-size="10" fill="#e65100">當月核銷</text>` : ''}
         </svg>`;
 
-    // 月份明細表
+    // 月份明細表（含核銷欄）
+    // 合併所有月份（計畫 + 核銷）
+    const allMonths = [...new Set([...rows.map(r=>r.month), ...accMonths])].sort();
+    const rowMap = {}; rows.forEach(r => rowMap[r.month] = r);
+
     html += `
         <div style="margin-top:12px;">
             <div style="font-size:12px;font-weight:bold;color:#4a148c;margin-bottom:6px;">📋 逐月明細</div>
@@ -748,18 +989,27 @@ function renderSCurve() {
                             <th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">當月預算</th>
                             <th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積預算</th>
                             <th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;">累積比例</th>
+                            ${hasAcc ? '<th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;color:#e65100;">當月核銷</th><th style="padding:5px 8px;text-align:right;border:1px solid #e1bee7;color:#e65100;">累積核銷</th>' : ''}
                         </tr>
                     </thead>
                     <tbody>
-                        ${rows.map((r, i) => {
-                            const isToday = r.month === todayStr;
-                            const isPast = r.month < todayStr;
+                        ${allMonths.map(m => {
+                            const r = rowMap[m];
+                            const isToday = m === todayStr;
                             const bg = isToday ? '#fff9c4' : '';
+                            const planCells = r
+                                ? `<td style="padding:4px 8px;border:1px solid #eee;text-align:right;">${fmt(r.monthly)} 元</td>
+                                   <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;">${fmt(r.cumulative)} 元</td>
+                                   <td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#7b1fa2;">${Math.round(r.cumulative/maxCum*100)}%</td>`
+                                : `<td colspan="3" style="padding:4px 8px;border:1px solid #eee;color:#ccc;text-align:center;">—</td>`;
+                            const accCells = hasAcc
+                                ? `<td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#e65100;">${accMap[m] ? fmt(accMap[m])+'元' : '-'}</td>
+                                   <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;color:#bf360c;">${accCumMap[m] ? fmt(accCumMap[m])+'元' : '-'}</td>`
+                                : '';
                             return `<tr style="background:${bg};">
-                                <td style="padding:4px 8px;border:1px solid #eee;${isToday?'font-weight:bold;color:#f57f17;':''}">${r.month}${isToday?' ◀':''}</td>
-                                <td style="padding:4px 8px;border:1px solid #eee;text-align:right;">${fmt(r.monthly)} 元</td>
-                                <td style="padding:4px 8px;border:1px solid #eee;text-align:right;font-weight:bold;">${fmt(r.cumulative)} 元</td>
-                                <td style="padding:4px 8px;border:1px solid #eee;text-align:right;color:#7b1fa2;">${Math.round(r.cumulative/maxCum*100)}%</td>
+                                <td style="padding:4px 8px;border:1px solid #eee;${isToday?'font-weight:bold;color:#f57f17;':''}">${m}${isToday?' ◀':''}</td>
+                                ${planCells}
+                                ${accCells}
                             </tr>`;
                         }).join('')}
                     </tbody>

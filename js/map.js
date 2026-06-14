@@ -135,7 +135,7 @@ if (nodeCoords && nodeCoords.length > 0) {
             className: '',
             html: `<div style="position:relative;width:10px;height:10px;">
                 <div style="width:10px;height:10px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-                <div style="position:absolute;left:14px;top:-28px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:3px 8px;border-radius:4px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,0.2);">${seg.nodeName}</div>
+                <div style="position:absolute;left:14px;top:-28px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:3px 8px;border-radius:4px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,0.2);pointer-events:none;">${seg.nodeName}</div>
             </div>`,
             iconSize: [10, 10],
             iconAnchor: [5, 5]
@@ -314,56 +314,77 @@ if (nodeCoords && nodeCoords.length > 0) {
 // ========== 新架構：繪製分支標籤 ==========
 function drawBranchLabel(branch, branchIndex, smallSegs) {
     if (!smallSegs || smallSegs.length === 0) return;
-    
-    const methodLengths = {};
-    const methodCompleted = {};
-    smallSegs.forEach(seg => {
+
+    // 按「節點區間 + 工法」分組
+    // 找出所有節點名稱變化點，切成區間
+    const groups = []; // [{fromNode, toNode, method, segs:[]}]
+
+    let currentGroup = null;
+    smallSegs.forEach((seg, i) => {
         const d = seg.diameter || '';
         const pt = seg.pipeType || '';
         const m = seg.method || '';
         if (!d && !pt && !m) return;
-        const mk = [d, pt, m].filter(Boolean).join(' ');
-        const sl = seg.endDistance - seg.startDistance;
-        methodLengths[mk] = (methodLengths[mk] || 0) + sl;
-        if (seg.status !== '0' && seg.status.trim() !== '') {
-            methodCompleted[mk] = (methodCompleted[mk] || 0) + sl;
+        const methodKey = [d, pt, m].filter(Boolean).join(' ');
+
+        // 節點名稱：有 nodeName 的 seg 作為新節點起點
+        const nodeStart = seg.nodeName && seg.nodeName.trim() ? seg.nodeName.trim() : null;
+
+        if (!currentGroup || methodKey !== currentGroup.method || (nodeStart && nodeStart !== currentGroup.fromNode)) {
+            currentGroup = { fromNode: nodeStart || currentGroup?.toNode || '', toNode: '', method: methodKey, segs: [] };
+            groups.push(currentGroup);
         }
+        if (nodeStart) currentGroup.fromNode = nodeStart;
+        currentGroup.segs.push(seg);
     });
-    
-    if (Object.keys(methodLengths).length === 0) return;
-    
-    // 每個工法都顯示一個標籤
-    Object.entries(methodLengths).forEach(([methodLabel, total]) => {
-        const labelColor = getColorForMethodKey(methodLabel.split(' ').filter(Boolean).join('-'));
-        const completed = methodCompleted[methodLabel] || 0;
-        const labelText = `${methodLabel} ${Math.round(completed)}m/${Math.round(total)}m`;
-        
-        // 找這個工法的小段中間點
-        const methodSegs = smallSegs.filter(seg => {
-            const mk = [seg.diameter||'', seg.pipeType||'', seg.method||''].filter(Boolean).join(' ');
-            return mk === methodLabel;
-        });
-        if (methodSegs.length === 0) return;
-        
-const midSeg = methodSegs[Math.floor(methodSegs.length / 2)];
-const midDist = (midSeg.startDistance + midSeg.endDistance) / 2;
-let midLatLng = null;
-const midCoords = getSegmentCoordsFromBranch(branch.coords, midDist - 5, midDist + 5);
-if (midCoords && midCoords.length > 0) {
-    midLatLng = midCoords[Math.floor(midCoords.length / 2)];
-} else {
-    // fallback：直接用分支座標插值
-    const branchLen = branch.coords.length;
-    if (branchLen >= 2) {
-        const ratio = midDist / (methodSegs[methodSegs.length-1].endDistance || 1);
-        const idx = Math.min(Math.floor(ratio * (branchLen-1)), branchLen-2);
-        const p1 = branch.coords[idx];
-        const p2 = branch.coords[idx+1];
-        midLatLng = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2];
-    }
-}
-if (!midLatLng) return;
-        
+
+    // 找每個區間的終點節點（下一個區間的起點）
+    groups.forEach((g, gi) => {
+        const nextGroup = groups[gi + 1];
+        g.toNode = nextGroup?.fromNode || '';
+    });
+
+    if (groups.length === 0) return;
+
+    groups.forEach(g => {
+        if (g.segs.length === 0) return;
+        const total = g.segs.reduce((s, seg) => s + (seg.endDistance - seg.startDistance), 0);
+        // 太短的區間不顯示標籤（避免尾段零碎標籤）
+        if (total < 15) return;
+        const completed = g.segs.reduce((s, seg) => {
+            const done = seg.status !== '0' && seg.status.trim() !== '';
+            return s + (done ? seg.endDistance - seg.startDistance : 0);
+        }, 0);
+
+        // 標籤文字：「工法 完工m/總長m」，節點資訊放 tooltip
+        const labelText = `${g.method} ${Math.round(completed)}m/${Math.round(total)}m`;
+        const labelColor = getColorForMethodKey(g.method.split(' ').filter(Boolean).join('-'));
+
+        // 標籤放在這組小段中間
+        const midSeg = g.segs[Math.floor(g.segs.length / 2)];
+        const midDist = (midSeg.startDistance + midSeg.endDistance) / 2;
+        let midLatLng = null;
+        const midCoords = getSegmentCoordsFromBranch(branch.coords, midDist - 5, midDist + 5);
+        if (midCoords && midCoords.length > 0) {
+            midLatLng = midCoords[Math.floor(midCoords.length / 2)];
+        } else {
+            const branchLen = branch.coords.length;
+            if (branchLen >= 2) {
+                const lastDist = g.segs[g.segs.length-1].endDistance || 1;
+                const ratio = midDist / lastDist;
+                const idx = Math.min(Math.floor(ratio * (branchLen-1)), branchLen-2);
+                const p1 = branch.coords[idx];
+                const p2 = branch.coords[idx+1];
+                midLatLng = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2];
+            }
+        }
+        if (!midLatLng) return;
+
+        // 節點資訊行（有節點名稱才顯示）
+        const nodeInfo = (g.fromNode || g.toNode)
+            ? `<div style="font-size:9px;opacity:0.8;margin-top:1px;">${g.fromNode}${g.fromNode && g.toNode ? ' → ' : ''}${g.toNode}</div>`
+            : '';
+
         const label = L.marker(midLatLng, {
             icon: L.divIcon({
                 className: 'segment-label',
@@ -377,14 +398,16 @@ if (!midLatLng) return;
                     white-space: nowrap;
                     border: none;
                     pointer-events: none;
+                    user-select: none;
                     text-shadow: -1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white;
-                ">${labelText}</div>`,
+                ">${labelText}${nodeInfo}</div>`,
                 iconSize: null,
                 iconAnchor: [-5, 20]
-            })
+            }),
+            interactive: false
         }).addTo(map);
-        
-        segmentLabels.push({ marker: label, segmentNumber: `B${branchIndex}`, color: labelColor, methodLabel });
+
+        segmentLabels.push({ marker: label, segmentNumber: `B${branchIndex}`, color: labelColor, methodLabel: g.method });
     });
 }
 
