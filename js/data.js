@@ -371,13 +371,7 @@ function showPipelineList(pipelines) {
         nameDiv.className = 'pipeline-item-name';
         nameDiv.textContent = pipeline.name;
         
-        // 📏 段落資訊
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'pipeline-item-info';
-        infoDiv.textContent = `📏 ${pipeline.segments.length} 個段落`;
-        
         item.appendChild(nameDiv);
-        item.appendChild(infoDiv);
         
         listDiv.appendChild(item);
     });

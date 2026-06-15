@@ -706,10 +706,14 @@ function finishGanttRectSelect(bounds) {
         const minIdx = nodes[0].smallIndex;
         const maxIdx = nodes[nodes.length - 1].smallIndex;
         // 1-based 給甘特圖
+        const fromNode = nodes[0].nodeName || `#${minIdx + 1}`;
+        const toNode = nodes[nodes.length - 1].nodeName || `#${maxIdx + 1}`;
         entries.push({
             segmentNumber: `B${branchIndex}`,
             minIdx: minIdx + 1,
             maxIdx: maxIdx + 1,
+            fromNode,
+            toNode,
             conflicts: []
         });
     }
@@ -724,14 +728,27 @@ function finishGanttRectSelect(bounds) {
         const minIdx = entry.minIdx;
         const maxIdx = entry.maxIdx;
         
-        // 檢查是否與現有項目完全重疊
+        // 檢查是否與現有項目完全重疊（支援新格式節點名稱和舊格式 #N～#N）
+        const entry_fromNode = entry.fromNode || '';
+        const entry_toNode = entry.toNode || '';
         const isFullyCovered = existingItems.some(item => {
-            const sMatch = (item.label || '').match(/段落([A-Za-z0-9\-]+)/);
-            const rMatch = (item.label || '').match(/#(\d+)～#(\d+)/);
-            if (!sMatch || !rMatch) return false;
-            return String(sMatch[1]) === String(segNum) &&
-                parseInt(rMatch[1]) <= minIdx &&
-                parseInt(rMatch[2]) >= maxIdx;
+            const label = item.label || '';
+            // 新格式：比對節點名稱（「節點X至節點Y」）
+            if (entry_fromNode && entry_toNode) {
+                const nodeMatch = label.match(/[－-]\s*(.+?)至(.+?)（/);
+                if (nodeMatch) {
+                    return nodeMatch[1].trim() === entry_fromNode && nodeMatch[2].trim() === entry_toNode;
+                }
+            }
+            // 舊格式：「...段落B0 #1～#31」
+            const sMatch = label.match(/段落([A-Za-z0-9\-]+)/);
+            const rMatch = label.match(/#(\d+)～#(\d+)/);
+            if (sMatch && rMatch) {
+                return String(sMatch[1]) === String(segNum) &&
+                    parseInt(rMatch[1]) <= minIdx &&
+                    parseInt(rMatch[2]) >= maxIdx;
+            }
+            return false;
         });
         
         if (isFullyCovered) {
@@ -755,7 +772,7 @@ function finishGanttRectSelect(bounds) {
 
     if (entries.length === 1) {
         const e = entries[0];
-        openGanttPanelForSegment(e.segmentNumber, e.minIdx, e.maxIdx);
+        openGanttPanelForSegment(e.segmentNumber, e.minIdx, e.maxIdx, e.fromNode, e.toNode);
     } else {
         showGanttSegmentPicker(entries);
     }

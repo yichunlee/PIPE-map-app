@@ -163,9 +163,10 @@ async function editPipeline(pipeline) {
             <input type="text" id="editPipelineName" value="${pipeline.name}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
         </div>
         
-        <div style="background:#fff3cd;padding:12px;border-radius:8px;margin-bottom:20px;font-size:12px;color:#856404;line-height:1.6;">
-            ⚠️ 修改後會立即更新 Google Sheets<br>
-            請確認資料正確後再儲存
+        <div style="margin-bottom:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:600;color:#555;font-size:14px;">💰 契約金額（元）</label>
+            <input type="number" id="editContractAmount" placeholder="例如：300000000"
+                style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
         </div>
         
         <div style="display:flex;gap:10px;margin-bottom:12px;">
@@ -183,7 +184,13 @@ async function editPipeline(pipeline) {
     `;
     
     document.body.appendChild(overlay);
-    document.body.appendChild(formDiv);
+    
+    // 載入契約金額
+    try {
+        const ca = await apiCall('getContractAmount', { pipelineId: pipeline.id });
+        const caInput = document.getElementById('editContractAmount');
+        if (caInput && ca.amount != null) caInput.value = ca.amount;
+    } catch(e) {}    document.body.appendChild(formDiv);
 }
 
 // 確認刪除工程(從編輯表單內呼叫)
@@ -269,6 +276,12 @@ window.submitEditPipeline = async function(oldPipelineId) {
             oldPipelineId: oldPipelineId, newPipelineId: newPipelineId,
             projectName: newProjectName, name: newPipelineName
         });
+        
+        // 儲存契約金額
+        const caInput = document.getElementById('editContractAmount');
+        if (caInput && caInput.value) {
+            await apiCall('saveContractAmount', { pipelineId: newPipelineId, amount: parseFloat(caInput.value) }).catch(() => {});
+        }
         
         if (result.success) {
             showToast('工程資料已更新', 'success');

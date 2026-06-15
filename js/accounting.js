@@ -28,7 +28,7 @@ window.openAccountingPanel = async function() {
         <div style="background:white;border-radius:12px;width:95%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);overflow:hidden;">
             <div style="background:#1565c0;color:white;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
                 <div>
-                    <div style="font-weight:bold;font-size:14px;">💰 核銷金額管理</div>
+                    <div style="font-weight:bold;font-size:14px;">💰 實支數查詢</div>
                     <div style="font-size:11px;opacity:0.85;margin-top:2px;">${currentPipeline.name}</div>
                 </div>
                 <button onclick="document.getElementById('_accountingPanel').remove()"
@@ -47,21 +47,15 @@ window.openAccountingPanel = async function() {
             <!-- 匯入區 -->
             <div style="padding:10px 16px;border-bottom:1px solid #eee;flex-shrink:0;background:#f8f9fa;">
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <button onclick="document.getElementById('_excelInputSingle').click()"
-                        style="padding:8px 14px;background:#e65100;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;">
-                        📂 匯入此工程
-                    </button>
                     <button onclick="document.getElementById('_excelInputAll').click()"
                         style="padding:8px 14px;background:#2e7d32;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;">
-                        📂 一次全部匯入
+                        📂 匯入未完工程明細
                     </button>
-                    <button onclick="_openManualInput()"
-                        style="padding:8px 14px;background:#f5f5f5;color:#555;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:12px;">
-                        ✏️ 手動新增
+                    <button onclick="_clearAllAccounting()"
+                        style="padding:8px 14px;background:#e53935;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;">
+                        🗑️ 清除全部資料
                     </button>
                 </div>
-                <input type="file" id="_excelInputSingle" accept=".xlsx,.xls" style="display:none;"
-                    onchange="_handleExcelSingle(event)">
                 <input type="file" id="_excelInputAll" accept=".xlsx,.xls" style="display:none;"
                     onchange="_handleExcelAll(event)">
                 <div id="_excelProgress" style="display:none;margin-top:8px;font-size:12px;color:#1565c0;"></div>
@@ -156,12 +150,16 @@ async function _parseExcel(file) {
         const direction = String(row[6] || '').trim();
         const amount = parseFloat(row[7]) || 0;
         const ref1 = String(row[9] || '').trim();
+        const ref2 = String(row[10] || '').trim(); // 參考欄二：科目
         if (!date || direction !== '借方' || !amount || !ref1) return;
         const ym = rocDateToYearMonth(date);
         if (!ym) return;
         // 取工程編號（第一個空格前的字串）
         const code = ref1.split(' ')[0].trim();
-        if (code) records.push({ code, year_month: ym, amount });
+        // 科目分類：011=施工費, other=其餘
+        const catPrefix = ref2.split(' ')[0].trim();
+        const category = catPrefix === '011' ? '011' : 'other';
+        if (code) records.push({ code, year_month: ym, amount, category });
     });
     return records;
 }
@@ -235,11 +233,11 @@ window._handleExcelAll = async function(event) {
         const rawRecords = await _parseExcel(file);
         if (progress) progress.textContent = `解析完成，共 ${rawRecords.length} 筆，前端合併中...`;
 
-        // 前端先依 code+year_month 合併，避免跨批次資料被覆蓋
+        // 前端先依 code+year_month+category 合併，避免跨批次資料被覆蓋
         const mergeMap = {};
         rawRecords.forEach(r => {
-            const key = r.code + '_' + r.year_month;
-            if (!mergeMap[key]) mergeMap[key] = { code: r.code, year_month: r.year_month, amount: 0 };
+            const key = r.code + '_' + r.year_month + '_' + (r.category || 'other');
+            if (!mergeMap[key]) mergeMap[key] = { code: r.code, year_month: r.year_month, amount: 0, category: r.category || 'other' };
             mergeMap[key].amount += r.amount;
         });
         const allRecords = Object.values(mergeMap);
@@ -250,8 +248,9 @@ window._handleExcelAll = async function(event) {
         for (let i = 0; i < allRecords.length; i += BATCH) {
             const batch = allRecords.slice(i, i + BATCH);
             if (progress) progress.textContent = `處理中 ${Math.min(i + BATCH, allRecords.length)} / ${allRecords.length} 筆...`;
-            const result = await apiCall('importAllPipelinesExcel', {
-                allRecords: JSON.stringify(batch)
+            // 用 POST JSON body 送，避免 GET URL 截斷 category
+            const result = await apiCall('importAllPipelinesExcel', {}, {
+                body: { allRecords: batch }
             });
             if (!result.success) throw new Error(result.error || '批次匯入失敗');
             totalSaved += result.saved || 0;
@@ -314,11 +313,6 @@ async function _loadAccountingList() {
                 <td style="padding:8px 10px;white-space:nowrap;">${r.year_month}</td>
                 ${codeCells}
                 <td style="padding:8px 10px;text-align:right;color:#1565c0;font-weight:bold;white-space:nowrap;">${Number(r.amount).toLocaleString('zh-TW')}</td>
-                <td style="padding:8px 10px;color:#888;font-size:11px;">${r.note || ''}</td>
-                <td style="padding:4px;text-align:center;">
-                    <button onclick="_deleteAccountingRecord('${r.id}')"
-                        style="padding:2px 6px;background:#e53935;color:white;border:none;border-radius:3px;cursor:pointer;font-size:11px;">✕</button>
-                </td>
             </tr>`;
         }).join('');
 
@@ -328,8 +322,6 @@ async function _loadAccountingList() {
                     <th style="padding:8px 10px;text-align:left;">年月</th>
                     ${codeHeaders}
                     <th style="padding:8px 10px;text-align:right;">合計</th>
-                    <th style="padding:8px 10px;text-align:left;">備註</th>
-                    <th style="width:36px;"></th>
                 </tr></thead>
                 <tbody>${rows}</tbody>
             </table>`;
@@ -390,4 +382,23 @@ window._deleteAccountingRecord = async function(id) {
         showToast('已刪除', 'success');
         await _loadAccountingList();
     } catch(e) { showToast('刪除失敗：' + e.message, 'error'); }
+};
+
+window._clearAllAccounting = async function() {
+    const confirmed = await showConfirm({
+        title: '⚠️ 清除全部實支數資料',
+        message: '確定要清除【所有工程】的實支數記錄嗎？\n清除後需重新匯入，此操作無法復原！',
+        okText: '確認全部清除',
+        danger: true
+    }).catch(() => false);
+    if (!confirmed) return;
+    try {
+        const result = await apiCall('clearAllAccounting', {});
+        if (result.success) {
+            showToast('✅ 已清除所有工程的實支數資料', 'success');
+            await _loadAccountingList();
+        } else {
+            showToast('清除失敗：' + (result.error || ''), 'error');
+        }
+    } catch(e) { showToast('清除失敗：' + e.message, 'error'); }
 };

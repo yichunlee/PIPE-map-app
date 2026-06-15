@@ -85,14 +85,32 @@ function _showPipelineSelector(pipelines) {
 }
 
 // ===== 計畫S曲線（跨工程彙整）=====
-async function showProjectSCurve() {
+// 監聽 blob 視窗的年度篩選訊息
+if (!window._scYearFilterListenerAdded) {
+    window._scYearFilterListenerAdded = true;
+    window.addEventListener('message', function(e) {
+        if (e.data && e.data.type === 'scYearFilter') {
+            window._scYearFilter = window._scYearFilter ? null : new Date().getFullYear();
+            showProjectSCurve(window._scYearFilter);
+        }
+    });
+}
+
+async function showProjectSCurve(yearFilter) {
     if (!allPipelines || !allPipelines.length) { showToast('尚無工程資料', 'warning'); return; }
 
-    // ── 先顯示工程勾選面板（跨所有計畫）──
-    const selectedIds = await _showPipelineSelector(allPipelines);
-    if (!selectedIds) return; // 使用者按取消
-    const selectedPipelines = allPipelines.filter(p => selectedIds.has(p.id));
-    if (!selectedPipelines.length) { showToast('請至少勾選一個工程', 'warning'); return; }
+    let selectedPipelines;
+    // 若是年度篩選切換（已有快取），直接重用上次選的工程
+    if (yearFilter !== undefined && window._scLastSelectedPipelines && window._scLastSelectedPipelines.length) {
+        selectedPipelines = window._scLastSelectedPipelines;
+    } else {
+        // ── 先顯示工程勾選面板（跨所有計畫）──
+        const selectedIds = await _showPipelineSelector(allPipelines);
+        if (!selectedIds) return; // 使用者按取消
+        selectedPipelines = allPipelines.filter(p => selectedIds.has(p.id));
+        if (!selectedPipelines.length) { showToast('請至少勾選一個工程', 'warning'); return; }
+        window._scLastSelectedPipelines = selectedPipelines; // 快取
+    }
 
     showToast('載入中...', 'info');
 
@@ -288,6 +306,22 @@ async function showProjectSCurve() {
     accSortedMonths.forEach(m => { accCumTotal += accMonthlyMap[m]; accCumMap[m] = accCumTotal; });
     const hasAcc = accSortedMonths.length > 0;
 
+    // 若有年度篩選，重新計算該年度的累積核銷（從年初起算）
+    const filterYear = yearFilter || null;
+    let filteredAccMonthlyMap = accMonthlyMap;
+    let filteredAccCumMap = accCumMap;
+    let filteredAccSortedMonths = accSortedMonths;
+    if (filterYear) {
+        filteredAccMonthlyMap = {};
+        Object.entries(accMonthlyMap).forEach(([m, v]) => {
+            if (parseInt(m.split('-')[0]) === filterYear) filteredAccMonthlyMap[m] = v;
+        });
+        filteredAccSortedMonths = Object.keys(filteredAccMonthlyMap).sort();
+        let cum = 0;
+        filteredAccCumMap = {};
+        filteredAccSortedMonths.forEach(m => { cum += filteredAccMonthlyMap[m]; filteredAccCumMap[m] = cum; });
+    }
+
     // 計算各前綴各年度的核銷加總（用於對比年度預算）
     // prefix 從 accByPipeline 的 pipeline.id 前兩碼取得
     const accByPrefixYear = {}; // prefix_year -> 累積金額
@@ -328,7 +362,7 @@ async function showProjectSCurve() {
 
     // 時間軸範圍（含核銷月份）
     const allMonths = totalRows.map(r => r.month);
-    const allRangeMonths = [...new Set([...allMonths, ...accSortedMonths])].sort();
+    const allRangeMonths = [...new Set([...(filterYear ? allMonths.filter(m => parseInt(m.split('-')[0]) >= filterYear) : allMonths), ...filteredAccSortedMonths])].sort();
     const minMonth = allRangeMonths[0], maxMonth = allRangeMonths[allRangeMonths.length - 1];
     const [minY, minM] = minMonth.split('-').map(Number);
     const [maxY, maxM] = maxMonth.split('-').map(Number);
@@ -516,10 +550,10 @@ async function showProjectSCurve() {
     // 核銷：當月柱狀圖 + 累積折線（分層存）
     let accBarsSvg = '', accLineSvg = '';
     if (hasAcc) {
-        const accMonthlyMax = Math.max(...Object.values(accMonthlyMap)) * 1.15;
-        const barW = Math.max(0.5, 1000 / Math.max(accSortedMonths.length, 1) * 0.3);
+        const accMonthlyMax = Math.max(...Object.values(filteredAccMonthlyMap)) * 1.15;
+        const barW = Math.max(0.5, 1000 / Math.max(filteredAccSortedMonths.length, 1) * 0.3);
         const accLinePts = [];
-        accSortedMonths.forEach(m => {
+        filteredAccSortedMonths.forEach(m => {
             const xPct = parseFloat((dateToPct(midDate(m)) * 10).toFixed(1));
             let stackY = 100;
             accByPipeline.forEach(pl => {
@@ -529,7 +563,7 @@ async function showProjectSCurve() {
                 stackY -= bH;
                 accBarsSvg += '<rect x="' + (xPct - barW/2).toFixed(1) + '" y="' + stackY.toFixed(2) + '" width="' + barW.toFixed(1) + '" height="' + bH.toFixed(2) + '" fill="' + pl.color + '" opacity="0.55" vector-effect="non-scaling-stroke"><title>' + pl.name + ' ' + m + '：' + Math.round(v).toLocaleString() + '元</title></rect>';
             });
-            const yPct = ((1 - accCumMap[m] / yMax) * 100).toFixed(1);
+            const yPct = ((1 - filteredAccCumMap[m] / yMax) * 100).toFixed(1);
             accLinePts.push(xPct.toFixed(1) + ',' + yPct);
         });
         if (accLinePts.length >= 2) {
@@ -546,9 +580,9 @@ async function showProjectSCurve() {
     // 核銷累積圓點
     let accDotDivs = '';
     if (hasAcc) {
-        accSortedMonths.forEach(m => {
+        filteredAccSortedMonths.forEach(m => {
             const left = dateToPct(midDate(m)).toFixed(2);
-            const bottom = (accCumMap[m] / yMax * 100).toFixed(2);
+            const bottom = (filteredAccCumMap[m] / yMax * 100).toFixed(2);
             accDotDivs += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:5px;height:5px;border-radius:50%;background:#e65100;border:1.5px solid white;transform:translate(-50%,50%);pointer-events:none;"></div>';
         });
     }
@@ -605,6 +639,7 @@ async function showProjectSCurve() {
         (hasAcc ? '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:normal;"><input type="checkbox" id="chkAccLine" checked onchange="toggleLayer(\'scAccLine\',this.checked)"> 累積核銷</label>' : '') +
         (hasAcc ? '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:normal;"><input type="checkbox" id="chkBars" checked onchange="toggleLayer(\'scBarsLayer\',this.checked)"> 當月核銷</label>' : '') +
         (hasBudget ? '<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;font-weight:normal;"><input type="checkbox" id="chkBudget" checked onchange="toggleLayer(\'scBudgetLayer\',this.checked)"> 年度預算</label>' : '') +
+        '<button onclick="_toggleScYearFilter()" style="background:' + (filterYear ? '#e3f2fd' : 'rgba(255,255,255,0.15)') + ';border:1px solid rgba(255,255,255,0.4);color:' + (filterYear ? '#0d47a1' : 'white') + ';padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:' + (filterYear ? 'bold' : 'normal') + ';">🗓️ ' + (filterYear ? filterYear + '年' : '本年度') + '</button>' +
         '<button id="exportBtn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📥 匯出Excel</button>' +
         '</div></div>' +
         '<div class="body">' + statsHtml +
@@ -626,6 +661,7 @@ async function showProjectSCurve() {
         '<div id="tip"></div>' +
         '</div>' +
         '<script>' +
+        'function _toggleScYearFilter(){window.opener&&window.opener.postMessage({type:"scYearFilter"},"*");}' +
         'function toggleLayer(id,show){var el=document.getElementById(id);if(el)el.style.display=show?"":"none";}' +
         'var tip=document.getElementById("tip");' +
         'document.querySelectorAll(".sc-hover").forEach(function(z){' +

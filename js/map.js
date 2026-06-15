@@ -135,7 +135,7 @@ if (nodeCoords && nodeCoords.length > 0) {
             className: '',
             html: `<div style="position:relative;width:10px;height:10px;">
                 <div style="width:10px;height:10px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
-                <div style="position:absolute;left:14px;top:-28px;white-space:nowrap;font-size:11px;font-weight:bold;color:${color};background:white;padding:3px 8px;border-radius:4px;border:2px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,0.2);pointer-events:none;">${seg.nodeName}</div>
+                <div style="position:absolute;left:10px;top:-22px;white-space:nowrap;font-size:9px;font-weight:bold;color:${color};background:white;padding:2px 5px;border-radius:3px;border:1.5px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,0.2);pointer-events:none;">${seg.nodeName}</div>
             </div>`,
             iconSize: [10, 10],
             iconAnchor: [5, 5]
