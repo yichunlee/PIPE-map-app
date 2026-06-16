@@ -858,3 +858,21 @@ kbd {
     background: #e3f2fd !important;
     color: #1565C0 !important;
 }
+
+/* 便利貼 tooltip - 移除 Leaflet 預設白底框和箭頭 */
+.sticky-note-tooltip {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+.sticky-note-tooltip::before {
+    display: none !important;
+}
+
+
+/* 便利貼 marker */
+.sticky-note-marker {
+    background: transparent !important;
+    border: none !important;
+}

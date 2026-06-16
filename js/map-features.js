@@ -903,6 +903,238 @@ window.closeRightClickMenu = function() {
     if (menu) menu.remove();
 }
 // ========== 右鍵選單結束 ==========
+
+// ========== 地圖便利貼功能 ==========
+let stickyNotes = [];
+let stickyRectangles = [];
+let _stickyDrawing = false;
+let _stickyStartLatLng = null;
+let _stickyPreviewRect = null;
+
+// 覆寫右鍵選單加入「新增便利貼」
+window.showRightClickMenu = function(latlng, clientX, clientY) {
+    const old = document.getElementById('rightClickMenu');
+    if (old) old.remove();
+    const menu = document.createElement('div');
+    menu.id = 'rightClickMenu';
+    menu.style.cssText = 'position:fixed;left:' + clientX + 'px;top:' + clientY + 'px;background:white;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,0.2);z-index:9999;overflow:hidden;min-width:160px;';
+    const lat = latlng.lat;
+    const lng = latlng.lng;
+    const ganttRectItem = currentPipeline
+        ? '<div class="rcm-item" style="border-top:2px solid #e8f5e9;background:#f9fffe;" onclick="closeRightClickMenu();startGanttRectSelect()">🗺️ <span>圈選建甘特</span></div>'
+        : '';
+    menu.innerHTML =
+        '<div class="rcm-item" onclick="closeRightClickMenu();showAddNotePopup({lat:' + lat + ',lng:' + lng + '})">📝 <span>新增備註</span></div>' +
+        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddShaftPopup(' + lat + ',' + lng + ')">🕳️ <span>新增工作井</span></div>' +
+        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddPanelPopup({lat:' + lat + ',lng:' + lng + '})">🔌 <span>新增配電盤/儀表箱</span></div>' +
+        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>' +
+        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;color:#b8860b;" onclick="closeRightClickMenu();startStickyNoteRect()">🟡 <span>新增便利貼</span></div>' +
+        ganttRectItem;
+    document.body.appendChild(menu);
+    setTimeout(() => {
+        document.addEventListener('click', closeRightClickMenu, { once: true });
+        map.once('click', closeRightClickMenu);
+    }, 100);
+};
+
+window.startStickyNoteRect = function() {
+    if (_stickyDrawing) return;
+    _stickyDrawing = true;
+    _stickyStartLatLng = null;
+    showToast('請在地圖上拖曳框選便利貼範圍', 'info', 4000);
+    map.dragging.disable();
+    map.getContainer().style.cursor = 'crosshair';
+    map.once('mousedown', function(e) {
+        _stickyStartLatLng = e.latlng;
+        _stickyPreviewRect = L.rectangle(
+            [_stickyStartLatLng, _stickyStartLatLng],
+            { color: '#f5c518', weight: 2, fillColor: '#fffde7', fillOpacity: 0.4, dashArray: '6,4' }
+        ).addTo(map);
+        function onMove(ev) {
+            if (_stickyPreviewRect) _stickyPreviewRect.setBounds(L.latLngBounds(_stickyStartLatLng, ev.latlng));
+        }
+        function onUp(ev) {
+            map.off('mousemove', onMove);
+            map.off('mouseup', onUp);
+            map.dragging.enable();
+            map.getContainer().style.cursor = '';
+            _stickyDrawing = false;
+            if (_stickyPreviewRect) { map.removeLayer(_stickyPreviewRect); _stickyPreviewRect = null; }
+            const bounds = L.latLngBounds(_stickyStartLatLng, ev.latlng);
+            const size = map.latLngToContainerPoint(bounds.getNorthEast())
+                .distanceTo(map.latLngToContainerPoint(bounds.getSouthWest()));
+            if (size < 20) { showToast('範圍太小，請重新框選', 'warning'); return; }
+            showStickyNoteForm(bounds, null);
+        }
+        map.on('mousemove', onMove);
+        map.on('mouseup', onUp);
+    });
+};
+
+function showStickyNoteForm(bounds, existingNote) {
+    const old = document.getElementById('_stickyForm');
+    if (old) old.remove();
+    const COLORS = [
+        { bg: '#fffde7', border: '#f5c518', label: '黃' },
+        { bg: '#e8f5e9', border: '#43a047', label: '綠' },
+        { bg: '#e3f2fd', border: '#1e88e5', label: '藍' },
+        { bg: '#fce4ec', border: '#e53935', label: '紅' },
+        { bg: '#f3e5f5', border: '#8e24aa', label: '紫' },
+    ];
+    window._pendingStickyBounds = bounds;
+    window._pendingStickyColors = COLORS;
+    window._pendingStickySelColor = existingNote ? (existingNote.color || 0) : 0;
+    window._editingStickyNote = existingNote || null;
+
+    const backdrop = document.createElement('div');
+    backdrop.id = '_stickyForm';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9990;display:flex;align-items:center;justify-content:center;';
+    const selColor = window._pendingStickySelColor;
+    backdrop.innerHTML =
+        '<div style="background:white;border-radius:12px;padding:20px;width:320px;box-shadow:0 8px 30px rgba(0,0,0,0.25);">' +
+        '<div style="font-size:15px;font-weight:bold;margin-bottom:12px;">🟡 便利貼內容</div>' +
+        '<textarea id="_stickyText" rows="5" placeholder="輸入便利貼文字\u2026" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;box-sizing:border-box;resize:vertical;">' + (existingNote ? existingNote.text.replace(/</g,'&lt;') : '') + '</textarea>' +
+        '<div style="margin-top:10px;margin-bottom:6px;font-size:12px;color:#666;">顏色</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:14px;" id="_stickyColors">' +
+        COLORS.map(function(c, i) {
+            return '<div data-ci="' + i + '" onclick="selectStickyColor(' + i + ')" style="width:28px;height:28px;border-radius:50%;background:' + c.bg + ';border:3px solid ' + (i===selColor?c.border:'#ccc') + ';cursor:pointer;box-shadow:' + (i===selColor?'0 0 0 2px '+c.border:'none') + ';transition:all 0.15s;" title="' + c.label + '色"></div>';
+        }).join('') +
+        '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+        '<button onclick="document.getElementById(\'_stickyForm\').remove()" style="flex:1;padding:9px;background:#f5f5f5;border:none;border-radius:6px;cursor:pointer;font-size:13px;">取消</button>' +
+        (existingNote ? '<button onclick="deleteStickyNote(\'' + existingNote.id + '\')" style="flex:1;padding:9px;background:#e53935;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">刪除</button>' : '') +
+        '<button onclick="saveStickyNote()" style="flex:1;padding:9px;background:#f5c518;color:#333;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;">貼上</button>' +
+        '</div></div>';
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
+    document.getElementById('_stickyText').focus();
+}
+
+window.selectStickyColor = function(idx) {
+    window._pendingStickySelColor = idx;
+    var COLORS = window._pendingStickyColors;
+    document.querySelectorAll('#_stickyColors [data-ci]').forEach(function(el) {
+        var i = parseInt(el.dataset.ci);
+        el.style.border = '3px solid ' + (i === idx ? COLORS[i].border : '#ccc');
+        el.style.boxShadow = i === idx ? '0 0 0 2px ' + COLORS[i].border : 'none';
+    });
+};
+
+window.saveStickyNote = async function() {
+    var text = (document.getElementById('_stickyText').value || '').trim();
+    if (!text) { showToast('請輸入便利貼文字', 'warning'); return; }
+    var bounds = window._pendingStickyBounds;
+    var ci = window._pendingStickySelColor || 0;
+    var editing = window._editingStickyNote;
+    var payload = {
+        text: text,
+        color: ci,
+        swLat: bounds.getSouthWest().lat,
+        swLng: bounds.getSouthWest().lng,
+        neLat: bounds.getNorthEast().lat,
+        neLng: bounds.getNorthEast().lng,
+        pipelineId: currentPipeline ? currentPipeline.id : '',
+    };
+    try {
+        var result;
+        if (editing) {
+            payload.noteId = editing.id;
+            result = await apiCall('updateStickyNote', payload);
+        } else {
+            result = await apiCall('addStickyNote', payload);
+        }
+        if (result.success) {
+            document.getElementById('_stickyForm').remove();
+            showToast('便利貼已儲存', 'success');
+            await loadStickyNotes();
+        } else { showToast(result.error || '儲存失敗', 'error'); }
+    } catch(e) { showToast(e.message, 'error'); }
+};
+
+window.deleteStickyNote = async function(id) {
+    try {
+        var result = await apiCall('deleteStickyNote', { noteId: id });
+        if (result.success) {
+            document.getElementById('_stickyForm').remove();
+            showToast('便利貼已刪除', 'success');
+            await loadStickyNotes();
+        } else { showToast(result.error || '刪除失敗', 'error'); }
+    } catch(e) { showToast(e.message, 'error'); }
+};
+
+async function loadStickyNotes() {
+    clearStickyNotes();
+    if (!currentPipeline) return;
+    try {
+        var result = await apiCall('getStickyNotes', { pipelineId: currentPipeline.id });
+        stickyNotes = result.notes || [];
+        displayStickyNotes();
+        // 縮放時重繪（控制顯示/隱藏）
+        map.off('zoomend', displayStickyNotes);
+        map.on('zoomend', displayStickyNotes);
+    } catch(e) { console.error('載入便利貼失敗', e); }
+}
+
+function displayStickyNotes() {
+    clearStickyNotes();
+    var COLORS = [
+        { bg: '#fffde7', border: '#f5c518' },
+        { bg: '#e8f5e9', border: '#43a047' },
+        { bg: '#e3f2fd', border: '#1e88e5' },
+        { bg: '#fce4ec', border: '#e53935' },
+        { bg: '#f3e5f5', border: '#8e24aa' },
+    ];
+    stickyNotes.forEach(function(note) {
+        var sw = L.latLng(note.swLat, note.swLng);
+        var ne = L.latLng(note.neLat, note.neLng);
+        var bounds = L.latLngBounds(sw, ne);
+        var ci = note.color || 0;
+        var c = COLORS[ci] || COLORS[0];
+        // 不顯示外框矩形
+        var center = bounds.getCenter();
+        // zoom < 18 不顯示（maxZoom=19，倒數第二才出現）
+        var zoom = map.getZoom();
+        if (zoom < 18) return;
+        var openEdit = function() { showStickyNoteForm(bounds, note); };
+        // onclick 不用 stopPropagation，讓 Leaflet click 事件正常冒泡
+        var noteHtml = '<div style="background:' + c.bg + ';border:1.5px solid ' + c.border + ';border-radius:4px;padding:3px 7px;font-size:11px;color:#333;white-space:pre-wrap;word-break:break-word;width:150px;line-height:1.5;cursor:pointer;box-shadow:1px 2px 5px rgba(0,0,0,0.18);">' + note.text.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div>';
+        var label = L.marker(center, {
+            icon: L.divIcon({
+                className: 'sticky-note-marker',
+                html: noteHtml,
+                iconSize: [150, 10],
+                iconAnchor: [75, 5],
+            }),
+            zIndexOffset: 800,
+            interactive: true,
+        }).addTo(map);
+        // 綁在 DOM 元素上，比 Leaflet .on('click') 更可靠
+        (function(fn) {
+            setTimeout(function() {
+                var wrapper = label.getElement();
+                if (wrapper) {
+                    wrapper.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+                    wrapper.addEventListener('click', function(e) { e.stopPropagation(); fn(); });
+                }
+            }, 50);
+        })(openEdit);
+        stickyRectangles.push(label);
+    });
+}
+
+function clearStickyNotes() {
+    stickyRectangles.forEach(function(l) { try { map.removeLayer(l); } catch(e) {} });
+    stickyRectangles = [];
+}
+
+// 掛載到 loadMapNotes 流程
+var _origLoadMapNotes2 = window.loadMapNotes;
+window.loadMapNotes = async function() {
+    if (_origLoadMapNotes2) await _origLoadMapNotes2();
+    await loadStickyNotes();
+};
+// ========== 地圖便利貼功能結束 ==========
+
 // ========== 施工日期標註功能（改良版）==========
 
 // 載入甘特圖項目用於日期標註
@@ -971,15 +1203,45 @@ if (itemEnd < today) return; // 已完全結束的才不顯示
 let segmentNumber, fromSmall, toSmall;
 if (item.segmentNumber) {
     segmentNumber = item.segmentNumber;
-    fromSmall = item.fromSmall || 0;
-    toSmall = item.toSmall || 0;
+    fromSmall = item.fromSmall != null ? Number(item.fromSmall) : 0;
+    toSmall   = item.toSmall   != null ? Number(item.toSmall)   : 0;
 } else {
+    // 舊格式：「xxx - 段落N #from～#to」
     const segMatch = label.match(/段落([\w-]+)/);
     const rangeMatch = label.match(/#(\d+)～#(\d+)/);
-    if (!segMatch || !rangeMatch) return;
-    segmentNumber = segMatch[1];
-    fromSmall = parseInt(rangeMatch[1]) - 1;
-    toSmall = parseInt(rangeMatch[2]) - 1;
+    if (segMatch && rangeMatch) {
+        segmentNumber = segMatch[1];
+        fromSmall = parseInt(rangeMatch[1]) - 1;
+        toSmall   = parseInt(rangeMatch[2]) - 1;
+    } else {
+        // 新格式：「prefix - 起點至終點（Xm）」→ 用節點名稱比對 branch
+        const nodeMatch = label.match(/- (.+)至(.+)（/);
+        if (!nodeMatch) return;
+        const fromNodeName = nodeMatch[1].trim();
+        const toNodeName   = nodeMatch[2].trim();
+        // 從 label 前綴推斷 prefix（管徑/管種/工法）
+        const dashIdx = label.lastIndexOf(' - ');
+        const prefix = dashIdx >= 0 ? label.substring(0, dashIdx).trim() : '';
+        // 掃描所有 branch 找到符合節點名稱的
+        let found = false;
+        const branches = currentPipeline.branches || {};
+        for (const [bk, bsegs] of Object.entries(branches)) {
+            const firstSeg = bsegs.find(s => s.diameter || s.pipeType || s.method);
+            if (firstSeg) {
+                const bp = [firstSeg.diameter||'', firstSeg.pipeType||'', firstSeg.method||''].filter(Boolean).join(' ');
+                if (prefix && bp !== prefix) continue;
+            }
+            const fi = bsegs.findIndex(s => s.nodeName === fromNodeName);
+            const ti = bsegs.findIndex(s => s.nodeName === toNodeName);
+            if (fi < 0 || ti < 0) continue;
+            segmentNumber = bk;
+            fromSmall = bsegs[fi].smallIndex;
+            toSmall   = bsegs[ti].smallIndex;
+            found = true;
+            break;
+        }
+        if (!found) return;
+    }
 }
         
 // 新架構：從 branches 取得小段資料
@@ -1070,8 +1332,8 @@ if (branchSegs.length > 0) {
         const pipelineLength = Math.round(endDistance - startDistance);
         
         // 取得施工方式
-const firstSeg = branchSegs.length > 0 ? branchSegs[fromSmall] : null;
-const lastSeg = branchSegs.length > 0 ? branchSegs[toSmall] : null;
+const firstSeg = branchSegs.length > 0 ? branchSegs.find(s => s.smallIndex === fromSmall) || branchSegs[0] : null;
+const lastSeg  = branchSegs.length > 0 ? branchSegs.find(s => s.smallIndex === toSmall)   || branchSegs[branchSegs.length-1] : null;
 const method = firstSeg?.method || '';
 const diameter = firstSeg?.diameter || '';
 const pipeType = firstSeg?.pipeType || '';
