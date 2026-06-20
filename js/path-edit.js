@@ -1143,6 +1143,7 @@ const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
         let newLength = 0;
         
         // 根據是否為 MULTILINESTRING 產生不同格式
+        const branchLengthsArr = [];
         if (isMULTI) {
             // ========== MULTILINESTRING 模式 ==========
             console.log('📝 準備生成 MULTILINESTRING');
@@ -1164,9 +1165,12 @@ const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
                 });
                 
                 // 計算該分支長度
+                let branchLen = 0;
                 for (let i = 0; i < coords.length - 1; i++) {
-                    newLength += getDistance(coords[i], coords[i + 1]);
+                    branchLen += getDistance(coords[i], coords[i + 1]);
                 }
+                newLength += branchLen;
+                branchLengthsArr.push({ branchIndex, length: Math.round(branchLen) });
                 
                 // 加入該分支的座標字串（lng lat 格式）
                 const coordStr = coords.map(c => `${c[1]} ${c[0]}`).join(', ');
@@ -1245,7 +1249,8 @@ const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
         const result = await apiCall('updateLinestring', {}, {
             body: new URLSearchParams({
                 pipelineId: currentPipeline.id,
-                linestring: linestring
+                linestring: linestring,
+                branchLengths: JSON.stringify(branchLengthsArr)
             })
         });
         

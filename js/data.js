@@ -348,11 +348,15 @@ function showPipelineList(pipelines) {
     const listDiv = document.createElement('div');
     listDiv.className = 'pipeline-list';
     listDiv.innerHTML = `
-        <div style="display:flex;gap:6px;margin:10px 10px 15px 10px;">
-            <div style="flex:1;background:#FF9800;color:white;padding:10px 8px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:12px;" onclick="toggleStatsReport()">
-                每月施工統計
+        <div style="padding:14px 14px 10px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1a5fb4,#1e6fdc);border-radius:0;">
+            <div style="color:white;font-weight:700;font-size:14px;margin-bottom:10px;letter-spacing:0.3px;">📋 工程列表</div>
+            <div style="display:flex;gap:8px;">
+                <div style="flex:1;background:rgba(255,255,255,0.18);color:white;padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:12px;border:1px solid rgba(255,255,255,0.3);transition:all 0.15s;" onclick="toggleStatsReport()" onmouseover="this.style.background='rgba(255,255,255,0.28)'" onmouseout="this.style.background='rgba(255,255,255,0.18)'">
+                    📊 每月施工統計
+                </div>
             </div>
         </div>
+        <div style="padding:8px 10px 4px;font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">工程選擇</div>
     `;
     
     pipelines.forEach(pipeline => {
@@ -372,8 +376,14 @@ function showPipelineList(pipelines) {
         const nameDiv = document.createElement('div');
         nameDiv.className = 'pipeline-item-name';
         nameDiv.textContent = pipeline.name;
+        nameDiv.style.cssText = 'font-weight:600;font-size:13px;color:#1e293b;';
         
+        const idDiv = document.createElement('div');
+        idDiv.style.cssText = 'font-size:10px;color:#94a3b8;margin-top:2px;font-family:monospace;';
+        idDiv.textContent = pipeline.id;
+
         item.appendChild(nameDiv);
+        item.appendChild(idDiv);
         
         listDiv.appendChild(item);
     });
@@ -472,13 +482,13 @@ function showStatsPanel() {
     const overallPercent = totalLength > 0 ? Math.round((completedLength / totalLength) * 100) : 0;
     
     let statsHTML = `
-        <div class="stats-panel-header" onclick="toggleStatsPanel(event)">
-            <h3>📊 ${currentPipeline.name}</h3>
-            <span class="stats-toggle-btn">▼</span>
+        <div class="stats-panel-header" onclick="toggleStatsPanel(event)" style="background:linear-gradient(135deg,#1a5fb4,#1e6fdc);padding:10px 14px;border-radius:10px 10px 0 0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+            <div style="color:white;font-weight:700;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${currentPipeline.name}</div>
+            <span class="stats-toggle-btn" style="color:rgba(255,255,255,0.8);font-size:12px;margin-left:8px;">▼</span>
         </div>
-        <div class="stats-content" style="margin-top: 10px;">
-            <div class="stats-info" style="font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;">
-                總進度：${overallPercent}% (${Math.round(completedLength)}m/${Math.round(totalLength)}m)
+        <div class="stats-content" style="padding:10px 12px 8px;">
+            <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px;">
+                總進度：${overallPercent}% <span style="font-weight:400;color:#64748b;font-size:12px;">(${Math.round(completedLength)}m / ${Math.round(totalLength)}m)</span>
             </div>
     `;
     
@@ -491,8 +501,8 @@ function showStatsPanel() {
         const percent = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
         const color = getColorForMethodKey(methodKey);
         statsHTML += `
-            <div class="stats-info" style="font-size: 11px; margin: 5px 0; padding-left: 10px; border-left: 3px solid ${color};">
-                ${stats.label}：${percent}% (${Math.round(stats.completed)}m/${Math.round(stats.total)}m)
+            <div style="font-size:11px;margin:5px 0;padding-left:10px;border-left:3px solid ${color};color:#475569;">
+                ${stats.label}：${percent}% <span style="color:#94a3b8;">(${Math.round(stats.completed)}m / ${Math.round(stats.total)}m)</span>
             </div>
         `;
     });

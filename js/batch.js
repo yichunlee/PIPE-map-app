@@ -48,7 +48,7 @@ function toggleSelectSmallSegment(segment, smallIndex, polyline, originalColor) 
         // 取消選取
         const item = selectedSmallSegments[existingIndex];
         item.polyline.setStyle({ 
-            weight: item.isCompleted ? 8 : 4,
+            weight: 5,
             color: item.originalColor,
             opacity: item.isCompleted ? 1 : 0.3
         });
@@ -102,7 +102,7 @@ function clearSmallSegmentSelection() {
         // 確保 polyline 還在地圖上才設置樣式
         if (map.hasLayer(item.polyline)) {
             item.polyline.setStyle({ 
-                weight: item.isCompleted ? 8 : 4,
+                weight: 5,
                 color: item.originalColor,
                 opacity: item.isCompleted ? 1 : 0.3
             });
@@ -495,7 +495,7 @@ function updateSmallSegmentVisual(segmentNumber, smallIndex, isCompleted) {
     
     // 立即更新 polyline 樣式
     tracked.polyline.setStyle({
-        weight: isCompleted ? 6 : 3,
+        weight: 5,
         opacity: isCompleted ? 1 : 0.5
     });
     

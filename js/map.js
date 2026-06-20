@@ -110,8 +110,8 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
                         
                         const polyline = L.polyline(smallCoords, {
                             color: color,
-                            weight: isCompleted ? 6 : 3,
-                            opacity: isCompleted ? 1 : 0.5
+                            weight: 5,
+                            opacity: isCompleted ? 1 : 0.35
                         }).addTo(map);
                         
                         polyline.on('click', function(e) {
@@ -206,8 +206,8 @@ if (nodeCoords && nodeCoords.length > 0) {
                     
                     const polyline = L.polyline(smallCoords, {
                         color: color,
-                        weight: isCompleted ? 6 : 3,
-                        opacity: isCompleted ? 1 : 0.5,
+                        weight: 5,
+                        opacity: isCompleted ? 1 : 0.35,
                         lineCap: 'round'
                     }).addTo(map);
                     
@@ -522,8 +522,8 @@ window.toggleNewSmallSegment = async function(branchIndex, smallIndex) {
         const tracked = smallSegmentPolylines[trackKey];
         if (tracked) {
             tracked.polyline.setStyle({
-                weight: newStatus !== '0' ? 6 : 3,
-                opacity: newStatus !== '0' ? 1 : 0.5,
+                weight: 5,
+                opacity: newStatus !== '0' ? 1 : 0.35,
             });
         }
         showToast(newStatus !== '0' ? '✅ 已標記完工' : '已標記未完工', 'success');
@@ -841,7 +841,7 @@ function drawLegacySegments(isMULTI, branchData, totalLength) {
                         const color = getColorForMethodKey(methodKey);
                         
                         const polyline = L.polyline(smallCoords, {
-                            color, weight: isCompleted ? 6 : 3, opacity: isCompleted ? 1 : 0.5
+                            color, weight: 5, opacity: isCompleted ? 1 : 0.35
                         }).addTo(map);
                         
                         polyline.on('click', function(e) {
@@ -880,7 +880,7 @@ function drawLegacySegments(isMULTI, branchData, totalLength) {
                 const color = getColorForMethodKey(methodKey);
                 
                 const polyline = L.polyline(smallCoords, {
-                    color, weight: isCompleted ? 6 : 3, opacity: isCompleted ? 1 : 0.5, lineCap: 'round'
+                    color, weight: 5, opacity: isCompleted ? 1 : 0.35, lineCap: 'round'
                 }).addTo(map);
                 polyline.on('click', function(e) {
                     const _arr = (segment.smallSegments || '').split(',').map(s => s.trim());
