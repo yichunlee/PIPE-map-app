@@ -741,6 +741,7 @@ async function compressImage(file, maxWidth = 1200, quality = 0.8) {
 // 儲存地圖備註
 window.saveMapNote = async function(lat, lng) {
     if (!requireLogin()) return;
+    if (!requireLogin()) return;
     const isNode = window._noteType === 'node';
     const rawText = document.getElementById('noteText').value.trim();
     const nodeName = isNode ? (document.getElementById('nodeName') ? document.getElementById('nodeName').value.trim() : '') : '';
@@ -804,6 +805,7 @@ window.saveMapNote = async function(lat, lng) {
 // 刪除地圖備註
 window.deleteMapNote = async function(noteId) {
     if (!requireLogin()) return;
+    if (!requireLogin()) return;
     if (!await showConfirm({ title: '刪除備註', message: '確定要刪除這個備註嗎？', okText: '刪除', danger: true })) {
         return;
     }
@@ -839,6 +841,7 @@ window.cancelEditNote = function(noteId) {
 
 // 儲存編輯後的備註
 window.saveEditNote = async function(noteId, isNode) {
+    if (!requireLogin()) return;
     if (!requireLogin()) return;
     const bodyText = (document.getElementById('note-text-edit-' + noteId) ? document.getElementById('note-text-edit-' + noteId).value.trim() : '');
     let newText;
@@ -884,7 +887,6 @@ window.showRightClickMenu = function(latlng, clientX, clientY) {
         : '';
     menu.innerHTML =
         '<div class="rcm-item" onclick="closeRightClickMenu();showAddNotePopup({lat:' + lat + ',lng:' + lng + '})">📝 <span>新增備註</span></div>' +
-        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddShaftPopup(' + lat + ',' + lng + ')">🕳️ <span>新增工作井</span></div>' +
         '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddPanelPopup({lat:' + lat + ',lng:' + lng + '})">🔌 <span>新增配電盤/儀表箱</span></div>' +
         '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>' +
         ganttRectItem;
@@ -925,11 +927,11 @@ window.showRightClickMenu = function(latlng, clientX, clientY) {
         : '';
     menu.innerHTML =
         '<div class="rcm-item" onclick="closeRightClickMenu();showAddNotePopup({lat:' + lat + ',lng:' + lng + '})">📝 <span>新增備註</span></div>' +
-        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddShaftPopup(' + lat + ',' + lng + ')">🕳️ <span>新增工作井</span></div>' +
         '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddPanelPopup({lat:' + lat + ',lng:' + lng + '})">🔌 <span>新增配電盤/儀表箱</span></div>' +
         '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>' +
         '<div class="rcm-item" style="border-top:1px solid #f0f0f0;color:#b8860b;" onclick="closeRightClickMenu();startStickyNoteRect()">🟡 <span>新增便利貼</span></div>' +
-        ganttRectItem;
+        ganttRectItem +
+        (currentPipeline ? '<div class="rcm-item" style="border-top:2px solid #fff3e0;background:#fffaf7;" onclick="closeRightClickMenu();startCompleteRectSelect()">🏗️ <span>圈選更新完工</span></div>' : '');
     document.body.appendChild(menu);
     setTimeout(() => {
         document.addEventListener('click', closeRightClickMenu, { once: true });
@@ -1021,6 +1023,7 @@ window.selectStickyColor = function(idx) {
 };
 
 window.saveStickyNote = async function() {
+    if (!requireLogin()) return;
     var text = (document.getElementById('_stickyText').value || '').trim();
     if (!text) { showToast('請輸入便利貼文字', 'warning'); return; }
     var bounds = window._pendingStickyBounds;
@@ -1052,6 +1055,7 @@ window.saveStickyNote = async function() {
 };
 
 window.deleteStickyNote = async function(id) {
+    if (!requireLogin()) return;
     try {
         var result = await apiCall('deleteStickyNote', { noteId: id });
         if (result.success) {
@@ -1215,7 +1219,9 @@ if (item.segmentNumber) {
         toSmall   = parseInt(rangeMatch[2]) - 1;
     } else {
         // 新格式：「prefix - 起點至終點（Xm）」→ 用節點名稱比對 branch
-        const nodeMatch = label.match(/- (.+)至(.+)（/);
+        // 支援多種 label 格式的節點名稱解析
+        let nodeMatch = label.match(/- (.+)至(.+?)[（(]/);
+        if (!nodeMatch) nodeMatch = label.match(/(\S+)至(\S+?)\s*[（(]/);
         if (!nodeMatch) return;
         const fromNodeName = nodeMatch[1].trim();
         const toNodeName   = nodeMatch[2].trim();

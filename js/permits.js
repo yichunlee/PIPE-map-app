@@ -166,6 +166,7 @@ function showPermitZoneForm(points) {
 
 async function savePermitZone(points) {
     if (!requireLogin()) return;
+    if (!requireLogin()) return;
     const status = document.getElementById('pz_status').value;
     const permitNo = document.getElementById('pz_permitNo').value.trim();
     const notes = document.getElementById('pz_notes').value.trim();
@@ -390,6 +391,7 @@ async function updatePermitZone(zoneId) {
 
 async function deletePermitZone(zoneId) {
     if (!requireLogin()) return;
+    if (!requireLogin()) return;
     if (!await showConfirm({ title: '刪除範圍', message: '確定要刪除這個路權範圍嗎？', okText: '刪除', danger: true })) return;
     try {
         const result = await apiCall('deletePermitZone', { zoneId: zoneId });
@@ -406,27 +408,20 @@ window.toggleAllMarkers = function() {
 
 function applyMarkerVisibility() {
     const btn = document.getElementById('permitZoneButton');
-    if (!btn) return;
     if (allMarkersVisible) {
         noteMarkers.forEach(m => map.addLayer(m));
         panelMarkers.forEach(m => map.addLayer(m));
-        shaftMarkers.forEach(m => map.addLayer(m));
         permitZones.forEach(z => map.addLayer(z));
         permitLabels.forEach(l => map.addLayer(l));
-        segmentLabels.forEach(l => map.addLayer(l.marker || l)); // 顯示段落標籤
-        btn.classList.remove('hidden-markers');
-        btn.textContent = '👁️';
-        btn.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍/段落標籤）';
+        segmentLabels.forEach(l => map.addLayer(l.marker || l));
+        if (btn) { btn.classList.remove('hidden-markers'); btn.textContent = '👁️'; btn.title = '隱藏所有標記（備註/配電盤/挖掘範圍/段落標籤）'; }
     } else {
         noteMarkers.forEach(m => map.removeLayer(m));
         panelMarkers.forEach(m => map.removeLayer(m));
-        shaftMarkers.forEach(m => map.removeLayer(m));
         permitZones.forEach(z => map.removeLayer(z));
         permitLabels.forEach(l => map.removeLayer(l));
-        segmentLabels.forEach(l => map.removeLayer(l.marker || l)); // 隱藏段落標籤
-        btn.classList.add('hidden-markers');
-        btn.textContent = '🙈';
-        btn.title = '顯示所有標記（備註/配電盤/工作井/挖掘範圍/段落標籤）';
+        segmentLabels.forEach(l => map.removeLayer(l.marker || l));
+        if (btn) { btn.classList.add('hidden-markers'); btn.textContent = '🙈'; btn.title = '顯示所有標記（備註/配電盤/挖掘範圍/段落標籤）'; }
     }
 }
 

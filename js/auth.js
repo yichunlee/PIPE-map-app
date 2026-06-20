@@ -65,8 +65,7 @@ function getRoleLabel(role) {
 // contractor(2) 以上：標記完工、上傳照片
 function requireLogin() {
     if (!currentUser) {
-        showToast('請先登入 Google 帳號', 'warning');
-        setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+        showToast('此功能需要登入後才能使用', 'warning');
         return false;
     }
     if (getRoleLevel(currentUser.role) < 2) {
@@ -79,8 +78,7 @@ function requireLogin() {
 // supervisor(3) 以上：甘特圖、里程碑、段落管理
 function requireSupervisor() {
     if (!currentUser) {
-        showToast('請先登入 Google 帳號', 'warning');
-        setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+        showToast('此功能需要登入後才能使用', 'warning');
         return false;
     }
     if (getRoleLevel(currentUser.role) < 3) {
@@ -93,8 +91,7 @@ function requireSupervisor() {
 // admin(4)：刪除工程、刪除 WGIS、成員管理
 function requireAdmin() {
     if (!currentUser) {
-        showToast('請先登入 Google 帳號', 'warning');
-        setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+        showToast('此功能需要登入後才能使用', 'warning');
         return false;
     }
     if (currentUser.role !== 'admin') {
@@ -107,8 +104,7 @@ function requireAdmin() {
 // viewer(1) 以上（登入即可）：匯出 DXF/SVG
 function requireViewer() {
     if (!currentUser) {
-        showToast('請先登入 Google 帳號', 'warning');
-        setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+        showToast('此功能需要登入後才能使用', 'warning');
         return false;
     }
     return true;
@@ -166,6 +162,25 @@ window.addEventListener('load', function() {
         loginScreen.style.display = 'none';
     }
     
+    // 工具抽屜：未登入時隱藏
+    const toolsDrawerToggle = document.getElementById('toolsDrawerToggle');
+    if (toolsDrawerToggle) {
+        toolsDrawerToggle.style.display = currentUser ? '' : 'none';
+    }
+    // 未登入顯示提示 banner
+    let guestBanner = document.getElementById('_guestBanner');
+    if (!currentUser) {
+        if (!guestBanner) {
+            guestBanner = document.createElement('div');
+            guestBanner.id = '_guestBanner';
+            guestBanner.style.cssText = 'position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.72);color:white;padding:7px 18px;border-radius:20px;font-size:12px;z-index:5000;pointer-events:none;letter-spacing:0.5px;';
+            guestBanner.textContent = '👁️ 訪客模式：僅限瀏覽，編輯功能請先登入';
+            document.body.appendChild(guestBanner);
+        }
+    } else {
+        if (guestBanner) guestBanner.remove();
+    }
+
     // 無論是否登入，都載入資料
     loadData();
 });

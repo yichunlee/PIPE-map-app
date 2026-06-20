@@ -396,8 +396,9 @@ function initMap() {
             return;
         }
         
-        // 一般模式的右鍵選單
+        // 一般模式的右鍵選單（未登入不顯示）
         e.originalEvent.preventDefault();
+        if (!currentUser) return;
         if (currentPipeline && currentPipeline.id) {
             showRightClickMenu(e.latlng, e.originalEvent.clientX, e.originalEvent.clientY);
         }
@@ -412,6 +413,7 @@ function initMap() {
         const touch = e.touches[0];
         _touchTimer = setTimeout(function() {
             if (_touchMoved) return;
+            if (!currentUser) return;
             // 將 touch 座標轉成 Leaflet latlng
             const rect = map.getContainer().getBoundingClientRect();
             const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
@@ -618,10 +620,6 @@ function clearMap(resetMarkerVisibility = false) {
     panelMarkers.forEach(marker => map.removeLayer(marker));
     panelMarkers = [];
     panelData = [];
-    // 清除工作井標記
-    shaftMarkers.forEach(m => map.removeLayer(m));
-    shaftMarkers = [];
-    shaftData = [];
     // 清除挖掘許可範圍（個別工程）
     permitZones.forEach(z => map.removeLayer(z));
     permitZones = [];

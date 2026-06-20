@@ -58,12 +58,14 @@ window.openPhotoPanel = async function(pipelineId, segmentNumber, smallIndex) {
 
 // 觸發相機
 window.triggerCamera = function(pipelineId, segmentNumber, smallIndex) {
+    if (!requireLogin()) return;
     const input = document.getElementById('_photoFileInput');
     if (input) { input.value = ''; input.click(); }
 };
 
 // 觸發相簿
 window.triggerFileUpload = function(pipelineId, segmentNumber, smallIndex) {
+    if (!requireLogin()) return;
     const input = document.getElementById('_photoGalleryInput');
     if (input) { input.value = ''; input.click(); }
 };
@@ -226,6 +228,7 @@ window.showPhotoOnMap = function(lat, lng) {
 
 // 確認刪除
 window.confirmDeletePhoto = async function(photoId, pipelineId, segmentNumber, smallIndex) {
+    if (!requireLogin()) return;
     if (!await showConfirm({ title: '刪除照片', message: '確定要刪除這張照片嗎？', okText: '刪除', danger: true })) return;
     try {
         const result = await apiCall('deletePhoto', { photoId });

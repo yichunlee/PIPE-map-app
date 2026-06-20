@@ -127,12 +127,13 @@ async function showProjectSCurve(yearFilter) {
     // 平行抓取所有工程的甘特 + 單價 + 小段進度
     const fetchResults = await Promise.all(selectedPipelines.map(async pl => {
         try {
-            const [ganttRes, upRes, segRes, smallRes, accRes] = await Promise.all([
+            const [ganttRes, upRes, segRes, smallRes, accRes, codesRes] = await Promise.all([
                 apiCall('getGanttItems', { pipelineId: pl.id }),
                 apiCall('getUnitPrices', { pipelineId: pl.id }),
                 apiCall('getProgress', { pipelineId: pl.id }),
                 apiCall('getAllSmallSegments', { pipelineId: pl.id }),
-                apiCall('getAccounting', { pipelineId: pl.id }).catch(() => ({ records: [] }))
+                apiCall('getAccounting', { pipelineId: pl.id }).catch(() => ({ records: [] })),
+                apiCall('getPipelineCodes', { pipelineId: pl.id }).catch(() => ({ codes: [] }))
             ]);
             // 新架構優先用 getAllSmallSegments 的 branches，舊架構用 getProgress 的 segments
             const branches = smallRes.branches && Object.keys(smallRes.branches).length > 0
@@ -144,7 +145,9 @@ async function showProjectSCurve(yearFilter) {
                 unitPrices: upRes.prices || [],
                 segments: segRes.segments || [],
                 branches,
-                accRecords: accRes.records || []
+                accRecords: accRes.records || [],
+                accByCode: accRes.byCode || [],
+                codes: codesRes.codes || []
             };
         } catch(e) { return { pipeline: pl, items: [], unitPrices: [], segments: [], branches: {}, accRecords: [] }; }
     }));
@@ -266,10 +269,17 @@ async function showProjectSCurve(yearFilter) {
         return sorted.map(m => { cum += map[m]; return { month: m, monthly: map[m], cumulative: cum }; });
     }
 
-    // 每條工程的曲線資料
+    // 每條工程的曲線資料（依 filterYear 過濾）
+    const _filterYear = yearFilter || null;
     const pipelineRows = fetchResults.map((r, idx) => {
-        const rows = computeMonthly(r.items, r.unitPrices, r.segments, r.branches);
-        const hue = Math.round((idx / fetchResults.length) * 300); // 避開最後的紅色
+        let rows = computeMonthly(r.items, r.unitPrices, r.segments, r.branches);
+        // 本年度模式：只留當年月份，累積從年初重算
+        if (_filterYear) {
+            rows = rows.filter(row => parseInt(row.month.split('-')[0]) === _filterYear);
+            let cum = 0;
+            rows = rows.map(row => { cum += row.monthly; return { ...row, cumulative: cum }; });
+        }
+        const hue = Math.round((idx / fetchResults.length) * 300);
         return { name: r.pipeline.name || r.pipeline.id, rows, color: 'hsl(' + hue + ',70%,45%)' };
     }).filter(r => r.rows.length > 0);
 
@@ -345,17 +355,16 @@ async function showProjectSCurve(yearFilter) {
     });
     // 各前綴核銷：需從 accByPipeline 的工程核銷資料中取 code 前綴
     // 先收集所有工程的 code (從 pipeline.id 或 accounting codes)
+    // 用 byCode（accounting_by_code）精確計算各前綴各年度核銷，避免重複計算
     const prefixAccByYear = {}; // prefix -> year -> amount
     fetchResults.forEach(r => {
-        const codes = r.pipeline.codes ? (typeof r.pipeline.codes === 'string' ? JSON.parse(r.pipeline.codes) : r.pipeline.codes) : [];
-        codes.forEach(code => {
-            const prefix = code.replace(/[0-9]/g,'').substring(0,2).toUpperCase();
+        (r.accByCode || []).forEach(rec => {
+            const prefix = (rec.code || '').match(/^[A-Za-z]+/)?.[0]?.toUpperCase() || '';
             if (!prefix) return;
-            (r.accRecords || []).forEach(rec => {
-                const yr = parseInt(rec.year_month.split('-')[0]);
-                if (!prefixAccByYear[prefix]) prefixAccByYear[prefix] = {};
-                prefixAccByYear[prefix][yr] = (prefixAccByYear[prefix][yr] || 0) + rec.amount;
-            });
+            const yr = parseInt((rec.year_month || '').split('-')[0]);
+            if (!yr) return;
+            if (!prefixAccByYear[prefix]) prefixAccByYear[prefix] = {};
+            prefixAccByYear[prefix][yr] = (prefixAccByYear[prefix][yr] || 0) + rec.amount;
         });
     });
     const hasBudget = Object.keys(budgetData).length > 0;
@@ -370,9 +379,24 @@ async function showProjectSCurve(yearFilter) {
     const maxDate = new Date(maxY, maxM + 1, 0);
     const totalRange = maxDate - minDate;
     const grandTotal = totalRows.length ? totalRows[totalRows.length - 1].cumulative : 0;
-    // Y軸最大值取計畫合計 和 累積核銷 的較大者
+    // Y軸最大值：本年度篩選時用本年度資料；全期用全部資料
     const accCumMax = hasAcc ? accCumMap[accSortedMonths[accSortedMonths.length-1]] : 0;
-    const yMax = Math.max(grandTotal, accCumMax, 1) * 1.1;
+    let yMax;
+    if (filterYear) {
+        // 本年度模式：Y軸最大值 = 本年度計畫最高點 + 本年度核銷最高點 + 本年度總預算
+        const filterYearRows = totalRows.filter(r => parseInt(r.month.split('-')[0]) === filterYear);
+        const filterYearPlanMax = filterYearRows.length ? filterYearRows[filterYearRows.length - 1].cumulative : 0;
+        const filterYearAccCum = filteredAccCumMap[filteredAccSortedMonths[filteredAccSortedMonths.length - 1]] || 0;
+        // 計算本年度各前綴預算合計（只算 filterYear 那一條線的金額，不累積）
+        let filterYearBudgetMax = 0;
+        Object.keys(budgetData).forEach(k => {
+            const [prefix, yr] = k.split('_');
+            if (parseInt(yr) === filterYear) filterYearBudgetMax += budgetData[k];
+        });
+        yMax = Math.max(filterYearPlanMax, filterYearAccCum, filterYearBudgetMax, 1) * 1.15;
+    } else {
+        yMax = Math.max(grandTotal, accCumMax, 1) * 1.1;
+    }
 
     function dateToPct(d) { return Math.max(0, Math.min(100, (d - minDate) / totalRange * 100)); }
     function midDate(m) { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 15); }
@@ -447,57 +471,147 @@ async function showProjectSCurve(yearFilter) {
         }, 0);
     }, 0);
 
-    // 計算當年度預算執行狀況
-    const curYear = new Date().getFullYear();
-    let totalBudgetCurYear = 0, totalAccCurYear = 0;
-    Object.keys(budgetData).forEach(k => {
-        const [prefix, yr] = k.split('_');
-        if (parseInt(yr) === curYear) {
-            totalBudgetCurYear += budgetData[k];
-            totalAccCurYear += (prefixAccByYear[prefix] && prefixAccByYear[prefix][curYear]) || 0;
-        }
-    });
-    const budgetExecPct = totalBudgetCurYear > 0 ? Math.round(totalAccCurYear / totalBudgetCurYear * 100) : null;
-    const budgetRemain = totalBudgetCurYear - totalAccCurYear;
+    // 計算統計卡數字
+    const statYear = filterYear || null; // 本年度篩選用 filterYear，全期用 null
 
-    const statsHtml =
-        '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;align-items:center;font-size:13px;">' +
-        (hasPlan ?
-            '<span><span style="color:#7b1fa2;">計畫總預算：</span><strong style="color:#4a148c;">' + fmtY(grandTotal) + ' 元</strong></span>' +
-            '<span style="color:#ccc;">|</span>' +
-            '<span><span style="color:#1976d2;">計畫累積至今：</span><strong style="color:#0d47a1;">' + fmtY(todayCum) + ' 元</strong></span>' +
-            '<span style="color:#ccc;">|</span>' +
-            '<span><span style="color:#388e3c;">實際完成金額：</span><strong style="color:#1b5e20;">' + fmtY(actualDone) + ' 元</strong></span>'
-        : '<span style="color:#e65100;">⚠️ 尚未設定施工單價，僅顯示核銷支用資料</span>') +
-        (hasAcc ? '<span style="color:#ccc;">|</span><span><span style="color:#e65100;">累積核銷：</span><strong style="color:#bf360c;">' + fmtY(accCumMax) + ' 元</strong></span>' : '') +
-        (budgetExecPct !== null ? '<span style="color:#ccc;">|</span><span><span style="color:#1565c0;">' + (curYear-1911) + '年預算執行：</span><strong style="color:#0d47a1;">' + budgetExecPct + '%</strong><span style="font-size:11px;color:#888;margin-left:4px;">（剩餘 ' + fmtY(Math.max(0,budgetRemain)) + ' 元）</span></span>' : '') +
-        '</div>';
+    // 收集所有 prefix
+    const allPrefixesInBudget = new Set();
+    Object.keys(budgetData).forEach(k => { allPrefixesInBudget.add(k.split('_')[0]); });
+
+    let statsHtml;
+    if (statYear) {
+        // ===== 本年度篩選：顯示該年度預算 / 核銷 / 執行率 =====
+        let totalBudgetStatYear = 0;
+        const prefixesInBudget = new Set();
+        Object.keys(budgetData).forEach(k => {
+            const [prefix, yr] = k.split('_');
+            if (parseInt(yr) === statYear) {
+                totalBudgetStatYear += budgetData[k];
+                prefixesInBudget.add(prefix);
+            }
+        });
+
+        // 年度核銷「總金額」：用 accMonthlyMap（與圖表橘色曲線同源，不遺漏）
+        let totalAccStatYear = 0;
+        accSortedMonths.forEach(m => {
+            if (parseInt(m.split('-')[0]) === statYear) totalAccStatYear += accMonthlyMap[m];
+        });
+
+        // 各 prefix 明細：用 byCode（有就顯示，沒有就不顯示）
+        const accByPrefix = {};
+        prefixesInBudget.forEach(prefix => {
+            const amt = (prefixAccByYear[prefix] && prefixAccByYear[prefix][statYear]) || 0;
+            accByPrefix[prefix] = amt;
+        });
+        const byCodeTotal = [...prefixesInBudget].reduce((s, p) => s + (accByPrefix[p] || 0), 0);
+        // 只有 byCode 接近總金額時才顯示明細（避免明細遺漏造成誤解）
+        const showAccDetail = byCodeTotal > 0 && byCodeTotal >= totalAccStatYear * 0.8;
+        const accDetailStr = showAccDetail
+            ? [...prefixesInBudget].sort().map(p => p + ' ' + fmtY(accByPrefix[p] || 0)).join('、')
+            : '';
+
+        const budgetExecPct = totalBudgetStatYear > 0 ? Math.round(totalAccStatYear / totalBudgetStatYear * 100) : null;
+        const budgetDetail = [...prefixesInBudget].sort().map(p => p + ' ' + fmtY(budgetData[p + '_' + statYear] || 0)).join('、');
+
+        // 各 prefix 執行率
+        const prefixExecDetail = [...prefixesInBudget].sort().map(p => {
+            const b = budgetData[p + '_' + statYear] || 0;
+            const a = accByPrefix[p] || 0;
+            const pct = b > 0 ? Math.round(a / b * 100) : 0;
+            return p + ' ' + pct + '%';
+        }).join('、');
+
+        statsHtml =
+            '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;align-items:center;font-size:13px;">' +
+            (totalBudgetStatYear > 0
+                ? '<span><span style="color:#7b1fa2;">' + (statYear-1911) + '年計畫預算：</span><strong style="color:#4a148c;">' + fmtY(totalBudgetStatYear) + ' 元</strong><span style="font-size:10px;color:#7b1fa2;margin-left:4px;">（' + budgetDetail + '）</span></span>'
+                : '<span style="color:#e65100;">⚠️ 尚未設定 ' + (statYear-1911) + ' 年預算</span>'
+            ) +
+            (hasAcc ? '<span style="color:#ccc;">|</span><span><span style="color:#e65100;">' + (statYear-1911) + '年核銷：</span><strong style="color:#bf360c;">' + fmtY(totalAccStatYear) + ' 元</strong>' + (accDetailStr ? '<span style="font-size:10px;color:#bf360c;margin-left:4px;">（' + accDetailStr + '）</span>' : '') + '</span>' : '') +
+            (budgetExecPct !== null ? '<span style="color:#ccc;">|</span><span><span style="color:#1565c0;">' + (statYear-1911) + '年預算執行：</span><strong style="color:#0d47a1;">' + budgetExecPct + '%</strong>' + (prefixExecDetail ? '<span style="font-size:10px;color:#1565c0;margin-left:4px;">（' + prefixExecDetail + '）</span>' : '') + '</span>' : '') +
+            '</div>';
+    } else {
+        // ===== 全期：顯示計畫總預算 / 累積至今 / 實際完成 / 累積核銷 =====
+        const grandTotal2 = totalRows.length ? totalRows[totalRows.length - 1].cumulative : 0;
+        const todayKey2 = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0');
+        const todayCumRow2 = totalRows.filter(r => r.month <= todayKey2);
+        const todayCum2 = todayCumRow2.length ? todayCumRow2[todayCumRow2.length - 1].cumulative : 0;
+        const actualDone2 = fetchResults.reduce((sum, r) => {
+            return sum + r.items.reduce((s2, item) => {
+                const prog = getItemProgressLocal(item, r.segments, r.branches);
+                const up = getEffectiveUnitPriceLocal(item, r.unitPrices);
+                if (!prog || !up) return s2;
+                if (item.status && item.status.toString().startsWith('custom:')) return s2 + up * prog.rate;
+                return s2 + prog.done * up;
+            }, 0);
+        }, 0);
+        const accCumTotal2 = hasAcc ? accCumMap[accSortedMonths[accSortedMonths.length-1]] : 0;
+
+        // 全期各 prefix 累積核銷明細
+        const allPrefixes2 = Object.keys(prefixAccByYear).sort();
+        const accDetailAll = allPrefixes2.map(p => {
+            let total = 0;
+            Object.values(prefixAccByYear[p]).forEach(v => total += v);
+            return p + ' ' + fmtY(total);
+        });
+        const accDetailAllStr = accDetailAll.length ? '<span style="font-size:10px;color:#bf360c;margin-left:4px;">（' + accDetailAll.join('、') + '）</span>' : '';
+
+        // 全期計畫總預算各 prefix 明細（用 budgetData 所有年加總）
+        const allBudgetPrefixes = [...new Set(Object.keys(budgetData).map(k => k.split('_')[0]))].sort();
+        const budgetByPrefix2 = {};
+        Object.keys(budgetData).forEach(k => {
+            const [p] = k.split('_');
+            budgetByPrefix2[p] = (budgetByPrefix2[p] || 0) + budgetData[k];
+        });
+        const planBudgetTotal2 = Object.values(budgetByPrefix2).reduce((s, v) => s + v, 0);
+        const planBudgetDetail2 = allBudgetPrefixes.map(p => p + ' ' + fmtY(budgetByPrefix2[p] || 0)).join('、');
+
+        // 達成率：累積核銷 / 計畫總預算
+        const totalBudgetExecPct2 = planBudgetTotal2 > 0 ? Math.round(accCumTotal2 / planBudgetTotal2 * 100) : null;
+
+        // 各 prefix 達成率（核銷 / 預算）
+        const prefixExecDetail2 = allBudgetPrefixes.filter(p => budgetByPrefix2[p] > 0).map(p => {
+            let accTotal = 0;
+            Object.values(prefixAccByYear[p] || {}).forEach(v => accTotal += v);
+            const pct = Math.round(accTotal / budgetByPrefix2[p] * 100);
+            return p + ' ' + pct + '%';
+        }).join('、');
+
+        statsHtml =
+            '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;align-items:center;font-size:13px;">' +
+            (planBudgetTotal2 > 0
+                ? '<span><span style="color:#7b1fa2;">計畫總預算：</span><strong style="color:#4a148c;">' + fmtY(planBudgetTotal2) + ' 元</strong><span style="font-size:10px;color:#7b1fa2;margin-left:4px;">（' + planBudgetDetail2 + '）</span></span>'
+                : (hasPlan
+                    ? '<span><span style="color:#7b1fa2;">計畫總預算：</span><strong style="color:#4a148c;">' + fmtY(grandTotal2) + ' 元</strong></span>'
+                    : '<span style="color:#e65100;">⚠️ 尚未設定施工單價，僅顯示核銷支用資料</span>')
+            ) +
+            (hasAcc ? '<span style="color:#ccc;">|</span><span><span style="color:#e65100;">累積核銷：</span><strong style="color:#bf360c;">' + fmtY(accCumTotal2) + ' 元</strong>' + accDetailAllStr + '</span>' : '') +
+            (totalBudgetExecPct2 !== null ? '<span style="color:#ccc;">|</span><span><span style="color:#1565c0;">總預算達成率：</span><strong style="color:#0d47a1;">' + totalBudgetExecPct2 + '%</strong>' + (prefixExecDetail2 ? '<span style="font-size:10px;color:#1565c0;margin-left:4px;">（' + prefixExecDetail2 + '）</span>' : '') + '</span>' : '') +
+            '</div>';
+    }
 
     // 圖例：有計畫S曲線的工程 + 有核銷但無計畫的工程
     const planNames = new Set(pipelineRows.map(pr => pr.name));
     const accOnlyEntries = accByPipeline.filter(p => !planNames.has(p.name));
 
+    const _lgItem = (icon, label, color) =>
+        '<span style="display:inline-flex;align-items:center;gap:5px;margin:3px 12px 3px 0;font-size:11px;color:' + (color||'#333') + ';font-family:Arial,\'Microsoft JhengHei\',sans-serif;">' +
+        icon + label + '</span>';
+    const _lgLine = (color, dash) =>
+        '<span style="display:inline-block;width:22px;height:0;border-top:' + (dash?'3px dashed ':'3px solid ') + color + ';vertical-align:middle;"></span>';
+    const _lgBar = (color) =>
+        '<span style="display:inline-block;width:13px;height:11px;background:' + color + ';opacity:0.55;border-radius:1px;vertical-align:middle;"></span>';
+    const _lgThick = (color) =>
+        '<span style="display:inline-block;width:22px;height:0;border-top:4px solid ' + color + ';vertical-align:middle;"></span>';
+
     const legendHtml =
-    // 有計畫的工程（折線圖示）
-    pipelineRows.map(pr =>
-        '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;">' +
-        '<span style="display:inline-block;width:20px;height:3px;background:' + pr.color + ';border-radius:2px;"></span>' +
-        pr.name + '</span>'
-    ).join('') +
-    // 有核銷但無計畫的工程（柱狀圖示）
-    accOnlyEntries.map(p =>
-        '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;color:#555;">' +
-        '<span style="display:inline-block;width:12px;height:10px;background:' + p.color + ';opacity:0.6;border-radius:1px;"></span>' +
-        p.name + '</span>'
-    ).join('') +
-    // 計畫合計
-    (hasPlan ? '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;font-weight:bold;">' +
-    '<span style="display:inline-block;width:20px;height:4px;background:#4a148c;border-radius:2px;"></span>計畫合計</span>' : '') +
-    // 核銷圖例
-    (hasAcc ? '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;color:#e65100;">' +
-    '<span style="display:inline-block;width:20px;height:0;border-top:3px dashed #e65100;"></span>累積核銷</span>' +
-    '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;font-size:11px;color:#e65100;">' +
-    '<span style="display:inline-block;width:12px;height:10px;background:#e65100;opacity:0.25;border-radius:1px;"></span>當月核銷</span>' : '');
+    pipelineRows.map(pr => _lgItem(_lgLine(pr.color, false), pr.name, '#333')).join('') +
+    accOnlyEntries.map(p => _lgItem(_lgBar(p.color), p.name, '#555')).join('') +
+    (hasPlan ? _lgItem(_lgThick('#4a148c'), '<strong>計畫合計</strong>', '#4a148c') : '') +
+    (hasAcc ?
+        _lgItem(_lgLine('#e65100', true), '累積核銷', '#e65100') +
+        _lgItem(_lgBar('#e65100'), '當月核銷', '#e65100')
+    : '');
 
     // SVG layers（只放面積、折線、格線、今日線 — 不放圓點，避免橢圓）
     const CHART_H = 260;
@@ -526,25 +640,42 @@ async function showProjectSCurve(yearFilter) {
     let budgetLayerSvg = '';
     if (hasBudget) {
         const prefixes = [...new Set(Object.keys(budgetData).map(k => k.split('_')[0]))].sort();
-        const budgetColors = ['#1565c0','#2e7d32','#6a1b9a','#e65100','#c62828','#00695c'];
-        prefixes.forEach((prefix, pi) => {
-            const color = budgetColors[pi % budgetColors.length];
-            // 計算累積預算（各年度加總）
-            let cumBudget = 0;
-            budgetYears.forEach(yr => {
-                const key = prefix + '_' + yr;
+        if (filterYear) {
+            // ===== 本年度：畫一條合計線 =====
+            let totalBudget = 0;
+            const details = [];
+            prefixes.forEach(prefix => {
+                const key = prefix + '_' + filterYear;
                 if (!budgetData[key]) return;
-                cumBudget += budgetData[key]; // 累積到此年度的總預算
-                const xStart = (dateToPct(new Date(yr, 0, 1)) * 10).toFixed(1);
-                const xEnd = (dateToPct(new Date(yr, 11, 31)) * 10).toFixed(1);
-                const yBudget = ((1 - cumBudget / yMax) * 100).toFixed(1);
-                const midX = ((parseFloat(xStart) + parseFloat(xEnd)) / 2).toFixed(1);
-                // 金額標籤（萬/億）
-                const amtLabel = cumBudget >= 1e8 ? (cumBudget/1e8).toFixed(2)+'億' : cumBudget>=1e4 ? Math.round(cumBudget/1e4)+'萬' : Math.round(cumBudget).toLocaleString();
-                budgetLayerSvg += '<line x1="' + xStart + '" y1="' + yBudget + '" x2="' + xEnd + '" y2="' + yBudget + '" stroke="' + color + '" stroke-width="1.5" stroke-dasharray="8,4" vector-effect="non-scaling-stroke" opacity="0.8"><title>' + prefix + ' 累積至' + (yr-1911) + '年 總預算：' + Math.round(cumBudget).toLocaleString() + '元</title></line>';
-                budgetLayerSvg += '<text x="' + (parseFloat(xEnd)-2) + '" y="' + (parseFloat(yBudget)-2) + '" font-size="7" fill="' + color + '" text-anchor="end" vector-effect="non-scaling-stroke">' + prefix + (yr-1911) + ' ' + amtLabel + '</text>';
+                totalBudget += budgetData[key];
+                details.push(prefix + ' ' + fmtY(budgetData[key]));
             });
-        });
+            if (totalBudget > 0) {
+                const xStart = (dateToPct(new Date(filterYear, 0, 1)) * 10).toFixed(1);
+                const xEnd = (dateToPct(new Date(filterYear, 11, 31)) * 10).toFixed(1);
+                const yBudget = ((1 - totalBudget / yMax) * 100).toFixed(1);
+                const titleText = (filterYear-1911) + '年預算合計：' + Math.round(totalBudget).toLocaleString() + '元（' + details.join('、') + '）';
+                budgetLayerSvg += '<line x1="' + xStart + '" y1="' + yBudget + '" x2="' + xEnd + '" y2="' + yBudget + '" stroke="#2e7d32" stroke-width="2" stroke-dasharray="8,4" vector-effect="non-scaling-stroke" opacity="0.9"><title>' + titleText + '</title></line>';
+                budgetLayerSvg += '<text x="' + (parseFloat(xStart)+2) + '" y="' + (parseFloat(yBudget)-2) + '" font-size="8" fill="#2e7d32" text-anchor="start" vector-effect="non-scaling-stroke">' + (filterYear-1911) + '年預算 ' + fmtY(totalBudget) + '</text>';
+            }
+        } else {
+            // ===== 全期：畫一條「計畫總預算」水平線（所有年度所有prefix加總）=====
+            let grandBudget = 0;
+            const prefixTotals = {};
+            prefixes.forEach(prefix => {
+                prefixTotals[prefix] = 0;
+                budgetYears.forEach(yr => { prefixTotals[prefix] += budgetData[prefix + '_' + yr] || 0; });
+                grandBudget += prefixTotals[prefix];
+            });
+            if (grandBudget > 0) {
+                // 線段橫跨整個 X 軸範圍
+                const yBudget = ((1 - grandBudget / yMax) * 100).toFixed(1);
+                const detailLabel = prefixes.filter(p => prefixTotals[p] > 0).map(p => p + ' ' + fmtY(prefixTotals[p])).join('、');
+                const titleText = '計畫總預算：' + fmtY(grandBudget) + '（' + detailLabel + '）';
+                budgetLayerSvg += '<line x1="0" y1="' + yBudget + '" x2="1000" y2="' + yBudget + '" stroke="#2e7d32" stroke-width="1.5" stroke-dasharray="8,4" vector-effect="non-scaling-stroke" opacity="0.85"><title>' + titleText + '</title></line>';
+                budgetLayerSvg += '<text x="2" y="' + (parseFloat(yBudget)-2) + '" font-size="7.5" fill="#2e7d32" text-anchor="start" vector-effect="non-scaling-stroke">計畫總預算 ' + fmtY(grandBudget) + '（' + detailLabel + '）</text>';
+            }
+        }
     }
     svgLayers += budgetLayerSvg;
     // 核銷：當月柱狀圖 + 累積折線（分層存）
@@ -577,13 +708,20 @@ async function showProjectSCurve(yearFilter) {
         '<g id="scBudgetLayer">' + budgetLayerSvg + '</g>' +
         '<g id="scPlanLayer">' + planLayerSvg + '</g>';
 
-    // 核銷累積圓點
+    // 核銷累積圓點（可點擊）
     let accDotDivs = '';
     if (hasAcc) {
         filteredAccSortedMonths.forEach(m => {
             const left = dateToPct(midDate(m)).toFixed(2);
             const bottom = (filteredAccCumMap[m] / yMax * 100).toFixed(2);
-            accDotDivs += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:5px;height:5px;border-radius:50%;background:#e65100;border:1.5px solid white;transform:translate(-50%,50%);pointer-events:none;"></div>';
+            const monthly = fmtY(filteredAccMonthlyMap[m] || 0);
+            const cum = fmtY(filteredAccCumMap[m]);
+            // 各工程當月明細
+            const breakdown = accByPipeline.map(p => {
+                const v = p.monthlyMap[m];
+                return v ? p.name + '：' + fmtY(v) : null;
+            }).filter(Boolean).join('&#10;');
+            accDotDivs += '<div class="sc-acc-dot" data-month="' + m + '" data-monthly="' + monthly + '" data-cum="' + cum + '" data-breakdown="' + breakdown + '" style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:12px;height:12px;border-radius:50%;background:#e65100;border:2px solid white;transform:translate(-50%,50%);cursor:pointer;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>';
         });
     }
 
@@ -593,13 +731,13 @@ async function showProjectSCurve(yearFilter) {
         pr.rows.forEach(r => {
             const left = dateToPct(midDate(r.month)).toFixed(2);
             const bottom = (r.cumulative / yMax * 100).toFixed(2);
-            dotDivs += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:5px;height:5px;border-radius:50%;background:' + pr.color + ';transform:translate(-50%,50%);opacity:0.7;pointer-events:none;"></div>';
+            dotDivs += '<div class="sc-plan-dot" data-month="' + r.month + '" data-name="' + pr.name + '" data-monthly="' + fmtY(r.monthly) + '" data-cum="' + fmtY(r.cumulative) + '" data-color="' + pr.color + '" style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:8px;height:8px;border-radius:50%;background:' + pr.color + ';border:1.5px solid white;transform:translate(-50%,50%);opacity:0.85;cursor:pointer;z-index:8;"></div>';
         });
     });
     totalRows.forEach(r => {
         const left = dateToPct(midDate(r.month)).toFixed(2);
         const bottom = (r.cumulative / yMax * 100).toFixed(2);
-        dotDivs += '<div style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:7px;height:7px;border-radius:50%;background:#4a148c;border:1.5px solid white;transform:translate(-50%,50%);pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>';
+        dotDivs += '<div class="sc-plan-dot" data-month="' + r.month + '" data-name="計畫合計" data-monthly="' + fmtY(r.monthly) + '" data-cum="' + fmtY(r.cumulative) + '" data-color="#4a148c" style="position:absolute;left:' + left + '%;bottom:' + bottom + '%;width:9px;height:9px;border-radius:50%;background:#4a148c;border:1.5px solid white;transform:translate(-50%,50%);cursor:pointer;z-index:9;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>';
     });
 
     // Y 軸標籤 HTML（放在左欄）
@@ -624,8 +762,12 @@ async function showProjectSCurve(yearFilter) {
         '<div class="sc-hover" data-month="' + p.month + '" data-monthly="' + p.monthly + '" data-cum="' + p.cum + '" data-breakdown="' + p.breakdown + '" style="position:absolute;left:' + p.pct.toFixed(2) + '%;width:' + p.w + '%;top:0;bottom:0;cursor:crosshair;"></div>'
     ).join('');
 
-    const win = window.open('', '_blank', 'width=1100,height=680');
+    let win = window.open('', 'scurve_project', 'width=1100,height=680');
+    if (!win || win.closed) {
+        win = window.open('', 'scurve_project', 'width=1100,height=680');
+    }
     if (!win) { showToast('請允許彈出視窗', 'warning'); return; }
+    win.focus();
     win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>計畫S曲線 - ' + currentProject.name + '</title>' +
         '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,"Microsoft JhengHei",sans-serif;background:#f5f5f5;}' +
         '.hdr{background:#4a148c;color:white;padding:10px 16px;font-size:14px;font-weight:bold;}' +
@@ -643,7 +785,6 @@ async function showProjectSCurve(yearFilter) {
         '<button id="exportBtn" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">📥 匯出Excel</button>' +
         '</div></div>' +
         '<div class="body">' + statsHtml +
-        '<div class="legend">' + legendHtml + '</div>' +
         '<div style="display:flex;">' +
         // Y軸左欄
         '<div style="width:80px;flex-shrink:0;position:relative;height:' + CHART_H + 'px;">' + yLabelsHtml + '</div>' +
@@ -657,21 +798,49 @@ async function showProjectSCurve(yearFilter) {
         hoverDivs +
         '</div>' +
         '<div style="border-top:1px solid #ddd;"><div style="position:relative;height:12px;">' + xYearHtml + '</div><div style="position:relative;height:16px;">' + xMonHtml + '</div></div>' +
+        '<div style="padding:8px 0 4px 0;border-top:1px solid #f0f0f0;margin-top:6px;line-height:1.8;">' + legendHtml + '</div>' +
         '</div></div>' +
         '<div id="tip"></div>' +
         '</div>' +
         '<script>' +
         'function _toggleScYearFilter(){window.opener&&window.opener.postMessage({type:"scYearFilter"},"*");}' +
-        'function toggleLayer(id,show){var el=document.getElementById(id);if(el)el.style.display=show?"":"none";}' +
+        'function toggleLayer(id,show){var el=document.getElementById(id);if(el)el.style.display=show?"":"none";if(id==="scPlanLayer"){document.querySelectorAll(".sc-plan-dot").forEach(function(d){d.style.display=show?"":"none";});}if(id==="scAccLine"){document.querySelectorAll(".sc-acc-dot").forEach(function(d){d.style.display=show?"":"none";});}}' +
         'var tip=document.getElementById("tip");' +
+        'var tipPinned=false;' +
         'document.querySelectorAll(".sc-hover").forEach(function(z){' +
-        'z.addEventListener("mouseenter",function(){' +
+        'z.addEventListener("mouseenter",function(){if(tipPinned)return;' +
         'var bd=z.dataset.breakdown?z.dataset.breakdown.replace(/&#10;/g,"\\n"):"";' +
-        'tip.textContent="📅 "+z.dataset.month+"\\n當月："+z.dataset.monthly+" 元\\n累積："+z.dataset.cum+" 元"+(bd?"\\n\\n各工程當月：\\n"+bd:"");' +
+        'tip.innerHTML="<b>📅 "+z.dataset.month+"</b>\\n當月核銷："+z.dataset.monthly+" 元"+(bd?"\\n\\n各工程當月：\\n"+bd:"");' +
         'tip.style.display="block";});' +
-        'z.addEventListener("mouseleave",function(){tip.style.display="none";});' +
-        'z.addEventListener("mousemove",function(e){var tx=e.clientX+14;if(tx+270>window.innerWidth)tx=e.clientX-280;tip.style.left=tx+"px";tip.style.top=Math.max(10,e.clientY-20)+"px";});' +
+        'z.addEventListener("mouseleave",function(){if(tipPinned)return;tip.style.display="none";});' +
+        'z.addEventListener("mousemove",function(e){if(tipPinned)return;var tx=e.clientX+14;if(tx+270>window.innerWidth)tx=e.clientX-280;tip.style.left=tx+"px";tip.style.top=Math.max(10,e.clientY-20)+"px";});' +
         '});' +
+        'document.querySelectorAll(".sc-plan-dot").forEach(function(d){' +
+        'd.addEventListener("click",function(e){' +
+        'e.stopPropagation();' +
+        'tip.textContent="\u{1F4C5} "+d.dataset.month+"\\n"+d.dataset.name+"\\n\u7d2f\u7a4d(S\u66f2\u7dda)\uff1a"+d.dataset.cum+" \u5143\\n\u7576\u6708\uff1a"+d.dataset.monthly+" \u5143";' +
+        'var tx=e.clientX+14;if(tx+270>window.innerWidth)tx=e.clientX-280;' +
+        'tip.style.left=tx+"px";tip.style.top=Math.max(10,e.clientY-20)+"px";' +
+        'tip.style.display="block";tipPinned=true;' +
+        'd.style.transform="translate(-50%,50%) scale(1.7)";d.style.zIndex=20;' +
+        '});' +
+        '});' +
+        'document.querySelectorAll(".sc-acc-dot").forEach(function(d){' +
+        'd.addEventListener("click",function(e){' +
+        'e.stopPropagation();' +
+        'var bd=d.dataset.breakdown?d.dataset.breakdown.replace(/&#10;/g,"\\n"):"";' +
+        'tip.textContent="\u{1F4C5} "+d.dataset.month+"\\n\u7d2f\u7a4d\u6838\u92b7\uff1a"+d.dataset.cum+" \u5143\\n\u7576\u6708\u6838\u92b7\uff1a"+d.dataset.monthly+" \u5143"+(bd?"\\n\\n\u5404\u5de5\u7a0b\u7576\u6708\uff1a\\n"+bd:"");' +
+        'var tx=e.clientX+14;if(tx+270>window.innerWidth)tx=e.clientX-280;' +
+        'tip.style.left=tx+"px";tip.style.top=Math.max(10,e.clientY-20)+"px";' +
+        'tip.style.display="block";tipPinned=true;' +
+        'd.style.background="#ff6d00";d.style.transform="translate(-50%,50%) scale(1.5)";' +
+        '});' +
+        '});' +
+        'document.addEventListener("click",function(){' +
+        'if(tipPinned){tipPinned=false;tip.style.display="none";' +
+        'document.querySelectorAll(".sc-acc-dot").forEach(function(d){d.style.background="#e65100";d.style.transform="translate(-50%,50%) scale(1)";});' +
+        'document.querySelectorAll(".sc-plan-dot").forEach(function(d){d.style.transform="translate(-50%,50%) scale(1)";d.style.zIndex=9;});' +
+        '}});' +
         'document.getElementById("exportBtn").onclick=function(){' +
         'var script=document.createElement("script");script.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";' +
         'script.onload=function(){' +

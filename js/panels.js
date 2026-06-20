@@ -211,6 +211,7 @@ function showAddPanelPopup(latlng) {
 // 儲存配電盤標記
 window.savePanel = async function(lat, lng) {
     if (!requireLogin()) return;
+    if (!requireLogin()) return;
     const text = document.getElementById('panelText').value.trim();
     const creator = document.getElementById('panelCreator').value.trim() || '匿名';
     const photoInput = document.getElementById('panelPhoto');
@@ -259,6 +260,7 @@ window.savePanel = async function(lat, lng) {
 
 // 刪除配電盤標記
 window.deletePanel = async function(panelId) {
+    if (!requireLogin()) return;
     if (!requireLogin()) return;
     if (!await showConfirm({ title: '刪除配電盤標記', message: '確定要刪除嗎？', okText: '刪除', danger: true })) {
         return;

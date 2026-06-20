@@ -97,6 +97,9 @@ function setMapContext(context, projectPipelines) {
         if (dxfBtn0) dxfBtn0.style.display = 'none';
         var scBtn0 = document.getElementById('projectSCurveBtn');
         if (scBtn0) scBtn0.style.display = 'none';
+        // 未登入也隱藏工具抽屜
+        const toolsToggle = document.getElementById('toolsDrawerToggle');
+        if (toolsToggle) toolsToggle.style.display = currentUser ? '' : 'none';
         return;
     }
 
@@ -110,7 +113,7 @@ function setMapContext(context, projectPipelines) {
         var svgBtn1 = document.getElementById('svgToolItem');
         if (svgBtn1) svgBtn1.style.display = 'none';
         var scBtn = document.getElementById('projectSCurveBtn');
-        if (scBtn) scBtn.style.display = 'block';
+        if (scBtn) scBtn.style.display = 'flex';
         if (ids.layer)     { ids.layer.style.display = 'flex'; }
         if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; ids.roadwork.classList.remove('active'); }
         if (ids.measure)   { ids.measure.style.display = 'flex'; }
@@ -138,7 +141,7 @@ function setMapContext(context, projectPipelines) {
         var svgBtn = document.getElementById('svgToolItem');
         if (svgBtn) svgBtn.style.display = 'flex';
         var scBtn2 = document.getElementById('projectSCurveBtn');
-        if (scBtn2) scBtn2.style.display = 'none';
+        if (scBtn2) scBtn2.style.display = 'flex';
         if (ids.layer)     { ids.layer.style.display = 'flex'; }
         if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; }
         if (ids.measure)   { ids.measure.style.display = 'flex'; }
@@ -150,7 +153,7 @@ function setMapContext(context, projectPipelines) {
             ids.eye.style.display = 'flex';
             ids.eye.classList.remove('hidden', 'hidden-markers');
             ids.eye.textContent = '👁️';
-            ids.eye.title = '隱藏所有標記（備註/配電盤/工作井/挖掘範圍）';
+            ids.eye.title = '隱藏所有標記（備註/配電盤/挖掘範圍）';
             ids.eye.onclick = toggleAllMarkers;
         }
         return;
@@ -346,9 +349,6 @@ function showPipelineList(pipelines) {
         <div style="display:flex;gap:6px;margin:10px 10px 15px 10px;">
             <div style="flex:1;background:#FF9800;color:white;padding:10px 8px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:12px;" onclick="toggleStatsReport()">
                 每月施工統計
-            </div>
-            <div style="flex:1;background:#7b1fa2;color:white;padding:10px 8px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:12px;" onclick="showProjectSCurve()">
-                📈 計畫S曲線
             </div>
         </div>
     `;

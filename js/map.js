@@ -277,7 +277,6 @@ if (nodeCoords && nodeCoords.length > 0) {
     showStatsPanel();
     await loadMapNotes();
     loadPanels();
-    loadShafts();
     loadPermitZones();
     
     document.getElementById('ganttBtn').style.display = 'none';
@@ -296,7 +295,6 @@ if (nodeCoords && nodeCoords.length > 0) {
             } else {
                 noteMarkers.forEach(m => map.removeLayer(m));
                 panelMarkers.forEach(m => map.removeLayer(m));
-                shaftMarkers.forEach(m => map.removeLayer(m));
                 permitZones.forEach(z => map.removeLayer(z));
                 permitLabels.forEach(l => map.removeLayer(l));
                 btn.classList.add('hidden-markers');
@@ -499,6 +497,7 @@ window.saveNodeName = async function(branchIndex, smallIndex) {
 
 // 標記完工/未完工
 window.toggleNewSmallSegment = async function(branchIndex, smallIndex) {
+    if (!requireLogin()) return;
     map.closePopup();
     const branchKey = `B${branchIndex}`;
     const seg = (currentPipeline.branches[branchKey] || []).find(s => s.smallIndex === smallIndex);
@@ -561,6 +560,7 @@ window.startRangeSelect = function(branchIndex, smallIndex) {
 
 // 範圍設定對話框
 window.showRangeSetDialog = function(branchIndex, fromIndex, toIndex) {
+    if (!requireLogin()) return;
     const minIdx = Math.min(fromIndex, toIndex);
     const maxIdx = Math.max(fromIndex, toIndex);
     const count = maxIdx - minIdx + 1;
