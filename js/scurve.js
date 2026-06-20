@@ -23,11 +23,19 @@ function _showPipelineSelector(pipelines) {
             const plRows = pls.map(pl => {
                 const i = idx++;
                 const checked = isCurrentProj ? 'checked' : '';
+                // 取工程的會計 codes prefix（BV、BU、DU...）
+                const plCodes = pl.codes
+                    ? (typeof pl.codes === 'string' ? JSON.parse(pl.codes) : pl.codes)
+                    : [];
+                const prefixes = [...new Set(plCodes.map(c => (c.match(/^[A-Za-z]+/) || [''])[0].toUpperCase()).filter(Boolean))].sort();
+                const codeTag = prefixes.length
+                    ? `<span style="font-size:10px;color:#1565c0;background:#e3f2fd;border-radius:4px;padding:1px 5px;margin-left:4px;">${prefixes.join('、')}</span>`
+                    : '';
                 return `<label style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:6px;cursor:pointer;"
                                onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">
                     <input type="checkbox" id="plChk_${i}" value="${pl.id}" ${checked}
                            style="width:15px;height:15px;accent-color:#4a148c;cursor:pointer;">
-                    <span style="font-size:13px;color:#333;">${pl.name || pl.id}</span>
+                    <span style="font-size:13px;color:#333;">${pl.name || pl.id}${codeTag}</span>
                 </label>`;
             }).join('');
             return `<div style="margin-bottom:10px;">
@@ -357,16 +365,33 @@ async function showProjectSCurve(yearFilter) {
     // 先收集所有工程的 code (從 pipeline.id 或 accounting codes)
     // 用 byCode（accounting_by_code）精確計算各前綴各年度核銷，避免重複計算
     const prefixAccByYear = {}; // prefix -> year -> amount
+    // 同時收集本次選中工程用到的所有 prefix（用來過濾 budgetData）
+    const activePrefixes = new Set();
     fetchResults.forEach(r => {
+        // 從工程的 codes 欄位取 prefix
+        const plCodes = r.codes || [];
+        plCodes.forEach(c => {
+            const p = (c.match(/^[A-Za-z]+/) || [''])[0].toUpperCase();
+            if (p) activePrefixes.add(p);
+        });
+        // 也從 byCode 取（確保有核銷記錄的都算進去）
         (r.accByCode || []).forEach(rec => {
             const prefix = (rec.code || '').match(/^[A-Za-z]+/)?.[0]?.toUpperCase() || '';
             if (!prefix) return;
+            activePrefixes.add(prefix);
             const yr = parseInt((rec.year_month || '').split('-')[0]);
             if (!yr) return;
             if (!prefixAccByYear[prefix]) prefixAccByYear[prefix] = {};
             prefixAccByYear[prefix][yr] = (prefixAccByYear[prefix][yr] || 0) + rec.amount;
         });
     });
+    // 過濾 budgetData，只保留本次選中工程有用到的 prefix
+    const filteredBudgetData = {};
+    Object.entries(budgetData).forEach(([k, v]) => {
+        const prefix = k.split('_')[0];
+        if (activePrefixes.has(prefix)) filteredBudgetData[k] = v;
+    });
+    budgetData = filteredBudgetData;
     const hasBudget = Object.keys(budgetData).length > 0;
 
     // 時間軸範圍（含核銷月份）
@@ -395,7 +420,10 @@ async function showProjectSCurve(yearFilter) {
         });
         yMax = Math.max(filterYearPlanMax, filterYearAccCum, filterYearBudgetMax, 1) * 1.15;
     } else {
-        yMax = Math.max(grandTotal, accCumMax, 1) * 1.1;
+        // 全期 yMax 也要把計畫總預算算進去
+        let grandBudgetForYMax = 0;
+        Object.values(budgetData).forEach(v => grandBudgetForYMax += v);
+        yMax = Math.max(grandTotal, accCumMax, grandBudgetForYMax, 1) * 1.1;
     }
 
     function dateToPct(d) { return Math.max(0, Math.min(100, (d - minDate) / totalRange * 100)); }

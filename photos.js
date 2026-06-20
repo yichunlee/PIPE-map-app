@@ -74,14 +74,6 @@ window.triggerFileUpload = function(pipelineId, segmentNumber, smallIndex) {
 window.handlePhotoSelect = async function(event, pipelineId, segmentNumber, smallIndex) {
     const file = event.target.files[0];
     if (!file) return;
-    // 限制只能有1張照片
-    try {
-        const existing = await apiCall('getPhotos', { pipelineId, segmentNumber, smallIndex });
-        if ((existing.photos || []).length >= 1) {
-            showToast('每個小段只能上傳1張照片，請先刪除現有照片', 'warning');
-            return;
-        }
-    } catch(e) {}
 
     const progress = document.getElementById('_photoUploadProgress');
     if (progress) { progress.style.display = 'block'; progress.textContent = '壓縮照片中...'; }
@@ -174,16 +166,12 @@ async function loadPhotos(pipelineId, segmentNumber, smallIndex) {
         const result = await apiCall('getPhotos', { pipelineId, segmentNumber, smallIndex });
         const photos = result.photos || [];
 
-        // 最多1張：有照片就隱藏上傳按鈕
-        const uploadArea = document.querySelector('#_photoPanel [style*="border-bottom"]');
-        if (uploadArea) uploadArea.style.display = photos.length >= 1 ? 'none' : '';
-
         if (photos.length === 0) {
             list.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;"><div style="font-size:40px;margin-bottom:8px;">📷</div><div>尚無照片</div><div style="font-size:11px;margin-top:4px;color:#bbb;">點上方按鈕拍照或選取</div></div>';
             return;
         }
 
-        list.innerHTML = photos.slice(0, 1).map((p, i) => `
+        list.innerHTML = photos.map((p, i) => `
             <div style="border:1px solid #eee;border-radius:8px;margin-bottom:10px;overflow:hidden;">
                 <img src="${p.dataUrl}" style="width:100%;max-height:220px;object-fit:cover;display:block;cursor:pointer;"
                     onclick="viewFullPhoto('${p.id}', '${p.dataUrl.replace(/'/g, "\\'")}')">
@@ -269,7 +257,6 @@ window.toggleLeftDrawer = function() {
 // ============================================================
 let _photoLayerActive = false;
 let _photoMarkers = [];
-let _photoLatLngMap = {}; // key: "segmentNumber-smallIndex" -> [lat, lng]
 
 window.togglePhotoLayer = async function() {
     _photoLayerActive = !_photoLayerActive;
@@ -329,9 +316,6 @@ window.togglePhotoLayer = async function() {
             // fallback：用照片 GPS
             if (!latlng && g.lat && g.lng) latlng = [parseFloat(g.lat), parseFloat(g.lng)];
             if (!latlng) return;
-            // 把座標存回供匯出使用
-            g._latlng = latlng;
-            _photoLatLngMap[`${g.segmentNumber}-${g.smallIndex}`] = latlng;
 
             // 標籤：「B0 #20」格式
             const branchKey = g.segmentNumber || 'B?';
@@ -369,7 +353,7 @@ window.togglePhotoLayer = async function() {
 
                     if (!marker._photoPopupOpen) return; // 已移出
 
-                    const imgs = photos.slice(0, 1).map(p =>
+                    const imgs = photos.slice(0, 3).map(p =>
                         `<img src="${p.dataUrl}" onclick="viewFullPhoto('${p.id}','${p.dataUrl.replace(/'/g,"\'")}')"
                             style="width:90px;height:70px;object-fit:cover;border-radius:4px;cursor:pointer;margin:2px;">`
                     ).join('');
@@ -380,7 +364,7 @@ window.togglePhotoLayer = async function() {
                                 📷 ${g.segmentNumber} 小段 #${parseInt(g.smallIndex)+1}　共 ${photos.length} 張
                             </div>
                             <div style="display:flex;flex-wrap:wrap;gap:2px;">${imgs}</div>
-
+                            ${photos.length > 3 ? `<div style="font-size:11px;color:#888;margin-top:4px;">還有 ${photos.length-3} 張...</div>` : ''}
                             <button onclick="openPhotoPanel('${currentPipeline.id}','${g.segmentNumber}',${g.smallIndex})"
                                 style="margin-top:6px;width:100%;padding:4px;background:#ff9800;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">
                                 查看全部照片
@@ -435,7 +419,6 @@ window.togglePhotoLayer = async function() {
 function _clearPhotoMarkers() {
     _photoMarkers.forEach(m => { if (map) map.removeLayer(m); });
     _photoMarkers = [];
-    _photoLatLngMap = {};
 }
 
 
@@ -466,17 +449,20 @@ window.exportPhotoReport = async function() {
             if (photos.length === 0) continue;
             const branchKey = g.segmentNumber || 'B?';
             const smallNum = parseInt(g.smallIndex) + 1;
-            const latlngKey = `${g.segmentNumber}-${g.smallIndex}`;
-            const latlng4export = _photoLatLngMap[latlngKey] || null;
-            allItems.push({ label: `${branchKey} 小段 #${smallNum}`, photos, latlng: latlng4export });
+            allItems.push({ label: `${branchKey} 小段 #${smallNum}`, photos });
         }
 
         if (allItems.length === 0) { showToast('沒有照片資料', 'warning'); return; }
 
-        // 3. 用 docx library 產生 Word
+        // 3. 用 docx library 產生 Word（動態載入）
         if (!window.docx) {
-            showToast('docx 函式庫未載入，請重新整理頁面', 'error');
-            return;
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
         }
 
         const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
@@ -498,155 +484,64 @@ window.exportPhotoReport = async function() {
         }));
         children.push(new Paragraph({ children: [new TextRun('')] }));
 
-        // 截圖前隱藏所有地圖標記，截完還原
-        function hideAllMapMarkers() {
-            // 隱藏：備註、配電盤、挖掘範圍、段落標籤、甘特日期標籤、便利貼
-            // 保留：節點標籤、照片位置標籤（B0 #20）
-            if (typeof noteMarkers !== 'undefined') noteMarkers.forEach(m => map.removeLayer(m));
-            if (typeof panelMarkers !== 'undefined') panelMarkers.forEach(m => map.removeLayer(m));
-            if (typeof permitZones !== 'undefined') permitZones.forEach(z => map.removeLayer(z));
-            if (typeof permitLabels !== 'undefined') permitLabels.forEach(l => map.removeLayer(l));
-            if (typeof segmentLabels !== 'undefined') segmentLabels.forEach(l => map.removeLayer(l.marker || l));
-            if (typeof dateLabels !== 'undefined') dateLabels.forEach(m => map.removeLayer(m));
-            if (typeof dateLabelArrows !== 'undefined') dateLabelArrows.forEach(m => map.removeLayer(m));
-            if (typeof stickyNotes !== 'undefined') stickyNotes.forEach(n => { if (n.marker) map.removeLayer(n.marker); });
-        }
-
-        function restoreAllMapMarkers() {
-            if (typeof allMarkersVisible !== 'undefined' && allMarkersVisible) {
-                if (typeof noteMarkers !== 'undefined') noteMarkers.forEach(m => map.addLayer(m));
-                if (typeof panelMarkers !== 'undefined') panelMarkers.forEach(m => map.addLayer(m));
-                if (typeof permitZones !== 'undefined') permitZones.forEach(z => map.addLayer(z));
-                if (typeof permitLabels !== 'undefined') permitLabels.forEach(l => map.addLayer(l));
-                if (typeof segmentLabels !== 'undefined') segmentLabels.forEach(l => map.addLayer(l.marker || l));
-            }
-            if (typeof dateLabelsVisible !== 'undefined' && dateLabelsVisible) {
-                if (typeof dateLabels !== 'undefined') dateLabels.forEach(m => map.addLayer(m));
-                if (typeof dateLabelArrows !== 'undefined') dateLabelArrows.forEach(m => map.addLayer(m));
-            }
-            if (typeof stickyNotes !== 'undefined') stickyNotes.forEach(n => { if (n.marker) map.addLayer(n.marker); });
-        }
-
-        // 輔助：用 html2canvas 截取 Leaflet 地圖某座標的畫面
-        async function captureMapAt(latlng, zoom = 19) {
-            return new Promise(async (resolve) => {
-                try {
-                    const origCenter = map.getCenter();
-                    const origZoom = map.getZoom();
-                    map.setView(latlng, zoom);
-                    await new Promise(r => setTimeout(r, 1500));
-                    const mapContainer = map.getContainer();
-                    const fullCanvas = await html2canvas(mapContainer, {
-                        useCORS: true, allowTaint: true, scale: 1,
-                        width: mapContainer.offsetWidth,
-                        height: mapContainer.offsetHeight,
-                        logging: false
-                    });
-                    map.setView(origCenter, origZoom);
-
-                    // 只裁取地圖中央 50% 區域（等效放大2倍）
-                    const cw = fullCanvas.width, ch = fullCanvas.height;
-                    const cropW = Math.floor(cw * 0.5);
-                    const cropH = Math.floor(ch * 0.5);
-                    const cropX = Math.floor((cw - cropW) / 2);
-                    const cropY = Math.floor((ch - cropH) / 2);
-
-                    const cropped = document.createElement('canvas');
-                    cropped.width = cropW;
-                    cropped.height = cropH;
-                    cropped.getContext('2d').drawImage(
-                        fullCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH
-                    );
-
-                    cropped.toBlob(blob => {
-                        if (!blob) { resolve(null); return; }
-                        const reader = new FileReader();
-                        reader.onload = e => {
-                            const b64 = e.target.result.split(',')[1];
-                            resolve(Uint8Array.from(atob(b64), c => c.charCodeAt(0)));
-                        };
-                        reader.readAsDataURL(blob);
-                    }, 'image/png');
-                } catch(e) {
-                    console.warn('地圖截圖失敗:', e);
-                    resolve(null);
-                }
-            });
-        }
-
-        // 每個小段一頁：標題 + 地圖（上半，全寬）+ 照片（下半，每行2張）
-        for (let itemIdx = 0; itemIdx < allItems.length; itemIdx++) {
-            const item = allItems[itemIdx];
-            const photos = item.photos;
-            const latlng = item.latlng;
-            const lat = latlng ? latlng[0].toFixed(6) : '';
-            const lng = latlng ? latlng[1].toFixed(6) : '';
-
-            // 非第一個小段前加分頁
-            if (itemIdx > 0) {
-                children.push(new Paragraph({ children: [new PageBreak()] }));
-            }
-
-            // 標題：小段編號 + 座標
+        // 每個小段：2張照片一排，A4 每排佔半頁
+        for (const item of allItems) {
+            // 小段標題
             children.push(new Paragraph({
                 heading: HeadingLevel.HEADING_2,
-                children: [
-                    new TextRun({ text: `📍 ${item.label}`, bold: true, size: 26, color: 'E65100' }),
-                    new TextRun({ text: `　緯度 ${lat}　經度 ${lng}`, size: 18, color: '888888' })
-                ]
+                children: [new TextRun({ text: `📍 ${item.label}`, bold: true, size: 24, color: 'E65100' })]
             }));
 
-            // 地圖截圖
-            let mapImgBuf = null;
-            if (latlng && window.html2canvas) {
-                showToast(`📷 截取 ${item.label} 地圖...`, 'info', 3000);
-                hideAllMapMarkers();
-                mapImgBuf = await captureMapAt(latlng, 19);
-                restoreAllMapMarkers();
-            }
-
-            // 上半：地圖全寬（A4 內容寬約 9026 DXA = ~16cm → 圖寬 500pt）
-            if (mapImgBuf) {
-                children.push(new Paragraph({
-                    alignment: AlignmentType.CENTER,
-                    children: [new ImageRun({
-                        data: mapImgBuf,
-                        transformation: { width: 520, height: 300 },
-                        type: 'png'
-                    })]
-                }));
-            } else {
-                children.push(new Paragraph({
-                    children: [new TextRun({ text: '（地圖截圖失敗）', size: 16, color: 'aaaaaa' })]
-                }));
-            }
-            children.push(new Paragraph({ children: [new TextRun('')] }));
-
-            // 下半：只印第1張照片，全寬置中
-            const p = photos[0];
-            if (p) {
-                const dataUrl = p.dataUrl || '';
-                const isJpeg = dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg');
-                const isPng = dataUrl.startsWith('data:image/png');
-                const b64 = dataUrl.split(',')[1] || '';
-                if (b64 && (isJpeg || isPng)) {
-                    const imgBuf = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-                    children.push(new Paragraph({
-                        alignment: AlignmentType.CENTER,
-                        children: [new ImageRun({
-                            data: imgBuf,
-                            transformation: { width: 480, height: 360 },
-                            type: isJpeg ? 'jpg' : 'png'
-                        })]
+            // 每2張一行
+            const photos = item.photos;
+            for (let i = 0; i < photos.length; i += 2) {
+                const cells = [];
+                for (let j = 0; j < 2; j++) {
+                    const p = photos[i + j];
+                    let cellChildren = [];
+                    if (p) {
+                        // 從 dataUrl 取 base64
+                        const dataUrl = p.dataUrl || '';
+                        const isJpeg = dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg');
+                        const isPng = dataUrl.startsWith('data:image/png');
+                        const b64 = dataUrl.split(',')[1] || '';
+                        if (b64 && (isJpeg || isPng)) {
+                            const imgBuf = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                            cellChildren.push(new Paragraph({
+                                children: [new ImageRun({
+                                    data: imgBuf,
+                                    transformation: { width: 310, height: 230 },
+                                    type: isJpeg ? 'jpg' : 'png'
+                                })]
+                            }));
+                        }
+                        // 拍照時間
+                        const ts = p.timestamp || p.created_at || '';
+                        const dateStr = ts ? ts.slice(0, 10) : '';
+                        if (dateStr) {
+                            cellChildren.push(new Paragraph({
+                                children: [new TextRun({ text: dateStr, size: 16, color: '888888' })]
+                            }));
+                        }
+                    } else {
+                        cellChildren.push(new Paragraph({ children: [new TextRun('')] }));
+                    }
+                    cells.push(new TableCell({
+                        borders,
+                        width: { size: 4503, type: WidthType.DXA },
+                        margins: { top: 80, bottom: 80, left: 120, right: 120 },
+                        children: cellChildren
                     }));
                 }
-                const ts = p.timestamp || p.created_at || '';
-                if (ts) children.push(new Paragraph({
-                    alignment: AlignmentType.CENTER,
-                    children: [new TextRun({ text: ts.slice(0, 10), size: 16, color: '888888' })]
+                children.push(new Table({
+                    width: { size: 9026, type: WidthType.DXA },
+                    columnWidths: [4503, 4503],
+                    rows: [new TableRow({ children: cells })]
                 }));
+                children.push(new Paragraph({ children: [new TextRun('')] }));
             }
         }
+
         // 4. 產生並下載
         const doc = new Document({
             styles: {
@@ -671,7 +566,8 @@ window.exportPhotoReport = async function() {
             }]
         });
 
-        const blob = await Packer.toBlob(doc);
+        const buffer = await Packer.toBuffer(doc);
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

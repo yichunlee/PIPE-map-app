@@ -36,6 +36,7 @@
         <div id="permitZoneButton" class="left-drawer-btn" title="隱藏所有標記" onclick="toggleAllMarkers()" style="display:none;">👁️</div>
         <div id="dateLabelButton" class="left-drawer-btn" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()" style="display:none;">📅</div>
         <div id="photoLayerButton" class="left-drawer-btn" title="顯示照片位置" onclick="togglePhotoLayer()" style="display:none;">📷</div>
+        <div id="photoExportButton" class="left-drawer-btn" title="匯出照片位置報告(Word)" onclick="exportPhotoReport()" style="display:none;background:#fff3e0;">📋</div>
         <div id="projectSCurveBtn" class="left-drawer-btn" title="計畫S曲線" onclick="showProjectSCurve()" style="display:none;background:#f3e5f5;">📊</div>
     </div>
     <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()">
@@ -264,6 +265,8 @@
     <script src="js/pipeline-crud.js"></script>
     <script src="js/dxf-export.js"></script>
     <script src="js/elevation.js"></script>
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="js/photos.js"></script>
     <script src="js/user-mgmt.js"></script>
     <script src="js/accounting.js"></script>

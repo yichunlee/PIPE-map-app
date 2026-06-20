@@ -120,6 +120,7 @@ function setMapContext(context, projectPipelines) {
         if (ids.date)      { ids.date.style.display = 'none'; ids.date.classList.remove('active'); }
         if (ids.elevation) { ids.elevation.style.display = 'none'; }
         if (ids.photo)     { ids.photo.style.display = 'none'; }
+        const _peb2 = document.getElementById('photoExportButton'); if (_peb2) _peb2.style.display = 'none';
         // 👁️ 改成「看路權」功能
         if (ids.eye) {
             ids.eye.style.display = 'flex';
@@ -148,6 +149,7 @@ function setMapContext(context, projectPipelines) {
         if (ids.date)      { ids.date.style.display = 'flex'; }
         if (ids.elevation) { ids.elevation.style.display = 'flex'; }
         if (ids.photo)     { ids.photo.style.display = 'flex'; }
+        const _peb = document.getElementById('photoExportButton'); if (_peb) _peb.style.display = 'flex';
         // 👁️ 改成「看標記」功能
         if (ids.eye) {
             ids.eye.style.display = 'flex';
