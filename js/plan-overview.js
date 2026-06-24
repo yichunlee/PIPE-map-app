@@ -399,9 +399,7 @@ function initMap() {
         // 一般模式的右鍵選單（未登入不顯示）
         e.originalEvent.preventDefault();
         if (!currentUser) return;
-        if (currentPipeline && currentPipeline.id) {
-            showRightClickMenu(e.latlng, e.originalEvent.clientX, e.originalEvent.clientY);
-        }
+        showRightClickMenu(e.latlng, e.originalEvent.clientX, e.originalEvent.clientY);
     });
 
     // 手機長按觸發右鍵選單（500ms）
@@ -418,9 +416,7 @@ function initMap() {
             const rect = map.getContainer().getBoundingClientRect();
             const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
             const latlng = map.containerPointToLatLng(point);
-            if (currentPipeline && currentPipeline.id) {
-                showRightClickMenu(latlng, touch.clientX, touch.clientY);
-            }
+            showRightClickMenu(latlng, touch.clientX, touch.clientY);
         }, 500);
     }, { passive: true });
     map.getContainer().addEventListener('touchmove', function() {

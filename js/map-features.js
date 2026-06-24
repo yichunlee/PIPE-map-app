@@ -925,13 +925,18 @@ window.showRightClickMenu = function(latlng, clientX, clientY) {
     const ganttRectItem = currentPipeline
         ? '<div class="rcm-item" style="border-top:2px solid #e8f5e9;background:#f9fffe;" onclick="closeRightClickMenu();startGanttRectSelect()">🗺️ <span>圈選建甘特</span></div>'
         : '';
-    menu.innerHTML =
-        '<div class="rcm-item" onclick="closeRightClickMenu();showAddNotePopup({lat:' + lat + ',lng:' + lng + '})">📝 <span>新增備註</span></div>' +
-        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddPanelPopup({lat:' + lat + ',lng:' + lng + '})">🔌 <span>新增配電盤/儀表箱</span></div>' +
-        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>' +
-        '<div class="rcm-item" style="border-top:1px solid #f0f0f0;color:#b8860b;" onclick="closeRightClickMenu();startStickyNoteRect()">🟡 <span>新增便利貼</span></div>' +
-        ganttRectItem +
-        (currentPipeline ? '<div class="rcm-item" style="border-top:2px solid #fff3e0;background:#fffaf7;" onclick="closeRightClickMenu();startCompleteRectSelect()">🏗️ <span>圈選更新完工</span></div>' : '');
+    // 大地圖（無 currentPipeline）只顯示便利貼
+    if (!currentPipeline) {
+        menu.innerHTML = '<div class="rcm-item" style="color:#b8860b;" onclick="closeRightClickMenu();startStickyNoteRect()">🟡 <span>新增便利貼</span></div>';
+    } else {
+        menu.innerHTML =
+            '<div class="rcm-item" onclick="closeRightClickMenu();showAddNotePopup({lat:' + lat + ',lng:' + lng + '})">📝 <span>新增備註</span></div>' +
+            '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();showAddPanelPopup({lat:' + lat + ',lng:' + lng + '})">🔌 <span>新增配電盤/儀表箱</span></div>' +
+            '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>' +
+            '<div class="rcm-item" style="border-top:1px solid #f0f0f0;color:#b8860b;" onclick="closeRightClickMenu();startStickyNoteRect()">🟡 <span>新增便利貼</span></div>' +
+            ganttRectItem +
+            '<div class="rcm-item" style="border-top:2px solid #fff3e0;background:#fffaf7;" onclick="closeRightClickMenu();startCompleteRectSelect()">🏗️ <span>圈選更新完工</span></div>';
+    }
     document.body.appendChild(menu);
     setTimeout(() => {
         document.addEventListener('click', closeRightClickMenu, { once: true });
@@ -1022,6 +1027,21 @@ window.selectStickyColor = function(idx) {
     });
 };
 
+// mouseup：判斷是 resize 還是單擊
+window._onStickyMouseUp = async function(e, el) {
+    var noteId = el.dataset.noteid;
+    var note = stickyNotes.find(function(n){ return n.id === noteId; });
+    var w = el.offsetWidth;
+    if (!note || !w || w < 80) return;
+    if (w !== (note.width || 160)) {
+        // 寬度改變 → 儲存 resize
+        try {
+            await apiCall('updateStickyNote', { noteId: noteId, width: w });
+            note.width = w;
+        } catch(err) {}
+    }
+};
+
 window.saveStickyNote = async function() {
     if (!requireLogin()) return;
     var text = (document.getElementById('_stickyText').value || '').trim();
@@ -1036,7 +1056,7 @@ window.saveStickyNote = async function() {
         swLng: bounds.getSouthWest().lng,
         neLat: bounds.getNorthEast().lat,
         neLng: bounds.getNorthEast().lng,
-        pipelineId: currentPipeline ? currentPipeline.id : '',
+        pipelineId: currentPipeline ? currentPipeline.id : (currentProject ? '__project__' + currentProject.name : ''),
     };
     try {
         var result;
@@ -1068,9 +1088,10 @@ window.deleteStickyNote = async function(id) {
 
 async function loadStickyNotes() {
     clearStickyNotes();
-    if (!currentPipeline) return;
+    var stickyPipelineId = currentPipeline ? currentPipeline.id : (currentProject ? '__project__' + currentProject.name : null);
+    if (!stickyPipelineId) return;
     try {
-        var result = await apiCall('getStickyNotes', { pipelineId: currentPipeline.id });
+        var result = await apiCall('getStickyNotes', { pipelineId: stickyPipelineId });
         stickyNotes = result.notes || [];
         displayStickyNotes();
         // 縮放時重繪（控制顯示/隱藏）
@@ -1096,32 +1117,65 @@ function displayStickyNotes() {
         var c = COLORS[ci] || COLORS[0];
         // 不顯示外框矩形
         var center = bounds.getCenter();
-        // zoom < 18 不顯示（maxZoom=19，倒數第二才出現）
         var zoom = map.getZoom();
-        if (zoom < 18) return;
+        var noteId = note.id;
         var openEdit = function() { showStickyNoteForm(bounds, note); };
-        // onclick 不用 stopPropagation，讓 Leaflet click 事件正常冒泡
-        var noteHtml = '<div style="background:' + c.bg + ';border:1.5px solid ' + c.border + ';border-radius:4px;padding:3px 7px;font-size:11px;color:#333;white-space:pre-wrap;word-break:break-word;width:150px;line-height:1.5;cursor:pointer;box-shadow:1px 2px 5px rgba(0,0,0,0.18);">' + note.text.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div>';
+        var noteHtml, iconSize, iconAnchor;
+        if (zoom < 17) {
+            // zoom 太小：顯示小圖示
+            noteHtml = '<div title="' + note.text.replace(/"/g,"'") + '" style="background:' + c.bg + ';border:2px solid ' + c.border + ';border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;box-shadow:1px 2px 5px rgba(0,0,0,0.2);">📝</div>';
+            iconSize = [22, 22];
+            iconAnchor = [11, 11];
+        } else {
+            // zoom 夠大：顯示完整便利貼，可 resize
+            var noteW = note.width || 160;
+            noteHtml = '<div class="_sticky-body" data-noteid="' + noteId + '" style="background:' + c.bg + ';border:1.5px solid ' + c.border + ';border-radius:6px;padding:5px 8px;font-size:11px;color:#333;white-space:pre-wrap;word-break:break-word;width:' + noteW + 'px;min-width:80px;max-width:400px;line-height:1.5;box-shadow:1px 2px 5px rgba(0,0,0,0.18);resize:horizontal;overflow:auto;cursor:move;" onmouseup="window._onStickyMouseUp&&window._onStickyMouseUp(event,this)">' + note.text.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div>';
+            iconSize = [noteW, 10];
+            iconAnchor = [noteW/2, 5];
+        }
         var label = L.marker(center, {
             icon: L.divIcon({
                 className: 'sticky-note-marker',
                 html: noteHtml,
-                iconSize: [150, 10],
-                iconAnchor: [75, 5],
+                iconSize: iconSize,
+                iconAnchor: iconAnchor,
             }),
             zIndexOffset: 800,
             interactive: true,
+            draggable: zoom >= 17,
         }).addTo(map);
-        // 綁在 DOM 元素上，比 Leaflet .on('click') 更可靠
-        (function(fn) {
+
+        // 拖拉結束後儲存新位置
+        label.on('dragend', (function(n, b) {
+            return async function(ev) {
+                var newCenter = ev.target.getLatLng();
+                var dlat = newCenter.lat - b.getCenter().lat;
+                var dlng = newCenter.lng - b.getCenter().lng;
+                var newSw = L.latLng(b.getSouthWest().lat + dlat, b.getSouthWest().lng + dlng);
+                var newNe = L.latLng(b.getNorthEast().lat + dlat, b.getNorthEast().lng + dlng);
+                var newBounds = L.latLngBounds(newSw, newNe);
+                try {
+                    await apiCall('updateStickyNote', {
+                        noteId: n.id, text: n.text, color: n.color,
+                        swLat: newBounds.getSouthWest().lat, swLng: newBounds.getSouthWest().lng,
+                        neLat: newBounds.getNorthEast().lat, neLng: newBounds.getNorthEast().lng,
+                    });
+                    n.swLat = newBounds.getSouthWest().lat; n.swLng = newBounds.getSouthWest().lng;
+                    n.neLat = newBounds.getNorthEast().lat; n.neLng = newBounds.getNorthEast().lng;
+                } catch(e) { showToast('儲存位置失敗', 'error'); }
+            };
+        })(note, bounds));
+
+        // 點擊開啟編輯（雙擊，避免跟拖拉衝突）
+        label.on('dblclick', function(e) { L.DomEvent.stop(e); openEdit(); });
+
+        (function(lbl, n) {
             setTimeout(function() {
-                var wrapper = label.getElement();
-                if (wrapper) {
-                    wrapper.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-                    wrapper.addEventListener('click', function(e) { e.stopPropagation(); fn(); });
-                }
+                var wrapper = lbl.getElement();
+                if (!wrapper) return;
+                wrapper.addEventListener('mousedown', function(e) { e.stopPropagation(); });
             }, 50);
-        })(openEdit);
+        })(label, note);
         stickyRectangles.push(label);
     });
 }
@@ -1547,7 +1601,11 @@ function getSegmentCoordsFromBranch(branchCoords, startDist, endDist) {
         accumulatedDist = nextAccDist;
     }
     
-    // 檢查是否正確擷取到座標
+    // 如果只有起點沒有終點（endDist 超過路徑總長），補上最後一個座標點
+    if (result.length === 1 && branchCoords.length >= 2) {
+        result.push(branchCoords[branchCoords.length - 1]);
+    }
+    
     if (result.length < 2) {
         console.warn(`⚠️ getSegmentCoordsFromBranch 返回座標不足: ${result.length} 點 (${startDist}-${endDist}m)`);
     }

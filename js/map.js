@@ -1,6 +1,11 @@
 let nodeMarkers = [];
 
 async function showPipelineDetail(pipelineId, keepView = false) {
+    // 確保 is_valve 欄位存在（只需執行一次）
+    if (!window._valveColumnEnsured) {
+        window._valveColumnEnsured = true;
+        apiCall('ensureValveColumn', {}).catch(() => {});
+    }
     currentPipeline = allPipelines.find(p => p.id === pipelineId);
 
     if (typeof ganttData !== 'undefined') ganttData = [];
@@ -100,6 +105,7 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
                         if (!smallCoords || smallCoords.length < 2) return;
                         
                         const isCompleted = seg.status !== '0' && seg.status.trim() !== '';
+                        const isValve = seg.isValve === 1 || seg.isValve === true || seg.isValve === '1';
                         const diameter = seg.diameter || '';
                         const pipeType = seg.pipeType || '';
                         const method = seg.method || '';
@@ -126,6 +132,8 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
                         
                         const trackingKey = `${branchKey}-${i}`;
                         smallSegmentPolylines[trackingKey] = { polyline, seg, branchIndex, smallIndex: i, color };
+                        // 制水閥：在中點畫垂直紅線（十字形）
+                        if (isValve) drawValveCross(smallCoords, trackingKey);
                         // 繪製節點標記
 if (seg.nodeName && seg.nodeName.trim()) {
 const nodeCoords = getSegmentCoordsFromBranch(branch.coords, smallStart, smallStart + 1);
@@ -412,6 +420,7 @@ function drawBranchLabel(branch, branchIndex, smallSegs) {
 // ========== 新架構：點擊小段處理 ==========
 window.handleNewSmallSegmentClick = function(e, branchIndex, smallIndex, smallStart, smallEnd, seg, polyline, color) {
     const isCompleted = seg.status !== '0' && seg.status.trim() !== '';
+    const isValve = seg.isValve === 1 || seg.isValve === true || seg.isValve === '1';
     const diameter = seg.diameter || '未設定';
     const pipeType = seg.pipeType || '未設定';
     const method = seg.method || '未設定';
@@ -458,6 +467,10 @@ const popup = L.popup()
         <button class="popup-button" onclick="toggleNewSmallSegment(${branchIndex}, ${smallIndex})">
             ${isCompleted ? '❌ 標記未完工' : '✓ 標記完工'}
         </button>
+        <button class="popup-button" style="background:${isValve ? '#b71c1c' : '#78909c'};margin-top:4px;"
+            onclick="toggleValve(${branchIndex}, ${smallIndex})">
+            🔴 ${isValve ? '移除制水閥' : '標記制水閥'}
+        </button>
         <button class="popup-button" style="background:#2196F3;margin-top:4px;" 
             onclick="startRangeSelect(${branchIndex}, ${smallIndex}); map.closePopup();">
             📏 設定範圍屬性（此段為起點）
@@ -468,6 +481,78 @@ const popup = L.popup()
         </button>
     `)
     .openOn(map);
+};
+
+// ===== 制水閥 =====
+const valveCrossLayers = {}; // key -> [line1, line2]
+
+function drawValveCross(coords, trackingKey) {
+    // 找中點
+    if (!coords || coords.length < 2) return;
+    const mid = coords[Math.floor(coords.length / 2)];
+    const p0 = coords[0];
+    const p1 = coords[coords.length - 1];
+    // 計算管線方向向量
+    const dlat = p1[0] - p0[0];
+    const dlng = p1[1] - p0[1];
+    const len = Math.sqrt(dlat*dlat + dlng*dlng) || 0.001;
+    // 垂直方向（旋轉90度）
+    const perpLat = -dlng / len;
+    const perpLng = dlat / len;
+    // 垂直線長度（約 40m 的地圖比例）
+    const armLen = 0.00035;
+    const pt1 = [mid[0] + perpLat * armLen, mid[1] + perpLng * armLen];
+    const pt2 = [mid[0] - perpLat * armLen, mid[1] - perpLng * armLen];
+    const vLine = L.polyline([pt1, pt2], {
+        color: '#e53935', weight: 4, opacity: 1, lineCap: 'round'
+    }).addTo(map);
+    // 中點標記
+    const dot = L.circleMarker(mid, {
+        radius: 5, color: '#e53935', fillColor: '#e53935', fillOpacity: 1, weight: 2
+    }).addTo(map);
+    // 移除舊的
+    if (valveCrossLayers[trackingKey]) {
+        valveCrossLayers[trackingKey].forEach(l => { try { map.removeLayer(l); } catch(e) {} });
+    }
+    valveCrossLayers[trackingKey] = [vLine, dot];
+}
+
+function removeValveCross(trackingKey) {
+    if (valveCrossLayers[trackingKey]) {
+        valveCrossLayers[trackingKey].forEach(l => { try { map.removeLayer(l); } catch(e) {} });
+        delete valveCrossLayers[trackingKey];
+    }
+}
+
+window.toggleValve = async function(branchIndex, smallIndex) {
+    if (!requireLogin()) return;
+    const branchKey = `B${branchIndex}`;
+    const seg = (currentPipeline.branches[branchKey] || []).find(s => s.smallIndex === smallIndex);
+    if (!seg) return;
+    const newVal = seg.isValve ? 0 : 1;
+    try {
+        await apiCall('updateSmallSegmentInfo', {
+            pipelineId: currentPipeline.id,
+            segmentNumber: branchKey,
+            smallIndex,
+            diameter: seg.diameter || '',
+            pipeType: seg.pipeType || '',
+            method: seg.method || '',
+            status: seg.status || '0',
+            isValve: newVal,
+        });
+        seg.isValve = newVal;
+        const trackingKey = `${branchKey}-${smallIndex}`;
+        if (newVal) {
+            const tracked = smallSegmentPolylines[trackingKey];
+            if (tracked) drawValveCross(tracked.polyline.getLatLngs().map(ll => [ll.lat, ll.lng]), trackingKey);
+            showToast('✅ 已標記制水閥', 'success');
+        } else {
+            removeValveCross(trackingKey);
+            showToast('已移除制水閥', 'info');
+        }
+        map.closePopup();
+    } catch(e) { showToast('操作失敗：' + e.message, 'error'); }
 };
 
 window.saveNodeName = async function(branchIndex, smallIndex) {

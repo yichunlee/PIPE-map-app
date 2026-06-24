@@ -1277,18 +1277,25 @@ const branchLengths = branchStructure ? branchStructure.branches.map((branch, id
     return { branchIndex: idx, length: Math.round(len) };
 }) : [{ branchIndex: 0, length: newLength }];
 
-try {
-const initResult = await apiCall('initSmallSegments', {}, {
-    body: {
-        action: 'initSmallSegments',
-        pipelineId: currentPipeline.id,
-        totalLength: newLength,
-        branchLengths: JSON.stringify(branchLengths),
+// 只有在 updateLinestring 沒有傳 branchLengths 時才初始化（通常不需要）
+// updateLinestring 已經更新了 start_distance/end_distance，不需要再 initSmallSegments
+// （initSmallSegments 會覆蓋現有屬性和節點名稱）
+if (branchLengthsArr.length === 0) {
+    try {
+        const initResult = await apiCall('initSmallSegments', {}, {
+            body: {
+                action: 'initSmallSegments',
+                pipelineId: currentPipeline.id,
+                totalLength: newLength,
+                branchLengths: JSON.stringify(branchLengths),
+            }
+        });
+        console.log('✅ 小段初始化完成，共', initResult.count, '個小段');
+    } catch(e) {
+        console.warn('⚠️ 小段初始化失敗:', e.message);
     }
-});
-    console.log('✅ 小段初始化完成，共', initResult.count, '個小段');
-} catch(e) {
-    console.warn('⚠️ 小段初始化失敗:', e.message);
+} else {
+    console.log('✅ 路徑已更新，小段距離由 updateLinestring 重算（保留屬性）');
 }
             // 退出編輯模式（靜默模式）
             cancelEditMode(true);

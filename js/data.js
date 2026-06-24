@@ -239,6 +239,9 @@ function showProjectPipelines(projectName) {
     // 顯示工程列表（會設定按鈕為顯示）
     showPipelineList(projectPipelines);
     
+    // 大地圖也載入便利貼
+    if (typeof loadStickyNotes === 'function') loadStickyNotes();
+    
     // 顯示返回按鈕
     showBackButton();
     
