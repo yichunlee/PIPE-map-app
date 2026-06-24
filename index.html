@@ -30,6 +30,7 @@
     <!-- 左側工具抽屜 -->
     <div id="leftDrawerToggle" style="display:none;position:absolute;top:125px;left:10px;z-index:1001;background:white;padding:8px;border-radius:4px;box-shadow:0 1px 5px rgba(0,0,0,0.4);cursor:pointer;font-size:18px;width:34px;height:34px;display:none;align-items:center;justify-content:center;" onclick="toggleLeftDrawer()" title="工具">🔧</div>
     <div id="leftDrawer" style="display:none;position:absolute;top:169px;left:10px;z-index:1000;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);overflow:hidden;min-width:44px;">
+        <div id="ganttDrawerBtn" class="left-drawer-btn" title="甘特圖" onclick="toggleGanttPanel()" style="display:none;">📊</div>
         <div id="measureButton" class="left-drawer-btn" title="測量距離" style="display:none;">📏</div>
         <div id="layerSwitchButton" class="left-drawer-btn" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
         <div id="elevationButton" class="left-drawer-btn" onclick="showElevationProfile()" title="高程剖面圖" style="display:none;">📈</div>

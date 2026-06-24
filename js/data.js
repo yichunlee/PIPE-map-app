@@ -97,6 +97,8 @@ function setMapContext(context, projectPipelines) {
         if (dxfBtn0) dxfBtn0.style.display = 'none';
         var scBtn0 = document.getElementById('projectSCurveBtn');
         if (scBtn0) scBtn0.style.display = 'none';
+        var ganttDrawerBtn00 = document.getElementById('ganttDrawerBtn');
+        if (ganttDrawerBtn00) ganttDrawerBtn00.style.display = 'none';
         // 未登入也隱藏工具抽屜
         const toolsToggle = document.getElementById('toolsDrawerToggle');
         if (toolsToggle) toolsToggle.style.display = currentUser ? '' : 'none';
@@ -114,6 +116,8 @@ function setMapContext(context, projectPipelines) {
         if (svgBtn1) svgBtn1.style.display = 'none';
         var scBtn = document.getElementById('projectSCurveBtn');
         if (scBtn) scBtn.style.display = 'flex';
+        var ganttDrawerBtn0 = document.getElementById('ganttDrawerBtn');
+        if (ganttDrawerBtn0) ganttDrawerBtn0.style.display = 'none';
         if (ids.layer)     { ids.layer.style.display = 'flex'; }
         if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; ids.roadwork.classList.remove('active'); }
         if (ids.measure)   { ids.measure.style.display = 'flex'; }
@@ -143,9 +147,11 @@ function setMapContext(context, projectPipelines) {
         if (svgBtn) svgBtn.style.display = 'flex';
         var scBtn2 = document.getElementById('projectSCurveBtn');
         if (scBtn2) scBtn2.style.display = 'flex';
+        var ganttDrawerBtn = document.getElementById('ganttDrawerBtn');
+        if (ganttDrawerBtn) ganttDrawerBtn.style.display = 'flex';
         if (ids.layer)     { ids.layer.style.display = 'flex'; }
         if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; }
-        if (ids.measure)   { ids.measure.style.display = 'flex'; }
+        if (ids.measure)   { ids.measure.style.display = 'none'; }  // 已移到右鍵選單
         if (ids.date)      { ids.date.style.display = 'flex'; }
         if (ids.elevation) { ids.elevation.style.display = 'flex'; }
         if (ids.photo)     { ids.photo.style.display = 'flex'; }

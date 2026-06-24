@@ -1230,7 +1230,7 @@ html += '<option value="' + seg.segmentNumber + '" data-num="' + numSmall + '" d
     html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="' + customRate + '" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="' + customRate + '" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
     html += '</div>';
     html += '<label>項目名稱</label><input id="itemLabel" value="' + esc(item.label || '') + '">';
-    html += '<label>開始日期</label><input id="startDate" type="date" value="' + (item.startDate || '') + '" onchange="var e=document.getElementById(&quot;endDate&quot;);if(e){e.min=this.value;}">';
+    html += '<label>開始日期</label><input id="startDate" type="date" value="' + (item.startDate || '') + '" onchange="var e=document.getElementById(&quot;endDate&quot;);if(e){e.min=this.value;if(!e.value||e.value<this.value)e.value=this.value;}">';
     html += '<label>完成日期</label><input id="endDate" type="date" value="' + (item.endDate || '') + '" min="' + (item.startDate || '') + '">';
     html += '<label>備註</label><input id="notes" value="' + esc(item.notes || '') + '">';
     html += '<label>前置項目（完成後才開始）</label>';
@@ -1299,7 +1299,7 @@ html += '<div style="font-size:10px;color:#e53935;margin-top:3px;">⚠️ 已全
     html += '<label>完成率（%）</label><div style="display:flex;align-items:center;gap:8px;"><input id="customRate" type="range" min="0" max="100" value="0" style="flex:1;" oninput="document.getElementById(&quot;customRateNum&quot;).value=this.value"><input id="customRateNum" type="number" min="0" max="100" value="0" style="width:56px;" oninput="document.getElementById(&quot;customRate&quot;).value=this.value"></div>';
     html += '</div>';
     html += '<label>項目名稱</label><input id="itemLabel">';
-    html += '<label>開始日期</label><input id="startDate" type="date" onchange="var e=document.getElementById(&quot;endDate&quot;);if(e&&!e.value){e.min=this.value;e.value=this.value;}else if(e){e.min=this.value;}">';
+    html += '<label>開始日期</label><input id="startDate" type="date" onchange="var e=document.getElementById(&quot;endDate&quot;);if(e){e.min=this.value;if(!e.value||e.value<this.value)e.value=this.value;}">';
     html += '<label>完成日期</label><input id="endDate" type="date">';
     html += '<label>備註</label><input id="notes">';
     html += '<label>前置項目（完成後才開始）</label>';

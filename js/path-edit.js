@@ -1232,6 +1232,27 @@ const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
             for (let i = 0; i < newCoords.length - 1; i++) {
                 newLength += getDistance(newCoords[i], newCoords[i + 1]);
             }
+            // LINESTRING 也要把 branchIndex 0 的長度推進去（即使有分段，B0 仍是第一段）
+            if (segmentBreakPoints.length === 0) {
+                // 單段 LINESTRING：整條當作 B0
+                branchLengthsArr.push({ branchIndex: 0, length: Math.round(newLength) });
+            } else {
+                // 多段 LINESTRING：每段對應 B0, B1, B2...
+                const sortedBreaks = [...segmentBreakPoints].sort((a, b) => a - b);
+                let startIndex = 0;
+                let bIdx = 0;
+                sortedBreaks.forEach(breakIndex => {
+                    const segCoords = newCoords.slice(startIndex, breakIndex + 1);
+                    let segLen = 0;
+                    for (let i = 0; i < segCoords.length - 1; i++) segLen += getDistance(segCoords[i], segCoords[i + 1]);
+                    branchLengthsArr.push({ branchIndex: bIdx++, length: Math.round(segLen) });
+                    startIndex = breakIndex;
+                });
+                const lastSegCoords = newCoords.slice(startIndex);
+                let lastLen = 0;
+                for (let i = 0; i < lastSegCoords.length - 1; i++) lastLen += getDistance(lastSegCoords[i], lastSegCoords[i + 1]);
+                branchLengthsArr.push({ branchIndex: bIdx, length: Math.round(lastLen) });
+            }
         }
         
         newLength = Math.round(newLength);

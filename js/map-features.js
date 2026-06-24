@@ -935,7 +935,8 @@ window.showRightClickMenu = function(latlng, clientX, clientY) {
             '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();startDrawPermitZone()">🔴 <span>繪製挖掘許可範圍</span></div>' +
             '<div class="rcm-item" style="border-top:1px solid #f0f0f0;color:#b8860b;" onclick="closeRightClickMenu();startStickyNoteRect()">🟡 <span>新增便利貼</span></div>' +
             ganttRectItem +
-            '<div class="rcm-item" style="border-top:2px solid #fff3e0;background:#fffaf7;" onclick="closeRightClickMenu();startCompleteRectSelect()">🏗️ <span>圈選更新完工</span></div>';
+            '<div class="rcm-item" style="border-top:2px solid #fff3e0;background:#fffaf7;" onclick="closeRightClickMenu();startCompleteRectSelect()">🏗️ <span>圈選更新完工</span></div>' +
+            '<div class="rcm-item" style="border-top:1px solid #f0f0f0;" onclick="closeRightClickMenu();toggleMeasureMode()">📏 <span>測量距離</span></div>';
     }
     document.body.appendChild(menu);
     setTimeout(() => {
