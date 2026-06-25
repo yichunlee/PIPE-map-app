@@ -24,7 +24,12 @@ function getItemProgress(item) {
         }
         const segs = branches[branchKey];
         const from = item.fromSmall != null ? Number(item.fromSmall) : 0;
-        const to   = item.toSmall   != null ? Number(item.toSmall)   : segs.length - 1;
+        let to     = item.toSmall   != null ? Number(item.toSmall)   : segs.length - 1;
+        // 節點代表「該小段的起點」，所以「節點A 到 節點B」的範圍是 [from, to-1]
+        // 但若 to 是最後一段或 from == to，則保留 inclusive
+        const isLastSeg = to === segs.length - 1;
+        const isSamePoint = to === from;
+        if (!isLastSeg && !isSamePoint) to = to - 1;
         let done = 0, total = 0;
         segs.forEach(seg => {
             const idx = seg.smallIndex;
@@ -834,6 +839,16 @@ html += '</div></div></div>';
     });
     
     document.getElementById('chart').innerHTML = html;
+
+    // 同步 S 曲線 X 軸捲動
+    var _syncOuter = document.getElementById('chartScrollOuter');
+    if (_syncOuter && !_syncOuter._scSync) {
+        _syncOuter._scSync = true;
+        _syncOuter.addEventListener('scroll', function() {
+            var sc = document.getElementById('_bcScrollSync');
+            if (sc) sc.scrollLeft = _syncOuter.scrollLeft;
+        });
+    }
 
     // label resize handle（固定在 chartScrollOuter 左邊緣）
     var outerEl = document.getElementById('chartScrollOuter');
@@ -2172,37 +2187,22 @@ return;
             window._bcCache = { accMonthlyMap, accCumMap, acc011Map, acc011CumMap, _byCodeRaw: accData.byCode || [] };
         } catch(e) {}
     }
-    // 根據 mode 選擇資料，並過濾成當年度
+    // 根據 mode 選擇資料（全年度）
     var is011 = !!mode;
-    var curYear = new Date().getFullYear();
-    var activeMonthlyMapAll = is011 ? acc011Map : accMonthlyMap;
-    var activeCumMapAll = is011 ? acc011CumMap : accCumMap;
-    // 只保留當年度
-    var activeMonthlyMap = {}, activeCumMap = {};
-    var cumY2 = 0;
-    Object.keys(activeMonthlyMapAll).sort().forEach(function(m) {
-        if (parseInt(m.split('-')[0]) === curYear) {
-            activeMonthlyMap[m] = activeMonthlyMapAll[m];
-            cumY2 += activeMonthlyMapAll[m];
-            activeCumMap[m] = cumY2;
-        }
-    });
+    var activeMonthlyMap = is011 ? acc011Map : accMonthlyMap;
+    var activeCumMap = is011 ? acc011CumMap : accCumMap;
     var hasAcc = Object.keys(activeMonthlyMap).length > 0;
     var hasAny = Object.keys(activeMonthlyMap).length > 0;
 
-    // 時間範圍：只顯示當年度（1/1 ~ 12/31）
-    var minDate = new Date(curYear, 0, 1);
-    var maxDate = new Date(curYear, 11, 31);
-    // 但計畫月份可能有當年度的，擴展到包含計畫月份
-    budgetRows.forEach(function(r) {
-        if (parseInt(r.month.split('-')[0]) === curYear) {
-            var parts = r.month.split('-');
-            var d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, 1);
-            if (d < minDate) minDate = d;
-            var de = new Date(parseInt(parts[0]), parseInt(parts[1]), 0);
-            if (de > maxDate) maxDate = de;
-        }
+    // 時間範圍：甘特圖全期 + 核銷資料範圍
+    var dates = items.flatMap(function(item) { return [new Date(item.startDate), new Date(item.endDate)]; });
+    Object.keys(activeMonthlyMap).forEach(function(m) {
+        var parts = m.split('-');
+        dates.push(new Date(parseInt(parts[0]), parseInt(parts[1])-1, 1));
+        dates.push(new Date(parseInt(parts[0]), parseInt(parts[1]), 0));
     });
+    var minDate = new Date(Math.min.apply(null, dates));
+    var maxDate = new Date(Math.max.apply(null, dates));
     minDate.setDate(minDate.getDate() - 14);
     maxDate.setDate(maxDate.getDate() + 14);
     var totalRange = maxDate.getTime() - minDate.getTime();
@@ -2212,7 +2212,8 @@ return;
     var accCumMax = 0;
     Object.values(activeCumMap).forEach(function(v) { if (v > accCumMax) accCumMax = v; });
     var _bcBudgetForYMax = parseFloat(localStorage.getItem('_bcYearBudget_' + pipeline.id) || '0') || 0;
-    var yMax = Math.max(maxCum, accCumMax, contractAmount, _bcBudgetForYMax) * 1.1;
+    var _ytForYMax = parseFloat(localStorage.getItem('_bcYearTarget_' + pipeline.id + '_' + new Date().getFullYear()) || '0') || 0;
+    var yMax = Math.max(maxCum, accCumMax, contractAmount, _bcBudgetForYMax, _ytForYMax) * 1.1;
     var actualDone = 0;
     items.forEach(function(item) {
 var prog = getItemProgress(item);
@@ -2231,14 +2232,12 @@ if (v >= 1e4) return (Math.round(v/1e3)/10).toFixed(1) + '萬';
 return Math.round(v/100)*100 > 0 ? (Math.round(v/100)*100).toLocaleString() : Math.round(v).toLocaleString();
     }
 
-    // Build SVG points (% of time range → x axis)，只取當年度計畫月份
-    var budgetRowsYear = budgetRows.filter(function(r){ return parseInt(r.month.split('-')[0]) === curYear; });
-    var ptsSource = budgetRowsYear.length > 0 ? budgetRowsYear : budgetRows;
-    var pts = ptsSource.map(function(r) {
+    // Build SVG points (% of time range → x axis)，全期
+    var pts = budgetRows.map(function(r) {
 var parts = r.month.split('-');
 var midDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, 15);
 return { pct: dateToPct(midDate), cum: r.cumulative, month: r.month };
-    }).filter(function(p){ return p.pct >= 0 && p.pct <= 100; });
+    });
 
     var svgPts = pts.map(function(p) {
 return (p.pct * 10).toFixed(1) + ',' + ((1 - p.cum/yMax)*100).toFixed(1);
@@ -2322,8 +2321,8 @@ html += '<div style="position:absolute;right:0;bottom:' + (item.frac*100).toFixe
     html += '</div>';
     html += '</div>';
 
-    // ── 右欄：對應 gantt-timeline-container { flex:1 }，無 padding ──
-    html += '<div style="flex:1;position:relative;min-width:0;">';
+    // ── 右欄：id 供捲動同步，overflow:hidden ──
+    html += '<div id="_bcScrollSync" style="flex:1;position:relative;min-width:0;overflow:hidden;">';
 
     // SVG 圖表（width:100% height 固定，與 .gantt-timeline 同寬）
     html += '<div style="position:relative;height:' + CHART_H + 'px;">';
@@ -2339,13 +2338,21 @@ html += '<line x1="0" y1="' + ((1-f)*100).toFixed(1) + '" x2="1000" y2="' + ((1-
         html += '<line x1="0" y1="' + contractY + '" x2="1000" y2="' + contractY + '" stroke="#1565c0" stroke-width="1.5" stroke-dasharray="6,3" vector-effect="non-scaling-stroke"/>';
         html += '<text x="4" y="' + (parseFloat(contractY)-2) + '" font-size="8" fill="#1565c0" vector-effect="non-scaling-stroke">契約 ' + contractLabel + '</text>';
     }
-    // 年度預算橫線
-    var _bcBudgetKeyInner = '_bcYearBudget_' + pipeline.id;
-    var _bcBudgetVal = parseFloat(localStorage.getItem(_bcBudgetKeyInner) || '0') || 0;
-    if (_bcBudgetVal > 0 && yMax > 0) {
-        var _bcY = ((1 - _bcBudgetVal / yMax) * 100).toFixed(1);
-        html += '<line x1="0" y1="' + _bcY + '" x2="1000" y2="' + _bcY + '" stroke="#2e7d32" stroke-width="1.5" stroke-dasharray="8,4" vector-effect="non-scaling-stroke" opacity="0.9"/>';
-        html += '<text x="4" y="' + (parseFloat(_bcY)-2) + '" font-size="7.5" fill="#2e7d32" vector-effect="non-scaling-stroke">' + curYear + '年預算 ' + fmtY(_bcBudgetVal) + '</text>';
+    // 當年度目標橫線（上年累積 + 當年目標）
+    var curYear = new Date().getFullYear();
+    var _ytKeyInner = '_bcYearTarget_' + pipeline.id + '_' + curYear;
+    var _ytValInner = parseFloat(localStorage.getItem(_ytKeyInner) || '0') || 0;
+    if (_ytValInner > 0 && yMax > 0) {
+        var prevCumForLine = 0;
+        Object.keys(activeCumMap).sort().forEach(function(m) {
+            if (parseInt(m.split('-')[0]) < curYear) prevCumForLine = activeCumMap[m];
+        });
+        var targetLine = prevCumForLine + _ytValInner;
+        if (targetLine <= yMax) {
+            var _bcY = ((1 - targetLine / yMax) * 100).toFixed(1);
+            html += '<line x1="0" y1="' + _bcY + '" x2="1000" y2="' + _bcY + '" stroke="#1565c0" stroke-width="1.5" stroke-dasharray="8,4" vector-effect="non-scaling-stroke" opacity="0.9"/>';
+            html += '<text x="4" y="' + (parseFloat(_bcY)-2) + '" font-size="7.5" fill="#1565c0" vector-effect="non-scaling-stroke">' + curYear + '年目標 ' + fmtY(targetLine) + '</text>';
+        }
     }
     html += '<path d="' + areaPath + '" fill="url(#bg2)"/>';
     html += '<polyline points="' + svgPts + '" fill="none" stroke="#7b1fa2" stroke-width="2" vector-effect="non-scaling-stroke"/>';
@@ -2412,43 +2419,34 @@ dotHtml += '<div style="position:absolute;left:' + actLeft + '%;bottom:' + actBo
     html += '</div>'; // 右欄
     html += '</div>'; // 整體
 
-    // 當年度核銷總額
-    var accYearTotalBC = 0;
-    Object.values(activeMonthlyMap).forEach(function(v){ accYearTotalBC += v; });
-    // 當年度各 code prefix 明細（從 byCode 過濾當年度）
-    var accByCodeYear = {};
-    var allByCode = is011 ? acc011Map : accMonthlyMap; // 同來源
-    // 從原始 byCode 資料抓 prefix 明細
-    if (window._bcCache && window._bcCache._byCodeRaw) {
-        window._bcCache._byCodeRaw.forEach(function(r) {
-            if (!r.year_month.startsWith(String(curYear))) return;
-            if (is011 && r.category !== '011') return;
-            var prefix = (r.code || '').match(/^[A-Za-z]+/)?.[0]?.toUpperCase() || '其他';
-            accByCodeYear[prefix] = (accByCodeYear[prefix] || 0) + r.amount;
-        });
-    }
-    var accDetailStr = Object.keys(accByCodeYear).sort().map(function(p) {
-        return p + ' ' + fmtY(accByCodeYear[p]);
-    }).join('、');
+    // 累積核銷總額
+    var accTotal = 0;
+    Object.values(activeMonthlyMap).forEach(function(v){ accTotal += v; });
 
-    // 當年度預算（localStorage）
-    var _bcBudgetKey = '_bcYearBudget_' + pipeline.id;
-    var _bcSavedBudget = parseFloat(localStorage.getItem(_bcBudgetKey) || '0') || 0;
-    var _bcExecPct = _bcSavedBudget > 0 ? Math.round(accYearTotalBC / _bcSavedBudget * 100) : null;
+    // 當年度目標執行數（localStorage）
+    var _ytKey = '_bcYearTarget_' + pipeline.id + '_' + curYear;
+    var _ytSaved = parseFloat(localStorage.getItem(_ytKey) || '0') || 0;
+    // 上一年底累積核銷
+    var prevYearCum = 0;
+    Object.keys(activeCumMap).sort().forEach(function(m) {
+        if (parseInt(m.split('-')[0]) < curYear) prevYearCum = activeCumMap[m];
+    });
+    // 目標橫線 = 上年累積 + 當年目標
+    var _ytLineVal = _ytSaved > 0 ? prevYearCum + _ytSaved : 0;
 
-    // 切換按鈕列 + 統計 + 年度預算輸入
+    // 切換按鈕列
     var tabHtml = '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px 4px 8px;flex-wrap:wrap;">';
     tabHtml += '<span style="font-size:10px;color:#888;">核銷顯示：</span>' +
         '<div style="display:flex;border:1px solid #ccc;border-radius:4px;overflow:hidden;font-size:11px;">' +
         '<button onclick="renderBudgetChart(0)" style="padding:2px 10px;background:' + (!is011?'#4a148c':'white') + ';color:' + (!is011?'white':'#555') + ';border:none;cursor:pointer;font-weight:' + (!is011?'bold':'normal') + ';">全部</button>' +
         '<button onclick="renderBudgetChart(1)" style="padding:2px 10px;background:' + (is011?'#4a148c':'white') + ';color:' + (is011?'white':'#555') + ';border:none;cursor:pointer;font-weight:' + (is011?'bold':'normal') + ';">施工費(011)</button>' +
         '</div>';
-    tabHtml += '<span style="font-size:10px;color:#e65100;margin-left:8px;">' + curYear + '年核銷：<b>' + fmtY(accYearTotalBC) + '</b>' +
-        (accDetailStr ? '<span style="font-size:10px;color:#e65100;">（' + accDetailStr + '）</span>' : '') + '</span>';
-    if (_bcExecPct !== null) tabHtml += '<span style="font-size:10px;color:#1565c0;">執行率：<b>' + _bcExecPct + '%</b></span>';
-    tabHtml += '<span style="font-size:10px;color:#2e7d32;margin-left:4px;">' + curYear + '年預算目標：</span>' +
-        '<input id="_bcYearBudgetInput" type="number" placeholder="金額(元)" value="' + (_bcSavedBudget||'') + '" style="width:110px;padding:2px 5px;border:1px solid #a5d6a7;border-radius:4px;font-size:11px;">' +
-        '<button onclick="(function(){var v=parseFloat(document.getElementById(&quot;_bcYearBudgetInput&quot;).value)||0;localStorage.setItem(&quot;' + _bcBudgetKey + '&quot;,v);renderBudgetChart(' + (is011?1:0) + ');})()" style="padding:2px 8px;background:#2e7d32;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">✓</button>';
+    if (accTotal > 0) tabHtml += '<span style="font-size:10px;color:#e65100;margin-left:8px;">累積核銷：<b>' + fmtY(accTotal) + '</b></span>';
+    // 當年目標輸入
+    tabHtml += '<span style="font-size:10px;color:#1565c0;margin-left:8px;">' + curYear + '年目標：</span>' +
+        '<input id="_bcYearTarget" type="number" placeholder="今年核銷目標(元)" value="' + (_ytSaved||'') + '" style="width:130px;padding:2px 5px;border:1px solid #90caf9;border-radius:4px;font-size:11px;">' +
+        '<button onclick="(function(){var v=parseFloat(document.getElementById(&quot;_bcYearTarget&quot;).value)||0;localStorage.setItem(&quot;' + _ytKey + '&quot;,v);renderBudgetChart(' + (is011?1:0) + ');})()" style="padding:2px 8px;background:#1565c0;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">✓</button>';
+    if (_ytSaved > 0) tabHtml += '<span style="font-size:10px;color:#1565c0;">（前年累積' + fmtY(prevYearCum) + '＋今年' + fmtY(_ytSaved) + '＝目標' + fmtY(_ytLineVal) + '）</span>';
     tabHtml += '</div>';
     container.innerHTML = tabHtml + html;
 
