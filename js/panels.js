@@ -233,9 +233,9 @@ window.savePanel = async function(lat, lng) {
     if (photoInput && photoInput.files && photoInput.files[0]) {
         const file = photoInput.files[0];
         try {
-            photoBase64 = await compressImage(file, 1600, 0.85);
+            photoBase64 = await compressImageForNote(file, 1600, 0.85);
             if (photoBase64.length > 3 * 1024 * 1024) {
-                photoBase64 = await compressImage(file, 1200, 0.75);
+                photoBase64 = await compressImageForNote(file, 1200, 0.75);
             }
         } catch (error) {
             console.error('照片壓縮失敗:', error);

@@ -699,7 +699,7 @@ window.switchNoteType = function(type) {
 };
 
 // 壓縮照片
-async function compressImage(file, maxWidth = 1200, quality = 0.8) {
+async function compressImageForNote(file, maxWidth = 1200, quality = 0.8) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -772,12 +772,12 @@ window.saveMapNote = async function(lat, lng) {
         try {
             // 壓縮照片（照片存 Google Drive，不受字元限制，品質可以好一點）
             console.log('開始壓縮照片...');
-            photoBase64 = await compressImage(file, 1600, 0.85);
+            photoBase64 = await compressImageForNote(file, 1600, 0.85);
             
             // 超過 3MB 再壓一次
             if (photoBase64.length > 3 * 1024 * 1024) {
                 console.log('照片仍然太大，降低品質重新壓縮...');
-                photoBase64 = await compressImage(file, 1200, 0.75);
+                photoBase64 = await compressImageForNote(file, 1200, 0.75);
             }
             
             console.log('照片壓縮完成！大小：' + Math.round(photoBase64.length / 1024) + 'KB');

@@ -110,6 +110,8 @@ function setMapContext(context, projectPipelines) {
         if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
         var accountingBtn1 = document.getElementById('accountingToolItem');
         if (accountingBtn1) accountingBtn1.style.display = 'none';
+        var settingsBtn1 = document.getElementById('settingsToolItem');
+        if (settingsBtn1) settingsBtn1.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn1 = document.getElementById('dxfToolItem');
         if (dxfBtn1) dxfBtn1.style.display = 'none';
         var svgBtn1 = document.getElementById('svgToolItem');
@@ -141,6 +143,8 @@ function setMapContext(context, projectPipelines) {
         if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
         var accountingBtn = document.getElementById('accountingToolItem');
         if (accountingBtn) accountingBtn.style.display = 'flex';
+        var settingsBtn2 = document.getElementById('settingsToolItem');
+        if (settingsBtn2) settingsBtn2.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn2 = document.getElementById('dxfToolItem');
         if (dxfBtn2) dxfBtn2.style.display = 'flex';
         var svgBtn = document.getElementById('svgToolItem');

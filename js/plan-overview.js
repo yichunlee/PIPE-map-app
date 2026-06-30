@@ -276,7 +276,7 @@ window.clearAllSegments = async function() {
             showToast('已清空所有段落', 'success');
             
             // 重新載入工程
-            const progressData = await apiCall('getProgress', { pipelineId: pipeline.id });
+            const progressData = await apiCall('getProgress', { pipelineId: currentPipeline.id });
             currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
             
             showPipelineDetail(currentPipeline.id);
@@ -933,7 +933,7 @@ window.saveEditedSegment = async function(segmentNumber) {
             map.closePopup();
             
             // 重新載入工程
-            const progressData = await apiCall('getProgress', { pipelineId: pipeline.id });
+            const progressData = await apiCall('getProgress', { pipelineId: currentPipeline.id });
             currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
             
             showPipelineDetail(currentPipeline.id);
@@ -966,7 +966,7 @@ window.deleteThisSegment = async function(segmentNumber) {
             map.closePopup();
             
             // 重新載入工程
-            const progressData = await apiCall('getProgress', { pipelineId: pipeline.id });
+            const progressData = await apiCall('getProgress', { pipelineId: currentPipeline.id });
             currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
             
             showPipelineDetail(currentPipeline.id);
@@ -1065,7 +1065,7 @@ window.saveNewSegment = async function() {
     try {
         // 使用 GET 請求（避免 CORS 問題）
         const segmentNumber = currentPipeline.segments.length + 1;
-        const result = await apiCall('saveSegment', { pipelineId: currentPipeline.id, status: '未施工', diameter: diameter, method: method, segmentNumber: segmentNumber, endDistance: end });
+        const result = await apiCall('saveSegment', { pipelineId: currentPipeline.id, status: '未施工', diameter: diameter, method: method, segmentNumber: segmentNumber, startDistance: start, endDistance: end });
         
         console.log('API 回應:', result);
         
@@ -1075,7 +1075,7 @@ window.saveNewSegment = async function() {
             
             // 重新載入這個工程的進度
             console.log('重新載入工程進度...');
-            const progressData = await apiCall('getProgress', { pipelineId: pipeline.id });
+            const progressData = await apiCall('getProgress', { pipelineId: currentPipeline.id });
             
             currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
             console.log('更新後段落數:', currentPipeline.segments.length);

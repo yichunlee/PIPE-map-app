@@ -7,7 +7,7 @@ async function showPipelineDetail(pipelineId, keepView = false) {
         apiCall('ensureValveColumn', {}).catch(() => {});
     }
     currentPipeline = allPipelines.find(p => p.id === pipelineId);
-
+    if (!currentPipeline) { console.warn('找不到工程:', pipelineId); return; }
     if (typeof ganttData !== 'undefined') ganttData = [];
     if (window.ganttData) window.ganttData = [];
     const _gp = document.getElementById('ganttPanel');
@@ -32,17 +32,21 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
     if (!currentPipeline._progressLoaded) {
         showLoading(true);
         try {
-            const data = await apiCall('getAllSmallSegments', { pipelineId: currentPipeline.id });
+            const data = await apiCall('getAllSmallSegments', { pipelineId });
+            // await 期間若使用者已切換工程，放棄寫入，避免汙染到別的工程
+            if (!currentPipeline || currentPipeline.id !== pipelineId) { showLoading(false); return; }
             currentPipeline.branches = data.branches || {};
             currentPipeline._progressLoaded = true;
             const totalSegs = Object.values(currentPipeline.branches).reduce((s, arr) => s + arr.length, 0);
             console.log('✅ 載入小段資料：', currentPipeline.name, totalSegs, '個小段');
         } catch (e) {
             console.error('載入小段失敗:', e);
+            if (!currentPipeline || currentPipeline.id !== pipelineId) { showLoading(false); return; }
             currentPipeline.branches = {};
             // fallback: 嘗試舊版大段資料
             try {
-                const progressData = await apiCall('getProgress', { pipelineId: currentPipeline.id });
+                const progressData = await apiCall('getProgress', { pipelineId });
+                if (!currentPipeline || currentPipeline.id !== pipelineId) { showLoading(false); return; }
                 currentPipeline.segments = parseBranchIndexFromSegments(progressData.segments || []);
                 currentPipeline._progressLoaded = true;
                 console.log('✅ Fallback 載入大段：', currentPipeline.segments.length, '個段落');

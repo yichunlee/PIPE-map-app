@@ -1318,11 +1318,9 @@ if (branchLengthsArr.length === 0) {
 } else {
     console.log('✅ 路徑已更新，小段距離由 updateLinestring 重算（保留屬性）');
 }
-            // 退出編輯模式（靜默模式）
-            cancelEditMode(true);
-            
-            // 重新載入工程詳細頁面
-            showPipelineDetail(currentPipeline.id, true);
+            // 退出編輯模式（靜默模式）。cancelEditMode 內部會自動重新載入工程詳細頁面，
+            // 故不要在此再次呼叫 showPipelineDetail，避免兩個 async 重繪並行互相清圖層。
+            await cancelEditMode(true);
         } else {
             throw new Error(result.error || '更新失敗');
         }
