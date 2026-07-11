@@ -123,16 +123,23 @@
             try {
                 showStatus('🔍 驗證使用者權限中...', 'loading');
                 
-                // 使用 GET 方法避免 CORS preflight
-                const params = new URLSearchParams({
-                    action: 'verifyUser',
+                // 改用 POST + body（而非 GET + URL query）：
+                // 1) Google ID Token 是敏感憑證，不該整包放在 URL 上（會進 log、瀏覽器歷史）。
+                // 2) URL 帶著長 token 字串在某些網路環境（防火牆/防毒/行動網路內容過濾）
+                //    容易被當成可疑內容直接斷線（ERR_CONNECTION_CLOSED），POST body 不會有這個問題。
+                // Worker 對 GET query 和 POST body 的參數是同一套解析邏輯，後端完全不用改。
+                const body = new URLSearchParams({
                     email: payload.email,
                     name: payload.name,
                     picture: payload.picture,
                     token: token
                 });
                 
-                const response = await fetch(API_URL + '?' + params.toString());
+                const response = await fetch(API_URL + '?action=verifyUser', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body
+                });
                 const result = await response.json();
                 
                 console.log('驗證結果:', result);

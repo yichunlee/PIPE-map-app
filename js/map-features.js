@@ -1028,19 +1028,43 @@ window.selectStickyColor = function(idx) {
     });
 };
 
-// mouseup：判斷是 resize 還是單擊
-window._onStickyMouseUp = async function(e, el) {
-    var noteId = el.dataset.noteid;
+// 🆕 便利貼右下角縮放把手：可同時調整寬度與高度。
+// 原本用 CSS resize，但便利貼整張是可拖曳的 Leaflet 標記，
+// 滑鼠按在角落想縮放時事件被「拖曳搬移」搶走，把手根本動不了。
+// 改成自製把手：mousedown 時擋掉事件冒泡（不觸發標記拖曳），
+// 用 document 層級的 mousemove 調整尺寸，mouseup 時只儲存 width/height 兩欄。
+window._startStickyResize = function(e, handleEl) {
+    e.preventDefault();
+    e.stopPropagation();
+    var body = handleEl.parentElement;
+    var noteId = body.dataset.noteid;
     var note = stickyNotes.find(function(n){ return n.id === noteId; });
-    var w = el.offsetWidth;
-    if (!note || !w || w < 80) return;
-    if (w !== (note.width || 160)) {
-        // 寬度改變 → 儲存 resize
-        try {
-            await apiCall('updateStickyNote', { noteId: noteId, width: w });
-            note.width = w;
-        } catch(err) {}
+    if (!note) return;
+    if (typeof map !== 'undefined' && map.dragging) map.dragging.disable();
+    var startX = e.clientX, startY = e.clientY;
+    var startW = body.offsetWidth, startH = body.offsetHeight;
+
+    function onMove(ev) {
+        var w = Math.max(80, Math.min(500, startW + (ev.clientX - startX)));
+        var h = Math.max(40, Math.min(600, startH + (ev.clientY - startY)));
+        body.style.width = w + 'px';
+        body.style.height = h + 'px';
     }
+    async function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (typeof map !== 'undefined' && map.dragging) map.dragging.enable();
+        var w = body.offsetWidth, h = body.offsetHeight;
+        if (w === startW && h === startH) return;
+        try {
+            // 後端已改為部分更新：只會動 width/height 兩欄，文字與座標不受影響
+            await apiCall('updateStickyNote', { noteId: noteId, width: w, height: h });
+            note.width = w;
+            note.height = h;
+        } catch(err) { showToast('儲存尺寸失敗', 'error'); }
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
 };
 
 window.saveStickyNote = async function() {
@@ -1128,9 +1152,13 @@ function displayStickyNotes() {
             iconSize = [22, 22];
             iconAnchor = [11, 11];
         } else {
-            // zoom 夠大：顯示完整便利貼，可 resize
+            // zoom 夠大：顯示完整便利貼，右下角把手可調整寬度與高度
             var noteW = note.width || 160;
-            noteHtml = '<div class="_sticky-body" data-noteid="' + noteId + '" style="background:' + c.bg + ';border:1.5px solid ' + c.border + ';border-radius:6px;padding:5px 8px;font-size:11px;color:#333;white-space:pre-wrap;word-break:break-word;width:' + noteW + 'px;min-width:80px;max-width:400px;line-height:1.5;box-shadow:1px 2px 5px rgba(0,0,0,0.18);resize:horizontal;overflow:auto;cursor:move;" onmouseup="window._onStickyMouseUp&&window._onStickyMouseUp(event,this)">' + note.text.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</div>';
+            var heightStyle = note.height ? 'height:' + note.height + 'px;' : '';
+            noteHtml = '<div class="_sticky-body" data-noteid="' + noteId + '" style="position:relative;background:' + c.bg + ';border:1.5px solid ' + c.border + ';border-radius:6px;padding:5px 8px;font-size:11px;color:#333;white-space:pre-wrap;word-break:break-word;width:' + noteW + 'px;' + heightStyle + 'min-width:80px;max-width:500px;line-height:1.5;box-shadow:1px 2px 5px rgba(0,0,0,0.18);overflow:auto;cursor:move;box-sizing:border-box;">'
+                + note.text.replace(/</g,'&lt;').replace(/\n/g,'<br>')
+                + '<div onmousedown="window._startStickyResize&&window._startStickyResize(event,this)" title="拖曳調整大小" style="position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,' + c.border + ' 50%);border-radius:0 0 5px 0;opacity:0.75;"></div>'
+                + '</div>';
             iconSize = [noteW, 10];
             iconAnchor = [noteW/2, 5];
         }

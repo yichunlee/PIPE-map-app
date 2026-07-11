@@ -346,7 +346,19 @@ function showProjectPipelines(projectName) {
     
     // 顯示計畫統計面板（先顯示，背景再載入進度更新）
     showProjectStatsPanel(projectPipelines);
-    
+
+    // 🐛 修正：制水閥標記只在「背景載入小段資料」的迴圈裡順便畫出來
+    // （_loadProjectProgressBackground），但那個迴圈只處理「還沒載入過」的工程。
+    // 從個別工程地圖切回大地圖時，工程的小段資料其實還留在記憶體裡（只有圖層被
+    // clearMap() 清掉），會被那個迴圈當成「已載入過」直接跳過，制水閥就沒機會
+    // 重新畫出來。這裡針對「資料已經在、只是圖層被清空」的工程立刻補畫一次，
+    // 還沒載入過的工程則照舊交給下面的背景載入去處理。
+    projectPipelines.forEach(pipeline => {
+        if (pipeline.branches && typeof drawProjectValveMarkers === 'function') {
+            drawProjectValveMarkers(pipeline);
+        }
+    });
+
     // 背景靜默載入所有工程進度，載入完自動更新統計欄
     _loadProjectProgressBackground(projectPipelines);
 }

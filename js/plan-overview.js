@@ -131,6 +131,12 @@ async function _loadProjectProgressBackground(pipelines) {
                 allPipelines[idx].segments = pipeline.segments;
                 allPipelines[idx].branches = pipeline.branches;
             }
+
+            // 🆕 仍停留在同一個計畫的大地圖時，把這個工程的制水閥畫上去
+            // （使用者若已切到別的工程/計畫，不畫，避免畫錯地方）
+            if (!currentPipeline && currentProject && currentProject.name === pipeline.projectName) {
+                drawProjectValveMarkers(pipeline);
+            }
         } catch (e) {
             console.warn('載入進度失敗:', pipeline.name, e);
         }
@@ -139,6 +145,87 @@ async function _loadProjectProgressBackground(pipelines) {
     }
     
     console.log('✅ 所有工程進度載入完成');
+}
+
+// 🆕 在計畫總覽（大地圖）上畫出單一工程的制水閥標記
+// 制水閥的座標是從該工程自己的 linestring + 小段的 startDistance/endDistance
+// 內插算出來的（跟個別工程地圖用的是同一套算法），不需要額外的後端資料。
+function drawProjectValveMarkers(pipeline) {
+    if (!pipeline.branches) return;
+
+    const isMULTI = pipeline.linestring.trim().toUpperCase().startsWith('MULTILINESTRING');
+    const branchData = isMULTI ? parseLineStringWithBranches(pipeline.linestring) : null;
+    const mainCoords = isMULTI ? null : parseLineString(pipeline.linestring);
+
+    Object.keys(pipeline.branches).forEach(branchKey => {
+        const segs = pipeline.branches[branchKey] || [];
+        if (segs.length === 0) return;
+
+        // 取得這個分支對應的軸線座標
+        let branchCoords = mainCoords;
+        if (isMULTI && branchData) {
+            const branchIndex = parseInt(branchKey.slice(1), 10); // 'B0' -> 0
+            const branch = branchData.branches[branchIndex];
+            branchCoords = branch ? branch.coords : null;
+        }
+        if (!branchCoords || branchCoords.length < 2) return;
+
+        segs.forEach(seg => {
+            const isValve = seg.isValve === 1 || seg.isValve === true || seg.isValve === '1';
+            if (!isValve) return;
+
+            const smallCoords = isMULTI
+                ? getSegmentCoordsFromBranch(branchCoords, seg.startDistance, seg.endDistance)
+                : getSegmentCoords(branchCoords, seg.startDistance, seg.endDistance);
+            if (!smallCoords || smallCoords.length === 0) return;
+
+            const mid = smallCoords[Math.floor(smallCoords.length / 2)];
+
+            // 跟個別工程地圖一樣：畫一條「垂直穿過管線」的紅色線段（不是點）。
+            // 個別工程地圖的十字線是用經緯度差（公尺）換算長度，在橫跨數公里的
+            // 大地圖上會小到看不見；這裡改用「固定像素長度」的 divIcon 來畫，
+            // 不管地圖縮放到多遠，線段在畫面上永遠一樣長、清楚可見。
+            //
+            // 角度計算：用 Web Mercator 投影後的座標算夾角（而不是直接拿經緯度
+            // 差去算），這樣算出來的角度才會跟 Leaflet 實際畫管線的方向完全一致
+            // （緯度越高，經度的實際距離跟畫面比例差異越大，直接用經緯度算角度
+            // 在高緯度會偏斜）。投影後的角度不受縮放等級影響，只需算一次。
+            const p0 = smallCoords[0];
+            const p1 = smallCoords[smallCoords.length - 1];
+            const proj0 = L.CRS.EPSG3857.project(L.latLng(p0[0], p0[1]));
+            const proj1 = L.CRS.EPSG3857.project(L.latLng(p1[0], p1[1]));
+            const pipeAngleDeg = Math.atan2(proj1.y - proj0.y, proj1.x - proj0.x) * 180 / Math.PI;
+            // 下面畫的紅色線段本身預設就是「直的」（垂直方向），對應數學角度 90 度，
+            // 所以要讓線段轉成「垂直於管線」，CSS 旋轉量 = 管線角度本身即可
+            // （管線角度 0 度＝水平管線 → 旋轉 0 度＝線段維持垂直，剛好穿過水平管線）。
+            const crossAngleDeg = pipeAngleDeg;
+
+            const iconHtml = `
+                <div style="position:relative;width:22px;height:22px;">
+                    <div style="position:absolute;top:50%;left:50%;width:3px;height:20px;background:#e53935;
+                        transform:translate(-50%,-50%) rotate(${crossAngleDeg}deg);
+                        box-shadow:0 0 2px rgba(0,0,0,0.5);border-radius:1px;"></div>
+                    <div style="position:absolute;top:50%;left:50%;width:8px;height:8px;background:#e53935;
+                        border:1.5px solid white;border-radius:50%;transform:translate(-50%,-50%);
+                        box-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
+                </div>
+            `;
+            const marker = L.marker(mid, {
+                icon: L.divIcon({ className: '', html: iconHtml, iconSize: [22, 22], iconAnchor: [11, 11] }),
+                zIndexOffset: 500, // 蓋在管線色帶之上，不會被蓋住
+            }).addTo(map);
+
+            marker.bindTooltip('🔧 制水閥', { direction: 'top', offset: [0, -10] });
+            marker.bindPopup(`
+                <div style="min-width:160px;font-size:13px;">
+                    <div style="font-weight:bold;color:#e53935;margin-bottom:4px;">🔧 制水閥</div>
+                    <div style="color:#666;"><b>工程：</b>${escapeHtml(pipeline.name)}</div>
+                </div>
+            `);
+
+            projectValveMarkers.push(marker);
+        });
+    });
 }
 
 // 顯示計畫統計面板（整個計畫的多個工程）
@@ -339,14 +426,26 @@ function initMap() {
         preferCanvas: true   // 🚀 效能優化：使用 Canvas 渲染,大幅提升數百個小段的繪製效能
     }).setView([24.15, 120.65], 11);
 
-    // 全域單一 zoomend：zoom>=15 時地圖容器加 map-zoom-in class，讓節點標籤顯示
+    // 節點名稱框、管線段落標籤（工法/進度/節點區間文字）：
+    // 只在「倒數第二層」以後（含）才顯示，避免縮小看整條管線時大量文字彼此重疊、畫面雜亂。
+    // 用 map.getMaxZoom() 而不是寫死的數字，是因為切換底圖（街道圖/衛星圖/地形圖）
+    // 彼此的最大縮放層級不同（19 / 19 / 17），"倒數第二層"要跟著目前使用的底圖走。
+    //
+    // 🐛 修正：這個函式之前是查詢 `.node-label` 這個 class，但實際畫節點/段落標籤的
+    // 程式碼（js/map.js）從來沒有任何標記使用過這個 class，等於這個顯示/隱藏機制
+    // 從一開始就沒有真正生效過——不管縮多小，所有標籤永遠都是顯示的。
+    // 現在改成查詢真正有掛在標記上的 `.zoom-detail-label` class。
     function updateNodeLabelVisibility() {
-        var show = map.getZoom() >= 15;
-        document.querySelectorAll('.node-label').forEach(function(el) {
+        var show = map.getZoom() >= map.getMaxZoom() - 1;
+        document.querySelectorAll('.zoom-detail-label').forEach(function(el) {
             el.style.display = show ? 'block' : 'none';
         });
     }
     map.on('zoomend', updateNodeLabelVisibility);
+    // 標記是在畫工程（showPipelineDetail）時才陸續建立的，不是只靠 zoomend 觸發，
+    // 所以曝露成全域函式，讓 map.js 畫完節點/段落標籤後可以主動呼叫一次，
+    // 新建立的標記才會立刻套用目前縮放層級該有的顯示狀態。
+    window.updateNodeLabelVisibility = updateNodeLabelVisibility;
     updateNodeLabelVisibility();
 
     
@@ -627,6 +726,9 @@ function clearMap(resetMarkerVisibility = false) {
     projectPermitZones = [];
     projectPermitLabels.forEach(l => map.removeLayer(l));
     projectPermitLabels = [];
+    // 🆕 清除大地圖的制水閥標記（計畫總覽）
+    projectValveMarkers.forEach(m => map.removeLayer(m));
+    projectValveMarkers = [];
     // 清除工程列表
     const existingList = document.querySelector('.pipeline-list');
     if (existingList) existingList.remove();

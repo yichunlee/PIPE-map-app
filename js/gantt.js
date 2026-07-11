@@ -338,16 +338,21 @@ var _dragListenersAdded = false;
 // 🔐 Blob 視窗用的 fetch 攔截器（與主視窗相同邏輯）
 (function() {
     var _of = window.fetch;
-    var WP = ['save','update','delete','add','clear','upload'];
+    // 與主視窗 api.js / worker 的 WRITE_PREFIXES 保持一致
+    var WP = ['save','update','delete','add','clear','upload','set','import','init','batch'];
     window.fetch = function(url, opts) {
 if (typeof url === 'string' && url.includes(API_URL) && USER_TOKEN) {
     var am = url.match(/[?&]action=(\\w+)/);
     if (am) {
         var lower = am[1].toLowerCase();
         var isW = WP.some(function(p) { return lower.indexOf(p) === 0; });
-        if (isW) {
-            var sep = url.includes('?') ? '&' : '?';
-            url = url + sep + 'userToken=' + encodeURIComponent(USER_TOKEN);
+        if (isW && (!opts || !opts.body)) {
+            // 寫入動作改走 POST body：token 與參數不再出現在 URL（不進 access log）
+            var qIdx = url.indexOf('?');
+            var body = new URLSearchParams(qIdx >= 0 ? url.slice(qIdx + 1) : '');
+            body.set('userToken', USER_TOKEN);
+            url = (qIdx >= 0 ? url.slice(0, qIdx) : url) + '?action=' + am[1];
+            opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body };
         }
     }
 }
@@ -1178,7 +1183,7 @@ function initGanttDrag() {
         var orders = items.map(function(it, i) { return { id: it.id, sortOrder: i + 1 }; });
         try {
             var res = await fetch(API_URL + '?action=updateGanttOrder&pipelineId=' +
-                encodeURIComponent(pipeline.id) + '&userToken=' + encodeURIComponent(USER_TOKEN) +
+                encodeURIComponent(pipeline.id) +
                 '&orders=' + encodeURIComponent(JSON.stringify(orders)));
             var result = await res.json();
             if (result.authError) { showAuthExpiredBanner(); return; }
@@ -1575,7 +1580,6 @@ async function moveGanttItem(idx, direction) {
     try {
         const res = await fetch(API_URL + '?action=updateGanttOrder&pipelineId=' +
             encodeURIComponent(pipeline.id) +
-            '&userToken=' + encodeURIComponent(USER_TOKEN) +
             '&orders=' + encodeURIComponent(JSON.stringify(orders)));
         const result = await res.json();
         if (result.authError) { showAuthExpiredBanner(); return; }

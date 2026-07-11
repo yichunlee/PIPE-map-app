@@ -32,6 +32,9 @@ let dateLabels = [];
 let dateLabelArrows = [];
 let ganttItemsCache = [];
 
+// 🆕 計畫總覽（大地圖）上的制水閥標記
+let projectValveMarkers = [];
+
 // 路徑編輯模式變數
 let isEditingPath = false;
 let editingPolyline = null;

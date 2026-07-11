@@ -35,12 +35,18 @@ function startEditMode() {
     console.log('   格式:', branchStructure.isMULTI ? 'MULTILINESTRING' : 'LINESTRING');
     
     // 清除現有管線顯示
+    // 管線色帶與制水閥標記清掉（編輯模式畫面單純），
+    // 但「節點名稱標記」（節點1/節點2）刻意保留——編輯路徑時也要能直接拖曳搬移它們，
+    // 一次編輯就能同時調整線形（白色圓圈）和節點位置（名稱小圓點）。
     allPolylines.forEach(layer => {
-        if (layer instanceof L.Polyline) {
-            map.removeLayer(layer);
-        }
+        if (nodeMarkers.includes(layer)) return; // 節點名稱標記留著
+        try { map.removeLayer(layer); } catch (e) {}
     });
-    
+    Object.keys(valveCrossLayers).forEach(key => {
+        valveCrossLayers[key].forEach(l => { try { map.removeLayer(l); } catch (e) {} });
+        delete valveCrossLayers[key];
+    });
+
     editingBranches = [];
     editingNodes = [];
     junctionMarkers = [];
@@ -1266,13 +1272,27 @@ const confirmMessage = `⚠️ 儲存路徑變更${segmentInfo}
         console.log('   LINESTRING:', linestring);
         console.log('   新路徑長度:', newLength, 'm');
         
+        // 🆕 計算「小段屬性重對應表」：讓沒被動到的區域，屬性跟著實際位置走。
+        // 原本後端是「新的第 N 段繼承舊的第 N 段」（按編號對齊），一旦中段長度改變，
+        // 後面所有屬性（含節點名稱）會整體往前/往後滑，看起來就是「改中間、尾巴少一截」。
+        // 這裡用「沒被移動的節點」當錨點，建立新舊距離的對應，讓被編輯的那段
+        // 自己吸收長度變化，錨點之後的屬性照實際位置原位保留。
+        let indexRemap = null;
+        try {
+            indexRemap = _buildSmallSegIndexRemap(currentPipeline.linestring, linestring);
+        } catch (e) {
+            console.warn('屬性重對應表計算失敗，退回舊行為（依編號繼承）', e);
+        }
+
         // 使用 POST 請求（避免 URL 過長）
+        const bodyParams = new URLSearchParams({
+            pipelineId: currentPipeline.id,
+            linestring: linestring,
+            branchLengths: JSON.stringify(branchLengthsArr)
+        });
+        if (indexRemap) bodyParams.set('indexRemap', JSON.stringify(indexRemap));
         const result = await apiCall('updateLinestring', {}, {
-            body: new URLSearchParams({
-                pipelineId: currentPipeline.id,
-                linestring: linestring,
-                branchLengths: JSON.stringify(branchLengthsArr)
-            })
+            body: bodyParams
         });
         
         if (result.success) {
@@ -1401,3 +1421,89 @@ L.GeometryUtil.distanceSegment = function(map, latlng, latlng1, latlng2) {
     return L.LineUtil.pointToSegmentDistance(p, p1, p2);
 };
 
+// ============================================================
+// 🆕 小段屬性重對應（路徑編輯用）
+// 目的：編輯路徑造成某一段變長/變短時，沒被動到的區域的小段屬性
+// （管徑/管材/工法/狀態/節點名稱）要跟著「實際位置」保留，
+// 而不是按小段編號硬對齊（那會讓後面全部位移、尾巴被吃掉）。
+// ============================================================
+
+// 從 WKT 字串解析出各分支座標（與後端 updateLinestring 用同一套正則，
+// 同時支援 LINESTRING / 多段 LINESTRING / MULTILINESTRING）
+function _parseBranchesFromWkt(wkt) {
+    const branches = [];
+    (String(wkt).match(/\(([^()]+)\)/g) || []).forEach(p => {
+        const coords = p.replace(/[()]/g, '').split(',').map(c => {
+            const xy = c.trim().split(/\s+/).map(parseFloat);
+            return [xy[1], xy[0]]; // [lat, lng]
+        }).filter(c => isFinite(c[0]) && isFinite(c[1]));
+        if (coords.length >= 2) branches.push(coords);
+    });
+    return branches;
+}
+
+// 座標串的累積距離表
+function _cumDist(coords) {
+    const d = [0];
+    for (let i = 1; i < coords.length; i++) {
+        d.push(d[i - 1] + getDistance(coords[i - 1], coords[i]));
+    }
+    return d;
+}
+
+// 建立每個分支的「新小段編號 → 舊小段編號」對應表
+// 原理：新舊路徑中座標幾乎相同（<0.05m，即沒被使用者移動）的節點視為錨點，
+// 錨點之間用距離線性內插對應；被編輯的區域自己吸收長度變化。
+function _buildSmallSegIndexRemap(oldWkt, newWkt) {
+    const oldBranches = _parseBranchesFromWkt(oldWkt);
+    const newBranches = _parseBranchesFromWkt(newWkt);
+    const remap = {};
+
+    newBranches.forEach((nc, bi) => {
+        const oc = oldBranches[bi];
+        if (!oc) return; // 新增的分支沒有舊屬性可繼承，交給後端預設值
+
+        const od = _cumDist(oc), nd = _cumDist(nc);
+        const oldLen = od[od.length - 1], newLen = nd[nd.length - 1];
+        if (oldLen <= 0 || newLen <= 0) return;
+
+        // 依序（單調）配對沒被移動的節點作為錨點
+        const anchors = [[0, 0]]; // [舊距離, 新距離]
+        let searchFrom = 1;
+        for (let ni = 1; ni < nc.length - 1; ni++) {
+            for (let j = searchFrom; j < oc.length - 1; j++) {
+                if (getDistance(nc[ni], oc[j]) < 0.05) {
+                    anchors.push([od[j], nd[ni]]);
+                    searchFrom = j + 1;
+                    break;
+                }
+            }
+        }
+        anchors.push([oldLen, newLen]);
+
+        // 新距離 → 舊距離（錨點間線性內插）
+        function newToOld(x) {
+            for (let k = 1; k < anchors.length; k++) {
+                if (x <= anchors[k][1] || k === anchors.length - 1) {
+                    const o0 = anchors[k - 1][0], n0 = anchors[k - 1][1];
+                    const o1 = anchors[k][0], n1 = anchors[k][1];
+                    if (n1 === n0) return o0;
+                    return o0 + (x - n0) / (n1 - n0) * (o1 - o0);
+                }
+            }
+            return oldLen;
+        }
+
+        const numNew = Math.ceil(newLen / 10);
+        const maxOldIdx = Math.max(0, Math.ceil(oldLen / 10) - 1);
+        const arr = [];
+        for (let i = 0; i < numNew; i++) {
+            const center = Math.min(i * 10 + 5, newLen);
+            const oldIdx = Math.floor(newToOld(center) / 10);
+            arr.push(Math.max(0, Math.min(maxOldIdx, oldIdx)));
+        }
+        remap['B' + bi] = arr;
+    });
+
+    return remap;
+}
