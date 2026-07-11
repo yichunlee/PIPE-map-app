@@ -473,10 +473,6 @@ const popup = L.popup()
             onclick="toggleValve(${branchIndex}, ${smallIndex})">
             🔴 ${isValve ? '移除制水閥' : '標記制水閥'}
         </button>
-        <button class="popup-button" style="background:#2196F3;margin-top:4px;" 
-            onclick="startRangeSelect(${branchIndex}, ${smallIndex}); map.closePopup();">
-            📏 設定範圍屬性（此段為起點）
-        </button>
         <button class="popup-button" style="background:#ff9800;margin-top:4px;"
             onclick="openPhotoPanel('${currentPipeline.id}', 'B${branchIndex}', ${smallIndex}); map.closePopup();">
             📷 施工照片
@@ -1054,11 +1050,14 @@ window.startRangeSelect = function(branchIndex, smallIndex) {
 };
 
 // 範圍設定對話框
-window.showRangeSetDialog = function(branchIndex, fromIndex, toIndex) {
+window.showRangeSetDialog = function(branchIndex, fromIndex, toIndex, extraRanges) {
     if (!requireLogin()) return;
     const minIdx = Math.min(fromIndex, toIndex);
     const maxIdx = Math.max(fromIndex, toIndex);
-    const count = maxIdx - minIdx + 1;
+    // 🆕 跨分支圈選：extraRanges = [{branchIndex, minIdx, maxIdx}]，與主範圍一次套用
+    const allRanges = [{ branchIndex: branchIndex, minIdx: minIdx, maxIdx: maxIdx }]
+        .concat(Array.isArray(extraRanges) ? extraRanges : []);
+    const count = allRanges.reduce((sum, r) => sum + (r.maxIdx - r.minIdx + 1), 0);
     
     const branchKey = `B${branchIndex}`;
     const segs = currentPipeline.branches[branchKey] || [];
@@ -1070,7 +1069,8 @@ window.showRangeSetDialog = function(branchIndex, fromIndex, toIndex) {
         <div style="background:white;padding:24px;border-radius:12px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
             <div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#333;">📏 設定範圍屬性</div>
             <div style="font-size:13px;color:#666;margin-bottom:16px;">
-                分支 ${branchIndex}，第 ${minIdx + 1} 段 → 第 ${maxIdx + 1} 段（共 ${count} 段）
+                ${allRanges.map(r => `分支 B${r.branchIndex}：第 ${r.minIdx + 1} 段 → 第 ${r.maxIdx + 1} 段`).join('<br>')}
+                <br>（共 ${count} 段${allRanges.length > 1 ? '，跨 ' + allRanges.length + ' 個分支一次套用' : ''}）
             </div>
             
             <div style="margin-bottom:12px;">
@@ -1133,28 +1133,29 @@ window.showRangeSetDialog = function(branchIndex, fromIndex, toIndex) {
         this.disabled = true;
         
         try {
-            await apiCall('batchUpdateSmallSegments', {}, {
-                body: {
-                    action: 'batchUpdateSmallSegments',
-                    pipelineId: currentPipeline.id,
-                    branchIndex: branchIndex,
-                    fromIndex: minIdx,
-                    toIndex: maxIdx,
-                    diameter: diameter,
-                    pipeType: pipeType,
-                    method: method,
-                }
-            });
-            
-            // 更新本地資料
-            const segs = currentPipeline.branches[branchKey] || [];
-            segs.forEach(s => {
-                if (s.smallIndex >= minIdx && s.smallIndex <= maxIdx) {
-                    if (diameter) s.diameter = diameter;
-                    if (pipeType) s.pipeType = pipeType;
-                    if (method) s.method = method;
-                }
-            });
+            // 🆕 逐一套用到所有範圍（跨分支圈選時一次完成）
+            for (const r of allRanges) {
+                await apiCall('batchUpdateSmallSegments', {}, {
+                    body: {
+                        action: 'batchUpdateSmallSegments',
+                        pipelineId: currentPipeline.id,
+                        branchIndex: r.branchIndex,
+                        fromIndex: r.minIdx,
+                        toIndex: r.maxIdx,
+                        diameter: diameter,
+                        pipeType: pipeType,
+                        method: method,
+                    }
+                });
+                const segsR = currentPipeline.branches[`B${r.branchIndex}`] || [];
+                segsR.forEach(s => {
+                    if (s.smallIndex >= r.minIdx && s.smallIndex <= r.maxIdx) {
+                        if (diameter) s.diameter = diameter;
+                        if (pipeType) s.pipeType = pipeType;
+                        if (method) s.method = method;
+                    }
+                });
+            }
             
             overlay.remove();
             showToast(`✅ 已更新 ${count} 個小段`, 'success');
@@ -1282,8 +1283,8 @@ window.showNewSmallSegmentContextMenu = function(e, branchIndex, smallIndex, seg
         <div class="rcm-item" onclick="toggleNewSmallSegment(${branchIndex}, ${smallIndex})">
             ${isCompleted ? '❌ 標記未完工' : '✓ 標記完工'}
         </div>
-        <div class="rcm-item" onclick="startRangeSelect(${branchIndex}, ${smallIndex})">
-            📏 設定範圍屬性（此段為起點）
+        <div class="rcm-item" onclick="startAttrsRectSelect()">
+            📏 圈選設定屬性
         </div>
 
     `;

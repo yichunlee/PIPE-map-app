@@ -691,38 +691,16 @@ function finishGanttRectSelect(bounds) {
         return;
     }
 
-    // 依分支分組
-    const branchGroups = {};
-    for (const node of hitNodes) {
-        const b = node.branchIndex;
-        if (!branchGroups[b]) branchGroups[b] = [];
-        branchGroups[b].push(node);
-    }
-
-    // 每個分支找 min/max smallIndex，建立甘特圖
-    // 跳過只有 1 個節點的分支（避免圈到隔壁分支的節點）
-    const entries = [];
-    let skippedBranches = 0;
-    for (const [branchIndex, nodes] of Object.entries(branchGroups)) {
-        if (nodes.length < 2) { skippedBranches++; continue; }
-        nodes.sort((a, b) => a.smallIndex - b.smallIndex);
-        const minIdx = nodes[0].smallIndex;
-        const maxIdx = nodes[nodes.length - 1].smallIndex;
-        // 1-based 給甘特圖
-        const fromNode = nodes[0].nodeName || `#${minIdx + 1}`;
-        const toNode = nodes[nodes.length - 1].nodeName || `#${maxIdx + 1}`;
-        entries.push({
-            segmentNumber: `B${branchIndex}`,
-            minIdx: minIdx + 1,
-            maxIdx: maxIdx + 1,
-            fromNode,
-            toNode,
-            conflicts: []
-        });
-    }
-    if (skippedBranches > 0) {
-        console.log(`⚠️ 已忽略 ${skippedBranches} 個只有 1 個節點的分支`);
-    }
+    // 🆕 共用範圍計算：支援跨分支（支線節點A＋主線節點B → 兩個範圍涵蓋完整管路）
+    const ranges = computeRectNodeRanges(hitNodes);
+    const entries = ranges.map(r => ({
+        segmentNumber: `B${r.branchIndex}`,
+        minIdx: r.minIdx + 1,   // 1-based 給甘特圖
+        maxIdx: r.maxIdx + 1,
+        fromNode: r.fromNode,
+        toNode: r.toNode,
+        conflicts: []
+    }));
 
     // 排除已建立過的範圍
     const existingItems = typeof ganttItemsCache !== 'undefined' ? ganttItemsCache : [];
@@ -807,20 +785,22 @@ function showGanttSegmentPicker(entries) {
     box.appendChild(title);
 
     entries.forEach(e => {
-        const seg = e.segment;
-        const method = seg.method || '未設定';
-        const numSmall = Math.ceil((seg.endDistance - seg.startDistance) / 10);
+        // 🐛 修正：原本讀取 e.segment.method，但建立 entries 的程式從未提供 segment
+        // 欄位——以前單分支框選只會產生 1 筆、走不到這個多筆選擇器，所以潛伏至今；
+        // 跨分支圈選會常態產生多筆，第一次執行就中招。改用 entry 本身既有的欄位。
+        const numSmall = e.maxIdx - e.minIdx + 1;
         const rangeText = e.minIdx === e.maxIdx
             ? `#${e.minIdx}`
             : `#${e.minIdx}～#${e.maxIdx}`;
+        const nodeText = (e.fromNode && e.toNode) ? `${e.fromNode} → ${e.toNode}，` : '';
         const btn = document.createElement('button');
         btn.style.cssText = 'display:block;width:100%;text-align:left;padding:9px 12px;margin-bottom:6px;border:1px solid #e0e0e0;border-radius:6px;cursor:pointer;background:#f9f9f9;font-size:13px;transition:background 0.15s;';
-        btn.innerHTML = `<strong>段落 #${seg.segmentNumber}</strong> 小段 <span style="color:#00695C;font-weight:bold;">${rangeText}</span> <span style="color:#888;font-size:11px;">（${method}，共 ${numSmall} 小段）</span>`;
+        btn.innerHTML = `<strong>段落 ${e.segmentNumber}</strong> 小段 <span style="color:#00695C;font-weight:bold;">${rangeText}</span> <span style="color:#888;font-size:11px;">（${nodeText}共 ${numSmall} 小段）</span>`;
         btn.onmouseover = () => btn.style.background = '#e8f5e9';
         btn.onmouseout = () => btn.style.background = '#f9f9f9';
         btn.onclick = () => {
             backdrop.remove();
-            openGanttPanelForSegment(seg.segmentNumber, e.minIdx, e.maxIdx);
+            openGanttPanelForSegment(e.segmentNumber, e.minIdx, e.maxIdx, e.fromNode, e.toNode);
         };
         box.appendChild(btn);
     });
@@ -979,56 +959,37 @@ function finishCompleteRectSelect(bounds) {
         return;
     }
 
-    // 依分支分組
-    const branchGroups = {};
-    for (const node of hitNodes) {
-        const b = node.branchIndex;
-        if (!branchGroups[b]) branchGroups[b] = [];
-        branchGroups[b].push(node);
-    }
-
-    // 判斷新/舊架構
+    // 🆕 共用範圍計算：支援跨分支（支線節點A＋主線節點B → 兩個範圍涵蓋完整管路）
     const hasBranches = currentPipeline.branches && Object.keys(currentPipeline.branches).length > 0;
-
-    // 每個分支找 min/max smallIndex
-    // 跳過只有 1 個節點的分支（避免圈到隔壁分支的節點）
+    const ranges = computeRectNodeRanges(hitNodes);
     const entries = [];
-    for (const [branchIndex, nodes] of Object.entries(branchGroups)) {
-        if (nodes.length < 2) continue;
-        nodes.sort((a, b) => a.smallIndex - b.smallIndex);
-        const minNode = nodes[0];
-        const maxNode = nodes[nodes.length - 1];
-        const branchKey = `B${branchIndex}`;
-
+    for (const r of ranges) {
+        const branchKey = `B${r.branchIndex}`;
         if (hasBranches) {
-            // 新架構：用 branches
             const branchSegs = currentPipeline.branches[branchKey];
             if (!branchSegs || branchSegs.length === 0) continue;
-
             entries.push({
                 segmentNumber: branchKey,
-                branchIndex: parseInt(branchIndex),
-                minSmallIndex: minNode.smallIndex,
-                maxSmallIndex: maxNode.smallIndex,
-                fromNode: minNode.nodeName || `#${minNode.smallIndex + 1}`,
-                toNode: maxNode.nodeName || `#${maxNode.smallIndex + 1}`,
+                branchIndex: r.branchIndex,
+                minSmallIndex: r.minIdx,
+                maxSmallIndex: r.maxIdx,
+                fromNode: r.fromNode,
+                toNode: r.toNode,
                 branchSegs: branchSegs,
                 isNewArch: true
             });
         } else {
-            // 舊架構：用 segments
             const seg = currentPipeline.segments.find(s =>
-                String(s.segmentNumber) === branchKey || String(s.branchIndex) === String(branchIndex)
+                String(s.segmentNumber) === branchKey || String(s.branchIndex) === String(r.branchIndex)
             );
             if (!seg) continue;
-
             entries.push({
                 segmentNumber: seg.segmentNumber,
-                branchIndex: parseInt(branchIndex),
-                minSmallIndex: minNode.smallIndex,
-                maxSmallIndex: maxNode.smallIndex,
-                fromNode: minNode.nodeName || `#${minNode.smallIndex + 1}`,
-                toNode: maxNode.nodeName || `#${maxNode.smallIndex + 1}`,
+                branchIndex: r.branchIndex,
+                minSmallIndex: r.minIdx,
+                maxSmallIndex: r.maxIdx,
+                fromNode: r.fromNode,
+                toNode: r.toNode,
                 segment: seg,
                 isNewArch: false
             });
@@ -1261,4 +1222,260 @@ async function executeBatchComplete(entry, isComplete) {
             showToast('更新失敗：' + error.message, 'error');
         }
     }
+}
+
+// ==================== 圈選共用：跨分支節點範圍計算 ====================
+// 三個圈選功能（建甘特/更新完工/設定屬性）共用。
+// 規則：
+//   - 同一分支框到 2 個以上節點 → 取最小~最大（原本行為）。
+//   - 只框到 1 個節點的分支 → 自動延伸到「與另一個被選分支的交會點」：
+//     例如框住支線的節點A＋主線的節點B，會得到兩個範圍：
+//     主線【節點B ~ 交會點】＋支線【交會點 ~ 節點A】，涵蓋兩點之間的完整管路。
+//   - 單節點分支若與其他被選分支沒有相接（>1m），維持舊行為忽略之。
+// 回傳 [{ branchIndex, minIdx, maxIdx, fromNode, toNode }]
+function computeRectNodeRanges(hitNodes) {
+    const branchGroups = {};
+    hitNodes.forEach(function(n) {
+        if (!branchGroups[n.branchIndex]) branchGroups[n.branchIndex] = [];
+        branchGroups[n.branchIndex].push(n);
+    });
+    Object.keys(branchGroups).forEach(function(k) {
+        branchGroups[k].sort(function(a, b) { return a.smallIndex - b.smallIndex; });
+    });
+    const bIdxs = Object.keys(branchGroups).map(Number);
+
+    function mkRange(bi, lo, hi) {
+        return {
+            branchIndex: bi, minIdx: lo.smallIndex, maxIdx: hi.smallIndex,
+            fromNode: lo.nodeName || ('#' + (lo.smallIndex + 1)),
+            toNode: hi.nodeName || ('#' + (hi.smallIndex + 1))
+        };
+    }
+
+    const ranges = [];
+    if (bIdxs.length === 1) {
+        const nodes = branchGroups[bIdxs[0]];
+        if (nodes.length >= 2) ranges.push(mkRange(bIdxs[0], nodes[0], nodes[nodes.length - 1]));
+        return ranges;
+    }
+
+    // ── 跨分支：需要幾何拓撲（找交會點） ──
+    const parsed = parseLineStringWithBranches(currentPipeline.linestring);
+    function coordsOf(bi) {
+        const br = parsed.branches[bi];
+        return br ? br.coords : null;
+    }
+    // pt 到分支 bi 的最近點：回傳 { d: 最近距離(米), dist: 該點的沿線累積距離(米) }
+    // 🐛 注意：必須做「點到線段」投影，不能只比對頂點——支線通常接在主線
+    // 某個直線段的中間，不會剛好落在頂點上。
+    function nearestOn(bi, pt) {
+        const cs = coordsOf(bi);
+        if (!cs || cs.length < 2) return null;
+        const cosLat = Math.cos(pt[0] * Math.PI / 180);
+        const toXY = function(c) { return [c[1] * 111320 * cosLat, c[0] * 110540]; };
+        const P = toXY(pt);
+        let acc = 0, best = { d: Infinity, dist: 0 };
+        for (let i = 1; i < cs.length; i++) {
+            const A = toXY(cs[i - 1]), B = toXY(cs[i]);
+            const ABx = B[0] - A[0], ABy = B[1] - A[1];
+            const segLen2 = ABx * ABx + ABy * ABy;
+            let t = segLen2 > 0 ? ((P[0] - A[0]) * ABx + (P[1] - A[1]) * ABy) / segLen2 : 0;
+            t = Math.max(0, Math.min(1, t));
+            const qx = A[0] + ABx * t, qy = A[1] + ABy * t;
+            const d = Math.sqrt((P[0] - qx) * (P[0] - qx) + (P[1] - qy) * (P[1] - qy));
+            const segLen = getDistance(cs[i - 1], cs[i]);
+            if (d < best.d) best = { d: d, dist: acc + segLen * t };
+            acc += segLen;
+        }
+        return best;
+    }
+    function lastIdxOf(bi) {
+        const segs = currentPipeline.branches['B' + bi] || [];
+        return segs.length ? segs[segs.length - 1].smallIndex : 0;
+    }
+
+    let ignored = 0;
+    bIdxs.forEach(function(bi) {
+        const nodes = branchGroups[bi];
+        if (nodes.length >= 2) {
+            ranges.push(mkRange(bi, nodes[0], nodes[nodes.length - 1]));
+            return;
+        }
+        // 單節點分支：找它與其他被選分支的交會端
+        const node = nodes[0];
+        const cs = coordsOf(bi);
+        if (!cs) { ignored++; return; }
+        let junctionIdx = null;
+        for (let k = 0; k < bIdxs.length && junctionIdx === null; k++) {
+            const other = bIdxs[k];
+            if (other === bi) continue;
+            // 本分支的起點/終點是否貼在另一分支上（Y 型：支線起點接在主線上；串接：頭尾相接）
+            const sHit = nearestOn(other, cs[0]);
+            if (sHit && sHit.d < 1) { junctionIdx = 0; break; }
+            const eHit = nearestOn(other, cs[cs.length - 1]);
+            if (eHit && eHit.d < 1) { junctionIdx = lastIdxOf(bi); break; }
+            // 反向：另一分支的端點貼在本分支上（本分支是主線）
+            const ocs = coordsOf(other);
+            if (ocs) {
+                const oS = nearestOn(bi, ocs[0]);
+                if (oS && oS.d < 1) { junctionIdx = Math.min(Math.floor(oS.dist / 10), lastIdxOf(bi)); break; }
+                const oE = nearestOn(bi, ocs[ocs.length - 1]);
+                if (oE && oE.d < 1) { junctionIdx = Math.min(Math.floor(oE.dist / 10), lastIdxOf(bi)); break; }
+            }
+        }
+        if (junctionIdx === null) { ignored++; return; }
+        const jFake = { smallIndex: junctionIdx, nodeName: '交會點' };
+        if (node.smallIndex <= junctionIdx) ranges.push(mkRange(bi, node, jFake));
+        else ranges.push(mkRange(bi, jFake, node));
+    });
+    if (ignored > 0) showToast('已忽略 ' + ignored + ' 個與其他被選分支不相接的節點', 'info');
+    return ranges;
+}
+
+// ==================== 圈選設定屬性：拖框選取小段範圍 → 開啟範圍屬性對話框 ====================
+// 與「圈選更新完工」同一套拖框機制；差別在命中的是「小段」本身（不需依賴節點名稱），
+// 框到的每個分支取最小~最大小段編號，接到既有的 showRangeSetDialog。
+let attrsRectMode = false, attrsRectStart = null, attrsRectLayer = null, attrsRectHint = null;
+let _attrsRectMoveFn = null, _attrsRectDownFn = null, attrsRectKeyHandler = null;
+let _attrsRectTouchMoveFn = null, _attrsRectTouchEndFn = null;
+
+window.startAttrsRectSelect = function() {
+    if (!currentPipeline) { showToast('請先選擇一個工程', 'warning'); return; }
+    if (!requireLogin()) return;
+    if (attrsRectMode) { cancelAttrsRectSelect(); return; }
+
+    attrsRectMode = true;
+    attrsRectStart = null;
+    map.dragging.disable();
+    map.getContainer().style.cursor = 'crosshair';
+
+    attrsRectHint = document.createElement('div');
+    attrsRectHint.style.cssText = [
+        'position:fixed', 'top:70px', 'left:50%', 'transform:translateX(-50%)',
+        'background:rgba(33,150,243,0.92)', 'color:white', 'padding:8px 18px',
+        'border-radius:20px', 'font-size:13px', 'font-weight:bold',
+        'z-index:9999', 'pointer-events:none',
+        'box-shadow:0 2px 10px rgba(0,0,0,0.3)'
+    ].join(';');
+    attrsRectHint.textContent = _isTouchDevice()
+        ? '👆 拖曳框選要設定屬性的管段範圍'
+        : '📏 拖曳框選要設定屬性的管段範圍，按 Esc 取消';
+    document.body.appendChild(attrsRectHint);
+
+    _attrsRectMoveFn = function(ev) {
+        if (!attrsRectStart) return;
+        const bounds = L.latLngBounds(attrsRectStart, ev.latlng);
+        if (attrsRectLayer) map.removeLayer(attrsRectLayer);
+        attrsRectLayer = L.rectangle(bounds, {
+            color: '#2196F3', weight: 2, dashArray: '6,4',
+            fillColor: '#2196F3', fillOpacity: 0.12
+        }).addTo(map);
+    };
+
+    _attrsRectDownFn = function(e) {
+        if (!attrsRectMode) return;
+        attrsRectStart = e.latlng;
+        map.on('mousemove', _attrsRectMoveFn);
+        const upHandler = function() {
+            map.off('mousemove', _attrsRectMoveFn);
+            document.removeEventListener('mouseup', upHandler);
+            if (!attrsRectStart) return;
+            const bounds = attrsRectLayer
+                ? attrsRectLayer.getBounds()
+                : L.latLngBounds(attrsRectStart, attrsRectStart);
+            attrsRectStart = null;
+            finishAttrsRectSelect(bounds);
+        };
+        document.addEventListener('mouseup', upHandler);
+    };
+    map.on('mousedown', _attrsRectDownFn);
+
+    // 觸控
+    const mapContainer = map.getContainer();
+    const getTouchLatLng = function(touch) {
+        const rect = mapContainer.getBoundingClientRect();
+        const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+        return map.containerPointToLatLng(point);
+    };
+    _attrsRectTouchMoveFn = function(e) {
+        if (!attrsRectMode || !attrsRectStart || e.touches.length !== 1) return;
+        e.preventDefault();
+        const latlng = getTouchLatLng(e.touches[0]);
+        const bounds = L.latLngBounds(attrsRectStart, latlng);
+        if (attrsRectLayer) map.removeLayer(attrsRectLayer);
+        attrsRectLayer = L.rectangle(bounds, {
+            color: '#2196F3', weight: 2, dashArray: '6,4',
+            fillColor: '#2196F3', fillOpacity: 0.12
+        }).addTo(map);
+    };
+    _attrsRectTouchEndFn = function(e) {
+        if (!attrsRectStart) return;
+        const bounds = attrsRectLayer
+            ? attrsRectLayer.getBounds()
+            : L.latLngBounds(attrsRectStart, attrsRectStart);
+        attrsRectStart = null;
+        mapContainer.removeEventListener('touchmove', _attrsRectTouchMoveFn);
+        mapContainer.removeEventListener('touchend', _attrsRectTouchEndFn);
+        finishAttrsRectSelect(bounds);
+    };
+    mapContainer.addEventListener('touchstart', function onTouchStart(e) {
+        if (!attrsRectMode || e.touches.length !== 1) return;
+        attrsRectStart = getTouchLatLng(e.touches[0]);
+        mapContainer.addEventListener('touchmove', _attrsRectTouchMoveFn, { passive: false });
+        mapContainer.addEventListener('touchend', _attrsRectTouchEndFn, { once: true });
+        mapContainer.removeEventListener('touchstart', onTouchStart);
+    }, { once: true });
+
+    attrsRectKeyHandler = function(e) {
+        if (e.key === 'Escape') cancelAttrsRectSelect();
+    };
+    document.addEventListener('keydown', attrsRectKeyHandler);
+};
+
+function cancelAttrsRectSelect() {
+    attrsRectMode = false;
+    attrsRectStart = null;
+    if (attrsRectLayer) { map.removeLayer(attrsRectLayer); attrsRectLayer = null; }
+    if (attrsRectHint) { attrsRectHint.remove(); attrsRectHint = null; }
+    if (_attrsRectMoveFn) { map.off('mousemove', _attrsRectMoveFn); _attrsRectMoveFn = null; }
+    if (_attrsRectDownFn) { map.off('mousedown', _attrsRectDownFn); _attrsRectDownFn = null; }
+    if (_attrsRectTouchMoveFn) {
+        map.getContainer().removeEventListener('touchmove', _attrsRectTouchMoveFn);
+        _attrsRectTouchMoveFn = null;
+    }
+    if (_attrsRectTouchEndFn) {
+        map.getContainer().removeEventListener('touchend', _attrsRectTouchEndFn);
+        _attrsRectTouchEndFn = null;
+    }
+    if (attrsRectKeyHandler) { document.removeEventListener('keydown', attrsRectKeyHandler); attrsRectKeyHandler = null; }
+    map.dragging.enable();
+    map.getContainer().style.cursor = '';
+}
+
+function finishAttrsRectSelect(bounds) {
+    cancelAttrsRectSelect();
+
+    // 命中判定：與「圈選更新完工」完全相同——以框到的「節點名牌」為準，
+    // 同一分支至少要框到 2 個節點，取最小~最大節點之間的範圍。
+    const hitNodes = [];
+    for (const marker of nodeMarkers) {
+        if (!marker.nodeData) continue;
+        if (bounds.contains(marker.getLatLng())) {
+            hitNodes.push(marker.nodeData);
+        }
+    }
+
+    if (hitNodes.length < 2) {
+        showToast('請至少框選到 2 個節點', 'warning');
+        return;
+    }
+
+    // 🆕 共用範圍計算：支援跨分支（支線節點A＋主線節點B → 兩個範圍一次設定）
+    const ranges = computeRectNodeRanges(hitNodes);
+    if (ranges.length === 0) {
+        showToast('請框選到可構成範圍的節點（同分支 2 個、或相接分支各 1 個）', 'warning');
+        return;
+    }
+    // 接上範圍屬性對話框：第一個範圍為主，其餘一併套用
+    showRangeSetDialog(ranges[0].branchIndex, ranges[0].minIdx, ranges[0].maxIdx, ranges.slice(1));
 }
