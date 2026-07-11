@@ -281,6 +281,7 @@ if (seg.nodeName && seg.nodeName.trim()) {
     // 節點名稱框、段落標籤（工法/進度/節點區間）剛剛才畫出來，
     // 立刻套用一次目前縮放層級該有的顯示/隱藏狀態（避免要等使用者手動縮放一次才生效）。
     if (typeof updateNodeLabelVisibility === 'function') updateNodeLabelVisibility();
+    scheduleLabelCollisions();
 
     showStatsPanel();
     await loadMapNotes();
@@ -395,7 +396,7 @@ function drawBranchLabel(branch, branchIndex, smallSegs) {
             icon: L.divIcon({
                 // zoom-detail-label：只在接近最大縮放層級時才顯示（見 plan-overview.js 的 updateNodeLabelVisibility）
                 className: 'segment-label zoom-detail-label',
-                html: `<div style="
+                html: `<div class="_lbl-collide" style="
                     background: transparent;
                     color: ${labelColor};
                     padding: 3px 6px;
@@ -492,14 +493,14 @@ const popup = L.popup()
 function drawNodeNameMarker(latlng, seg, branchIndex, smallIndex, color) {
     const nodeMarker = L.marker(latlng, {
         icon: L.divIcon({
-            // 🆕 節點標記改成不受縮放層級限制、一律顯示——因為現在可以直接拖曳搬移，
-            // 如果跟著 zoom-detail-label 規則被 display:none 隱藏，會連帶不能拖曳
-            // （隱藏的元素收不到滑鼠事件）。畫面雜亂的問題交給下面「段落進度文字標籤」
-            // 的縮放規則處理就好，節點的小圓點本身不佔太多視覺空間。
-            className: '',
+            // 節點標記：倒數第三層（maxZoom-2）以後才顯示——縮小看全線時
+            // 大量節點框會擠成一長條遮住地圖；隱藏時本來也不需要拖曳，
+            // 放大到會顯示的層級後，拖曳搬移功能照常可用。
+            // （段落進度文字用 zoom-detail-label，門檻是倒數第二層，兩者分開控制）
+            className: 'zoom-node-label',
             html: `<div style="position:relative;width:10px;height:10px;">
                 <div style="width:10px;height:10px;background:white;border:2px solid ${color};border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);cursor:move;"></div>
-                <div style="position:absolute;left:10px;top:-22px;white-space:nowrap;font-size:9px;font-weight:bold;color:${color};background:white;padding:2px 5px;border-radius:3px;border:1.5px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,0.2);pointer-events:none;">${seg.nodeName}</div>
+                <div class="_lbl-collide" style="position:absolute;left:10px;top:-22px;white-space:nowrap;font-size:9px;font-weight:bold;color:${color};background:white;padding:2px 5px;border-radius:3px;border:1.5px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,0.2);pointer-events:none;">${seg.nodeName}</div>
             </div>`,
             iconSize: [10, 10],
             iconAnchor: [5, 5]
@@ -842,6 +843,55 @@ async function moveSectionBoundary(nd, best, targetSeg, marker) {
         return false;
     }
 }
+
+// ===== 標籤防碰撞 =====
+// 節點名稱框、管線段落標籤（工法/進度文字）都是畫在各自錨點上的文字；
+// 兩條管線平行靠近、或節點密集時，文字會疊在一起完全讀不到。
+// 這裡在繪製完成與縮放後掃一遍所有可見標籤：發現重疊就把後面的
+// 往下推開，垂直排成一疊，每個都保持可讀。
+// 位移做在標籤「內層」元素的 transform 上，不動 Leaflet 控制的外層定位，
+// 平移地圖時相對位置不變、不用重算；縮放時間距改變才需要重跑。
+let _lblCollideTimer = null;
+function resolveLabelCollisions() {
+    const els = Array.prototype.slice.call(document.querySelectorAll('._lbl-collide'))
+        .filter(el => el.offsetParent !== null); // 只處理目前可見的
+    // 先歸零之前的位移，取得原始位置
+    els.forEach(el => { el.style.transform = ''; });
+    if (els.length < 2) return;
+
+    const PAD = 2; // 標籤間最小間距(px)
+    const placed = [];
+    // 由上而下、由左而右處理，重疊時往下推
+    els.map(el => ({ el, rect: el.getBoundingClientRect() }))
+        .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left)
+        .forEach(item => {
+            let dy = 0;
+            // 反覆下推直到不與任何已定位的標籤重疊（設上限防呆）
+            for (let guard = 0; guard < 25; guard++) {
+                const t = item.rect.top + dy, b = item.rect.bottom + dy;
+                const hit = placed.find(p =>
+                    item.rect.left < p.right + PAD && item.rect.right > p.left - PAD &&
+                    t < p.bottom + PAD && b > p.top - PAD
+                );
+                if (!hit) break;
+                dy = hit.bottom + PAD - item.rect.top;
+            }
+            if (dy > 0) item.el.style.transform = 'translateY(' + dy + 'px)';
+            placed.push({
+                left: item.rect.left, right: item.rect.right,
+                top: item.rect.top + dy, bottom: item.rect.bottom + dy
+            });
+        });
+}
+window.resolveLabelCollisions = resolveLabelCollisions;
+function scheduleLabelCollisions() {
+    clearTimeout(_lblCollideTimer);
+    _lblCollideTimer = setTimeout(resolveLabelCollisions, 120); // 等 DOM 定位完成
+    // 保險：部分標籤（如非同步載入的甘特日期、較慢放定位的節點框）可能在第一輪
+    // 之後才出現，450ms 再掃一次，確保全部都被納入防碰撞。
+    setTimeout(resolveLabelCollisions, 450);
+}
+window.scheduleLabelCollisions = scheduleLabelCollisions;
 
 // ===== 制水閥 =====
 const valveCrossLayers = {}; // key -> [line1, line2]

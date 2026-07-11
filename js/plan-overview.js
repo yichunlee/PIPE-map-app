@@ -436,10 +436,20 @@ function initMap() {
     // 從一開始就沒有真正生效過——不管縮多小，所有標籤永遠都是顯示的。
     // 現在改成查詢真正有掛在標記上的 `.zoom-detail-label` class。
     function updateNodeLabelVisibility() {
-        var show = map.getZoom() >= map.getMaxZoom() - 1;
+        var z = map.getZoom(), mz = map.getMaxZoom();
+        // 段落進度文字：倒數第二層（maxZoom-1）以後顯示
+        var showDetail = z >= mz - 1;
         document.querySelectorAll('.zoom-detail-label').forEach(function(el) {
-            el.style.display = show ? 'block' : 'none';
+            el.style.display = showDetail ? 'block' : 'none';
         });
+        // 節點名稱框：倒數第三層（maxZoom-2）以後顯示（比進度文字早一層出現，
+        // 但縮小看全線時整批隱藏，不會擠成一長條遮住地圖）
+        var showNode = z >= mz - 2;
+        document.querySelectorAll('.zoom-node-label').forEach(function(el) {
+            el.style.display = showNode ? 'block' : 'none';
+        });
+        // 縮放後標籤間距改變（或段落標籤剛顯示出來），重跑一次防碰撞排列
+        if (typeof scheduleLabelCollisions === 'function') scheduleLabelCollisions();
     }
     map.on('zoomend', updateNodeLabelVisibility);
     // 標記是在畫工程（showPipelineDetail）時才陸續建立的，不是只靠 zoomend 觸發，
