@@ -95,8 +95,9 @@
   <span class="lbl-input">前次標題<input id="beforeLabel" value="第十二次修正預算"></span>
   <span class="lbl-input">本次標題<input id="afterLabel" value="第一次變更設計"></span>
   <button class="btn blue" id="btnGenerate" disabled onclick="generateXlsx()">② 產生變更設計明細表</button>
-  <button class="btn small" id="btnExpandAll" disabled onclick="setAllCollapsed(false)">全部展開</button>
-  <button class="btn small" id="btnCollapseAll" disabled onclick="setAllCollapsed(true)">全部收合</button>
+  <button class="btn small" id="btnExpandAll" disabled onclick="setAllCollapsed(false)">展開全部</button>
+  <button class="btn small" id="btnCollapseLeaf" disabled onclick="collapseLeafGroups(true)">收合明細</button>
+  <button class="btn small" id="btnCollapseAll" disabled onclick="setAllCollapsed(true)">收合全部</button>
   <label class="chk-lbl"><input type="checkbox" id="onlyChanged" onchange="render()">只顯示有變更</label>
   <span id="status"></span>
 </div>
@@ -219,14 +220,16 @@ async function loadContract(file) {
     if (!res.ok) throw new Error((await res.json()).detail || res.status);
     const data = await res.json();
     groups = data.groups || [];
-    changes = {}; rateAmounts = {}; newItems = []; collapsedNodes = new Set();
+    changes = {}; rateAmounts = {}; newItems = [];
     leafByCode = {};
     groups.forEach(g => g.leaves.forEach(lf => { leafByCode[lf.code] = lf; }));
+    collapseLeafGroups();   // 預設：只收合「直接掛工項的那一組」，上層結構保持展開
     render();
     document.getElementById('btnLoadState').disabled = false;
     document.getElementById('btnSaveState').disabled = false;
     document.getElementById('btnGenerate').disabled = false;
     document.getElementById('btnExpandAll').disabled = false;
+    document.getElementById('btnCollapseLeaf').disabled = false;
     document.getElementById('btnCollapseAll').disabled = false;
     document.getElementById('hintBox').style.display = 'none';
     document.getElementById('totalsBar').style.display = 'flex';
@@ -291,6 +294,17 @@ function setAllCollapsed(collapsed) {
     })(root);
   }
   render();
+}
+// 只收合「直接掛工項的那一組」（groupIndex 不為 null 的節點），上層分類保持展開。
+// 這些節點在樹裡沒有子標題，收合它就只是把底下的工項/新增項目藏起來。
+function collapseLeafGroups(doRender) {
+  collapsedNodes = new Set();
+  const root = buildTree();
+  (function walk(node) {
+    if (node.code !== '__root__' && node.groupIndex !== null) collapsedNodes.add(node.code);
+    node.children.forEach(walk);
+  })(root);
+  if (doRender) render();
 }
 
 // ---------- 右鍵選單 ----------
@@ -687,6 +701,7 @@ function loadState(file) {
       newItems = d.new_items || [];
       rateAmounts = {};
       Object.keys(d.rate_amounts || {}).forEach(k => rateAmounts[k] = { inc: parseFloat(d.rate_amounts[k].inc) || 0, dec: parseFloat(d.rate_amounts[k].dec) || 0 });
+      collapseLeafGroups();
       render();
       toast('已讀入變更狀態');
     } catch (e) { toast('讀取失敗：' + e.message); }
