@@ -16,19 +16,25 @@
   .btn:hover { filter: brightness(0.95); }
   .btn.primary { background: #00695C; color: white; }
   .btn.blue { background: #1976D2; color: white; }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .lbl-input { font-size: 12px; color: #666; display: flex; align-items: center; gap: 4px; }
   .lbl-input input { width: 150px; padding: 5px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; }
+  .chk-lbl { font-size: 12px; color: #444; display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
   #status { font-size: 12px; color: #888; margin-left: auto; }
-  main { padding: 14px 20px 60px; max-width: 1200px; margin: 0 auto; }
+  main { padding: 14px 20px 84px; max-width: 1300px; margin: 0 auto; }
   .hint { background: #fffde7; border: 1px solid #ffe082; border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.8; }
   table.boq { width: 100%; border-collapse: collapse; background: white; font-size: 13px; margin-top: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-  table.boq th { background: #37474F; color: white; padding: 7px 8px; font-size: 12px; position: sticky; top: 52px; }
-  table.boq td { border: 1px solid #e0e0e0; padding: 6px 8px; }
-  tr.grp td { background: #eceff1; font-weight: bold; color: #37474F; }
-  tr.grp .grp-add { float: right; font-size: 12px; padding: 2px 10px; }
+  table.boq th { background: #37474F; color: white; padding: 7px 8px; font-size: 12px; position: sticky; top: 93px; }
+  table.boq td { border: 1px solid #e0e0e0; padding: 6px 8px; vertical-align: top; }
+  tr.hdr td { background: #eceff1; font-weight: bold; color: #37474F; cursor: pointer; }
+  tr.hdr.changed td { background: #fde8e8; }
+  tr.hdr .toggle { display: inline-block; width: 16px; color: #607D8B; }
+  tr.hdr .badge { color: #c62828; font-size: 11px; font-weight: normal; margin-left: 8px; }
+  tr.hdr .grp-add { float: right; font-size: 12px; padding: 2px 10px; font-weight: normal; cursor: pointer; }
   tr.leaf.inc td { background: #e8f5e9; }
   tr.leaf.dec td { background: #fff3e0; }
+  tr.leaf.changed td.val { color: #c62828; font-weight: bold; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.qty-cell input { width: 90px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 13px; }
   td.qty-cell .mini { font-size: 11px; color: #999; margin-left: 4px; cursor: pointer; }
@@ -37,21 +43,37 @@
   tr.newitem .ni-ops span { cursor: pointer; margin-left: 8px; font-size: 12px; color: #1565C0; }
   .rate-inputs input { width: 90px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 12px; }
   .rate-inputs label { font-size: 11px; color: #777; }
+  /* 右鍵選單 */
+  .ctx-menu { position: fixed; background: white; border: 1px solid #cfd8dc; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.22); z-index: 900; min-width: 168px; overflow: hidden; padding: 4px 0; }
+  .ctx-menu button { display: block; width: 100%; text-align: left; border: none; background: white; padding: 8px 14px; font-size: 13px; cursor: pointer; color: #333; }
+  .ctx-menu button:hover { background: #eef3f2; }
+  .ctx-menu .sep { border-top: 1px solid #eee; margin: 4px 0; }
+  /* 底部即時總計列 */
+  #totalsBar { position: fixed; bottom: 0; left: 0; right: 0; background: #263238; color: #eceff1; padding: 10px 22px; display: flex; gap: 26px; font-size: 13px; z-index: 400; flex-wrap: wrap; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); }
+  #totalsBar b { font-variant-numeric: tabular-nums; }
+  #totalsBar .inc { color: #a5d6a7; }
+  #totalsBar .dec { color: #ffcc80; }
   /* modal */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 500; }
-  .modal { background: white; border-radius: 12px; padding: 20px; width: min(860px, 94vw); max-height: 90vh; overflow: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+  .modal { background: white; border-radius: 12px; padding: 20px; width: min(960px, 96vw); max-height: 92vh; overflow: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
   .modal h3 { margin: 0 0 12px; font-size: 15px; color: #00695C; }
   .modal .row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
   .modal .row label { font-size: 12px; color: #666; display: block; margin-bottom: 3px; }
   .modal .row input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; }
+  .upa-sec-title { font-size: 13px; font-weight: bold; color: #555; display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .upa-hint { font-size: 11px; color: #999; font-weight: normal; }
   table.upa { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 4px; }
   table.upa th { background: #f5f5f5; padding: 5px; border: 1px solid #ddd; }
   table.upa td { border: 1px solid #ddd; padding: 3px; }
-  table.upa input { width: 100%; border: none; padding: 4px; font-size: 12px; background: transparent; }
-  table.upa td.n { width: 80px; } table.upa td.n input { text-align: right; }
+  table.upa input, table.upa select { width: 100%; border: none; padding: 4px; font-size: 12px; background: transparent; }
+  table.upa td.n { width: 82px; } table.upa td.n input { text-align: right; }
+  table.upa td.mv { width: 30px; text-align: center; cursor: pointer; color: #1565C0; }
+  table.upa td.rm { width: 28px; text-align: center; cursor: pointer; color: #c62828; }
+  .upa-weights { font-size: 11.5px; color: #c62828; font-weight: bold; line-height: 1.9; min-height: 4px; }
   .upa-sum { text-align: right; font-size: 12px; color: #00695C; font-weight: bold; }
+  .upa-total { text-align: right; font-size: 13.5px; color: #00695C; font-weight: bold; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; }
   .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-  #toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.82); color: white; padding: 10px 22px; border-radius: 22px; font-size: 13px; display: none; z-index: 999; }
+  #toast { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.82); color: white; padding: 10px 22px; border-radius: 22px; font-size: 13px; display: none; z-index: 999; }
 </style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -73,6 +95,9 @@
   <span class="lbl-input">前次標題<input id="beforeLabel" value="第十二次修正預算"></span>
   <span class="lbl-input">本次標題<input id="afterLabel" value="第一次變更設計"></span>
   <button class="btn blue" id="btnGenerate" disabled onclick="generateXlsx()">② 產生變更設計明細表</button>
+  <button class="btn small" id="btnExpandAll" disabled onclick="setAllCollapsed(false)">全部展開</button>
+  <button class="btn small" id="btnCollapseAll" disabled onclick="setAllCollapsed(true)">全部收合</button>
+  <label class="chk-lbl"><input type="checkbox" id="onlyChanged" onchange="render()">只顯示有變更</label>
   <span id="status"></span>
 </div>
 
@@ -80,15 +105,24 @@
   <div class="hint" id="hintBox">
     <b>使用方式</b><br>
     1. 按【① 載入原契約詳細表】選擇台水格式的原契約 .xlsx（需含「契約詳細表」分頁）。<br>
-    2. 在工項列的「變更後數量」欄直接輸入新數量（比原數量大＝增加/綠色，小＝減少/橘色；清空＝取消變更）。<br>
+    2. 在工項列的「變更後數量」欄直接輸入新數量（比原數量大＝增加/綠色，小＝減少/橘色；清空＝取消變更）。滑鼠右鍵點一列可快速跳到編輯欄位或清除變更。<br>
     3. 費率型項目（單價為 --）改填「增加金額 / 減少金額」。<br>
-    4. 分組標題列右側【＋新增項目】可加入全新工項（含單價分析）。<br>
-    5. 【儲存變更狀態】會下載 .json，之後可【讀入變更狀態】接續編輯；<b>此檔與桌面版工具完全互通</b>。<br>
-    6. 按【② 產生變更設計明細表】下載完整 .xlsx（含增減表、新增項目、單價分析表）。
+    4. 分組標題列可點擊展開/收合；右側【＋新增項目】可加入全新工項（含單價分析）。標題列變紅＝底下有變更。<br>
+    5. 單價分析視窗：原契約 / 新增兩區可各自貼上 Excel 多列（Ctrl+V）、用「→」按鈕互相搬移列，物調權重即時顯示。<br>
+    6. 【儲存變更狀態】會下載 .json，之後可【讀入變更狀態】接續編輯；<b>此檔與桌面版工具完全互通</b>。<br>
+    7. 按【② 產生變更設計明細表】下載完整 .xlsx（含增減表、新增項目、單價分析表）。
   </div>
   <div id="tableWrap"></div>
 </main>
 
+<div id="totalsBar" style="display:none;">
+  <span>原複價：<b id="tBase">0</b></span>
+  <span>變更後複價：<b id="tChanged">0</b></span>
+  <span class="inc">增加金額：<b id="tInc">0</b></span>
+  <span class="dec">減少金額：<b id="tDec">0</b></span>
+</div>
+
+<div id="ctxMenu" class="ctx-menu" style="display:none;"></div>
 <div id="toast"></div>
 
 <script>
@@ -97,8 +131,6 @@ const API_BASE = 'https://pipe-change-design-api-850504271041.asia-east1.run.app
 // ============================================
 
 // ====== 登入（獨立頁面，跟主系統用同一組 Google Client ID）======
-// 這個頁面是獨立開啟的，讀不到主系統（index.html）記憶體裡的登入狀態，
-// 所以自己做一次 Google 登入，把 token 存在 localStorage 供 API 呼叫使用。
 const GOOGLE_CLIENT_ID = '850504271041-0n2eqka71m9i9t2ss7b8gue27rk7cg26.apps.googleusercontent.com';
 
 function initAuth() {
@@ -151,10 +183,12 @@ function setButtonsEnabled(loggedIn) {
 window.addEventListener('load', () => { if (window.google && google.accounts) initAuth(); else setTimeout(initAuth, 300); });
 
 let contractFile = null;   // 原契約 File（generate 時要再上傳一次）
-let groups = [];           // /parse 回傳的分組樹
+let groups = [];           // /parse 回傳的分組樹（扁平陣列，每個 group 帶 ancestors）
 let changes = {};          // code -> 變更後數量
 let rateAmounts = {};      // code -> {inc, dec}
 let newItems = [];         // NewItem 陣列（schema 同桌面版）
+let leafByCode = {};        // code -> leaf 物件（快查表）
+let collapsedNodes = new Set(); // 已收合的節點 code
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -166,6 +200,11 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replac
 function authHeaders() {
   const tk = localStorage.getItem('userToken');
   return tk ? { 'X-User-Token': tk } : {};
+}
+// 容錯數字解析：接受 "2,000"、"2000"、空白等
+function parseNum(v) {
+  const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '').trim());
+  return isNaN(n) ? 0 : n;
 }
 
 // ---------- 載入原契約 ----------
@@ -180,39 +219,232 @@ async function loadContract(file) {
     if (!res.ok) throw new Error((await res.json()).detail || res.status);
     const data = await res.json();
     groups = data.groups || [];
-    changes = {}; rateAmounts = {}; newItems = [];
+    changes = {}; rateAmounts = {}; newItems = []; collapsedNodes = new Set();
+    leafByCode = {};
+    groups.forEach(g => g.leaves.forEach(lf => { leafByCode[lf.code] = lf; }));
     render();
     document.getElementById('btnLoadState').disabled = false;
     document.getElementById('btnSaveState').disabled = false;
     document.getElementById('btnGenerate').disabled = false;
+    document.getElementById('btnExpandAll').disabled = false;
+    document.getElementById('btnCollapseAll').disabled = false;
     document.getElementById('hintBox').style.display = 'none';
+    document.getElementById('totalsBar').style.display = 'flex';
     setStatus('已載入：' + file.name + '（' + groups.length + ' 個分組）');
   } catch (e) {
     setStatus(''); toast('載入失敗：' + e.message);
   }
 }
 
-// ---------- 畫面 ----------
+// ---------- 樹狀結構 ----------
 function shortCode(code) {
-  // 只顯示最後一節，完整編碼放 title
   const m = String(code).match(/(\[\d+\]|[a-z]|\d+|<[^<>]+>)$/);
   return m ? m[1] : code;
 }
+function buildTree() {
+  const root = { code: '__root__', desc: '', children: [], childMap: {}, groupIndex: null };
+  groups.forEach((g, gi) => {
+    const chain = (g.ancestors || []).concat([[g.code, g.desc]]);
+    let node = root;
+    chain.forEach(([code, desc]) => {
+      let child = node.childMap[code];
+      if (!child) {
+        child = { code: code, desc: desc, children: [], childMap: {}, groupIndex: null };
+        node.childMap[code] = child;
+        node.children.push(child);
+      }
+      node = child;
+    });
+    node.groupIndex = gi;
+  });
+  return root;
+}
+function flattenTree(root) {
+  const rows = [];
+  (function walk(node, ancestorCodes) {
+    if (node.code !== '__root__') {
+      rows.push({ type: 'header', node: node, ancestorCodes: ancestorCodes.slice(), depth: ancestorCodes.length });
+    }
+    const newAnc = node.code === '__root__' ? [] : ancestorCodes.concat([node.code]);
+    if (node.groupIndex !== null) {
+      const g = groups[node.groupIndex];
+      g.leaves.forEach(lf => rows.push({ type: 'leaf', leaf: lf, gi: node.groupIndex, ancestorCodes: newAnc, depth: newAnc.length }));
+      newItems.forEach((it, ii) => {
+        if (it.group_code === g.code) rows.push({ type: 'newitem', item: it, ii: ii, gi: node.groupIndex, ancestorCodes: newAnc, depth: newAnc.length });
+      });
+    }
+    node.children.forEach(c => walk(c, newAnc));
+  })(root, []);
+  return rows;
+}
+function toggleNode(code) {
+  if (collapsedNodes.has(code)) collapsedNodes.delete(code); else collapsedNodes.add(code);
+  render();
+}
+function setAllCollapsed(collapsed) {
+  collapsedNodes = new Set();
+  if (collapsed) {
+    const root = buildTree();
+    (function walk(node) {
+      if (node.code !== '__root__' && node.children.length) collapsedNodes.add(node.code);
+      node.children.forEach(walk);
+    })(root);
+  }
+  render();
+}
+
+// ---------- 右鍵選單 ----------
+function showCtxMenu(evt, items) {
+  evt.preventDefault();
+  const m = document.getElementById('ctxMenu');
+  m.innerHTML = '';
+  items.forEach(it => {
+    if (it === '-') { const d = document.createElement('div'); d.className = 'sep'; m.appendChild(d); return; }
+    const b = document.createElement('button');
+    b.textContent = it.label;
+    b.onclick = () => { closeCtxMenu(); it.fn(); };
+    m.appendChild(b);
+  });
+  const vw = window.innerWidth, vh = window.innerHeight;
+  m.style.display = 'block';
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.min(evt.clientX, vw - w - 8) + 'px';
+  m.style.top = Math.min(evt.clientY, vh - h - 8) + 'px';
+}
+function closeCtxMenu() { document.getElementById('ctxMenu').style.display = 'none'; }
+document.addEventListener('click', e => { if (!e.target.closest('#ctxMenu')) closeCtxMenu(); });
+document.addEventListener('scroll', closeCtxMenu, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtxMenu(); });
+
+function rowInput(code, kind) {
+  const tr = document.querySelector('tr[data-code="' + CSS.escape(code) + '"]');
+  if (!tr) return null;
+  if (kind === 'qty') return tr.querySelector('.qty-cell input');
+  if (kind === 'inc') return tr.querySelector('.rate-inputs input');
+  return null;
+}
+function leafCtxMenu(evt, code) {
+  const lf = leafByCode[code];
+  if (!lf) return;
+  const items = [];
+  if (lf.is_rate) {
+    items.push({ label: '設定增加 / 減少金額', fn: () => { const i = rowInput(code, 'inc'); if (i) { i.focus(); i.select(); } } });
+  } else {
+    items.push({ label: '修改變更後數量', fn: () => { const i = rowInput(code, 'qty'); if (i) { i.focus(); i.select(); } } });
+  }
+  const hasChange = (code in changes) || (rateAmounts[code] && (rateAmounts[code].inc || rateAmounts[code].dec));
+  if (hasChange) items.push({ label: '清除此項變更', fn: () => clearChange(code) });
+  showCtxMenu(evt, items);
+}
+function groupCtxMenu(evt, gi) {
+  const g = groups[gi];
+  showCtxMenu(evt, [
+    { label: '＋ 新增項目', fn: () => openNewItemModal(gi) },
+    { label: '清除本組所有變更', fn: () => clearGroupChanges(g) },
+  ]);
+}
+function headerCtxMenu(evt, code) {
+  showCtxMenu(evt, [
+    { label: collapsedNodes.has(code) ? '展開此分支' : '收合此分支', fn: () => toggleNode(code) },
+  ]);
+}
+function clearGroupChanges(g) {
+  g.leaves.forEach(lf => { delete changes[lf.code]; delete rateAmounts[lf.code]; });
+  newItems = newItems.filter(it => it.group_code !== g.code);
+  render();
+  toast('已清除「' + g.desc + '」的所有變更');
+}
+
+// ---------- 即時總計 ----------
+function calcTotals() {
+  let base = 0, incAmt = 0, decAmt = 0, newAmt = 0;
+  groups.forEach(g => {
+    g.leaves.forEach(lf => {
+      base += Number(lf.orig_total) || 0;
+      if (lf.is_rate) {
+        const ra = rateAmounts[lf.code];
+        if (ra) { incAmt += ra.inc || 0; decAmt += ra.dec || 0; }
+      } else if (lf.code in changes) {
+        const nq = changes[lf.code];
+        const price = typeof lf.price === 'number' ? lf.price : 0;
+        const delta = (nq - lf.orig_qty) * price;
+        if (delta > 0) incAmt += delta; else decAmt += -delta;
+      }
+    });
+  });
+  newItems.forEach(it => {
+    const unitPrice = sumUpa(it.upa_orig) + sumUpa(it.upa_new);
+    newAmt += unitPrice * (Number(it.qty) || 0);
+  });
+  const changed = base + incAmt - decAmt + newAmt;
+  return { base: base, changed: changed, inc: incAmt + newAmt, dec: decAmt };
+}
+function fmt(n) { return Math.round(n).toLocaleString(); }
+function renderTotals() {
+  const t = calcTotals();
+  document.getElementById('tBase').textContent = fmt(t.base);
+  document.getElementById('tChanged').textContent = fmt(t.changed);
+  document.getElementById('tInc').textContent = '+' + fmt(t.inc);
+  document.getElementById('tDec').textContent = '-' + fmt(t.dec);
+}
+
+// ---------- 畫面（樹狀展開/收合 + 紅字變更標記）----------
 function render() {
+  if (!groups.length) { document.getElementById('tableWrap').innerHTML = ''; return; }
+  const root = buildTree();
+  const rows = flattenTree(root);
+  const onlyChanged = document.getElementById('onlyChanged').checked;
+
+  // 判斷每列是否「有變更」，並把變更狀態往上冒泡到所有祖先 code
+  const changedAncestors = new Set();
+  rows.forEach(row => {
+    let isChanged = false;
+    if (row.type === 'leaf') {
+      const lf = row.leaf;
+      isChanged = lf.is_rate
+        ? !!(rateAmounts[lf.code] && (rateAmounts[lf.code].inc || rateAmounts[lf.code].dec))
+        : (lf.code in changes && changes[lf.code] !== lf.orig_qty);
+    } else if (row.type === 'newitem') {
+      isChanged = true;
+    }
+    row.isChanged = isChanged;
+    if (isChanged) row.ancestorCodes.forEach(c => changedAncestors.add(c));
+  });
+
   let html = '<table class="boq"><thead><tr>' +
     '<th style="width:70px;">項次</th><th>項目及說明</th><th style="width:52px;">單位</th>' +
     '<th style="width:90px;">原數量</th><th style="width:90px;">單價</th>' +
     '<th style="width:210px;">變更後數量</th></tr></thead><tbody>';
 
-  groups.forEach((g, gi) => {
-    html += `<tr class="grp"><td colspan="6">${esc(g.code)}　${esc(g.desc)}` +
-      `<button class="btn grp-add" onclick="openNewItemModal(${gi})">＋新增項目</button></td></tr>`;
-
-    g.leaves.forEach(lf => {
+  rows.forEach(row => {
+    const anc = row.ancestorCodes;
+    const isHidden = anc.some(c => collapsedNodes.has(c));
+    if (row.type === 'header') {
+      const node = row.node;
+      const hasChange = changedAncestors.has(node.code);
+      if (onlyChanged && !hasChange) return; // 篩選：整支都沒變更就跳過（含其子孫，之後遇到也會被跳過因為子孫的祖先鏈含此 code 且同樣沒變更）
+      const collapsed = collapsedNodes.has(node.code);
+      const style = isHidden ? ' style="display:none;"' : '';
+      const indent = row.depth * 18;
+      const addBtn = node.groupIndex !== null
+        ? `<span class="btn small grp-add" onclick="event.stopPropagation();openNewItemModal(${node.groupIndex})">＋新增項目</span>`
+        : '';
+      html += `<tr class="hdr${hasChange ? ' changed' : ''}" data-code="${esc(node.code)}"${style} ` +
+        `onclick="toggleNode('${esc(node.code)}')" oncontextmenu="${node.groupIndex !== null ? 'groupCtxMenu(event,' + node.groupIndex + ')' : 'headerCtxMenu(event,\'' + esc(node.code) + '\')'}">` +
+        `<td colspan="6" style="padding-left:${14 + indent}px;"><span class="toggle">${collapsed ? '⊞' : '⊟'}</span>` +
+        `${esc(node.code)}　${esc(node.desc)}${hasChange ? '<span class="badge">● 有變更</span>' : ''}${addBtn}</td></tr>`;
+      return;
+    }
+    if (onlyChanged && !row.isChanged) return;
+    const style = isHidden ? ' style="display:none;"' : '';
+    const indent = row.depth * 18 + 14;
+    if (row.type === 'leaf') {
+      const lf = row.leaf;
       const codeAttr = esc(lf.code);
       if (lf.is_rate) {
         const ra = rateAmounts[lf.code] || { inc: '', dec: '' };
-        html += `<tr class="leaf" data-code="${codeAttr}"><td title="${codeAttr}">${esc(shortCode(lf.code))}</td>` +
+        html += `<tr class="leaf${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
+          `<td title="${codeAttr}" style="padding-left:${indent}px;">${esc(shortCode(lf.code))}</td>` +
           `<td>${esc(lf.desc)} <span style="color:#999;font-size:11px;">（費率型）</span></td>` +
           `<td>${esc(lf.unit)}</td><td class="num">${lf.orig_qty}</td><td class="num">--</td>` +
           `<td class="rate-inputs"><label>增加$</label><input type="number" value="${ra.inc}" ` +
@@ -221,29 +453,28 @@ function render() {
       } else {
         const nq = (lf.code in changes) ? changes[lf.code] : '';
         const cls = nq === '' ? '' : (nq > lf.orig_qty ? 'inc' : (nq < lf.orig_qty ? 'dec' : ''));
-        html += `<tr class="leaf ${cls}" data-code="${codeAttr}"><td title="${codeAttr}">${esc(shortCode(lf.code))}</td>` +
+        html += `<tr class="leaf ${cls}${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
+          `<td title="${codeAttr}" style="padding-left:${indent}px;">${esc(shortCode(lf.code))}</td>` +
           `<td>${esc(lf.desc)}</td><td>${esc(lf.unit)}</td>` +
-          `<td class="num">${lf.orig_qty}</td><td class="num">${typeof lf.price === 'number' ? lf.price.toLocaleString() : esc(lf.price)}</td>` +
+          `<td class="num">${lf.orig_qty}</td><td class="num val">${typeof lf.price === 'number' ? lf.price.toLocaleString() : esc(lf.price)}</td>` +
           `<td class="qty-cell"><input type="number" value="${nq}" placeholder="（未變更）" ` +
           `onchange="setQty('${codeAttr}', ${lf.orig_qty}, this.value)">` +
           `<span class="mini" onclick="clearChange('${codeAttr}')">清除</span></td></tr>`;
       }
-    });
-
-    // 此分組已加入的新增項目
-    newItems.forEach((it, ii) => {
-      if (it.group_code !== g.code) return;
+    } else if (row.type === 'newitem') {
+      const it = row.item, ii = row.ii, gi = row.gi;
       const up = sumUpa(it.upa_orig) + sumUpa(it.upa_new);
-      html += `<tr class="newitem"><td>${esc(it.code)}</td>` +
+      html += `<tr class="newitem"${style}><td style="padding-left:${indent}px;">${esc(it.code)}</td>` +
         `<td>🆕 ${esc(it.desc)}</td><td>${esc(it.unit)}</td>` +
         `<td class="num">${it.qty}</td><td class="num">${up.toLocaleString()}</td>` +
         `<td class="ni-ops">（新增項目）<span onclick="openNewItemModal(${gi}, ${ii})">編輯</span>` +
         `<span onclick="deleteNewItem(${ii})">刪除</span></td></tr>`;
-    });
+    }
   });
 
   html += '</tbody></table>';
   document.getElementById('tableWrap').innerHTML = html;
+  renderTotals();
 }
 
 // ---------- 變更操作 ----------
@@ -258,19 +489,27 @@ function setRate(code, kind, v) {
   cur[kind] = parseFloat(v) || 0;
   if (!cur.inc && !cur.dec) delete rateAmounts[code];
   else rateAmounts[code] = cur;
+  render();
 }
 function deleteNewItem(ii) { newItems.splice(ii, 1); render(); }
 function sumUpa(rows) {
   return Math.round((rows || []).reduce((s, r) => s + (parseFloat(r.qty) || 0) * (parseFloat(r.price) || 0), 0) * 100) / 100;
 }
 
-// ---------- 新增項目 modal ----------
-let _editing = null; // { gi, ii(可空=新建) }
+// ---------- 新增項目 modal（強化版單價分析：雙區搬移 / Ctrl+V 貼上 / 即時物調權重）----------
+const MATERIAL_TYPES = ['預拌混凝土', '鋼筋', '鋼板', '型鋼', '瀝青混凝土', '水泥及其製品類', '金屬製品類', '瀝青及其製品類'];
+let _editing = null;      // { gi, ii(可空=新建) }
+let _upaState = { orig: [], new: [] }; // 目前 modal 編輯中的兩區列資料
+
 function openNewItemModal(gi, ii) {
   _editing = { gi: gi, ii: (ii === undefined ? null : ii) };
   const g = groups[gi];
   const it = _editing.ii !== null ? newItems[_editing.ii]
     : { code: '', desc: '', unit: '', qty: 0, upa_orig: [], upa_new: [] };
+  _upaState = {
+    orig: (it.upa_orig || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
+    new: (it.upa_new || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
+  };
 
   const bg = document.createElement('div');
   bg.className = 'modal-bg'; bg.id = 'niModal';
@@ -281,13 +520,19 @@ function openNewItemModal(gi, ii) {
       <div><label>單位</label><input id="niUnit" style="width:80px;" value="${esc(it.unit)}"></div>
       <div><label>數量</label><input id="niQty" type="number" style="width:100px;" value="${it.qty}"></div>
     </div>
-    <div style="font-size:13px;font-weight:bold;color:#555;">單價分析 — 原契約單價部份</div>
-    <table class="upa" id="upaOrig"></table>
-    <button class="btn" onclick="addUpaRow('upaOrig')">＋新增一列</button>
-    <div style="font-size:13px;font-weight:bold;color:#555;margin-top:10px;">單價分析 — 新增單價部份</div>
-    <table class="upa" id="upaNew"></table>
-    <button class="btn" onclick="addUpaRow('upaNew')">＋新增一列</button>
-    <div class="upa-sum" id="upaSum" style="margin-top:10px;"></div>
+    <div class="upa-sec-title">一、原契約單價部份 <span class="upa-hint">可從 Excel 選取多列直接 Ctrl+V 貼上</span></div>
+    <div id="upaWrap_orig"><table class="upa" id="upaTbl_orig"></table></div>
+    <button class="btn small" onclick="addUpaRow('orig')">＋新增一列</button>
+    <div class="upa-weights" id="upaWeights_orig"></div>
+    <div class="upa-sum" id="upaSum_orig"></div>
+
+    <div class="upa-sec-title" style="margin-top:16px;">二、新增單價部份 <span class="upa-hint">可從 Excel 選取多列直接 Ctrl+V 貼上</span></div>
+    <div id="upaWrap_new"><table class="upa" id="upaTbl_new"></table></div>
+    <button class="btn small" onclick="addUpaRow('new')">＋新增一列</button>
+    <div class="upa-weights" id="upaWeights_new"></div>
+    <div class="upa-sum" id="upaSum_new"></div>
+
+    <div class="upa-total" id="upaGrandTotal"></div>
     <div class="modal-btns">
       <button class="btn" onclick="closeNiModal()">取消</button>
       <button class="btn primary" onclick="saveNewItem()">確定</button>
@@ -295,51 +540,110 @@ function openNewItemModal(gi, ii) {
   </div>`;
   document.body.appendChild(bg);
   bg.addEventListener('click', e => { if (e.target === bg) closeNiModal(); });
-  renderUpa('upaOrig', it.upa_orig);
-  renderUpa('upaNew', it.upa_new);
-  updateUpaSum();
+  renderUpaTable('orig');
+  renderUpaTable('new');
+  attachPasteHandler('orig');
+  attachPasteHandler('new');
+  updateSumsAndWeights();
+}
+function matDatalist() {
+  return '<datalist id="matTypesList">' + MATERIAL_TYPES.map(m => `<option value="${esc(m)}">`).join('') + '</datalist>';
 }
 function upaHeader() {
-  return '<tr><th>工料說明</th><th style="width:60px;">單位</th><th style="width:80px;">數量</th>' +
-         '<th style="width:90px;">單價</th><th style="width:90px;">備註(物調類別)</th><th style="width:34px;"></th></tr>';
+  return '<tr><th>工料說明</th><th style="width:60px;">單位</th><th style="width:78px;">數量</th>' +
+         '<th style="width:88px;">單價</th><th style="width:110px;">備註(物調類別)</th>' +
+         '<th style="width:30px;" title="搬到另一區">搬</th><th style="width:28px;"></th></tr>';
 }
-function renderUpa(tid, rows) {
-  const t = document.getElementById(tid);
-  t.innerHTML = upaHeader() + (rows || []).map((r, i) =>
-    `<tr><td><input value="${esc(r.desc)}" data-f="desc"></td>` +
-    `<td><input value="${esc(r.unit)}" data-f="unit"></td>` +
-    `<td class="n"><input type="number" value="${r.qty}" data-f="qty" oninput="updateUpaSum()"></td>` +
-    `<td class="n"><input type="number" value="${r.price}" data-f="price" oninput="updateUpaSum()"></td>` +
-    `<td><input value="${esc(r.remark)}" data-f="remark"></td>` +
-    `<td style="text-align:center;cursor:pointer;color:#c62828;" onclick="this.closest('tr').remove();updateUpaSum()">✕</td></tr>`
-  ).join('');
+function renderUpaTable(section) {
+  const rows = _upaState[section];
+  const t = document.getElementById('upaTbl_' + section);
+  const arrow = section === 'orig' ? '→新增' : '→原契約';
+  t.innerHTML = upaHeader() + rows.map((r, i) =>
+    `<tr>` +
+    `<td><input value="${esc(r.desc)}" oninput="updateCell('${section}',${i},'desc',this.value)"></td>` +
+    `<td><input value="${esc(r.unit)}" oninput="updateCell('${section}',${i},'unit',this.value)"></td>` +
+    `<td class="n"><input type="text" inputmode="decimal" value="${r.qty}" oninput="updateCell('${section}',${i},'qty',this.value)"></td>` +
+    `<td class="n"><input type="text" inputmode="decimal" value="${r.price}" oninput="updateCell('${section}',${i},'price',this.value)"></td>` +
+    `<td><input list="matTypesList" value="${esc(r.remark)}" oninput="updateCell('${section}',${i},'remark',this.value)"></td>` +
+    `<td class="mv" title="${arrow}" onclick="moveUpaRow('${section}',${i})">⇄</td>` +
+    `<td class="rm" onclick="removeUpaRow('${section}',${i})">✕</td>` +
+    `</tr>`
+  ).join('') + matDatalist();
 }
-function addUpaRow(tid) {
-  const t = document.getElementById(tid);
-  if (!t.querySelector('tr')) t.innerHTML = upaHeader();
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td><input data-f="desc"></td><td><input data-f="unit"></td>` +
-    `<td class="n"><input type="number" data-f="qty" value="0" oninput="updateUpaSum()"></td>` +
-    `<td class="n"><input type="number" data-f="price" value="0" oninput="updateUpaSum()"></td>` +
-    `<td><input data-f="remark"></td>` +
-    `<td style="text-align:center;cursor:pointer;color:#c62828;" onclick="this.closest('tr').remove();updateUpaSum()">✕</td>`;
-  t.appendChild(tr);
+function updateCell(section, idx, field, value) {
+  const r = _upaState[section][idx];
+  if (!r) return;
+  if (field === 'qty' || field === 'price') r[field] = parseNum(value);
+  else r[field] = value;
+  updateSumsAndWeights();
 }
-function collectUpa(tid) {
-  const rows = [];
-  document.querySelectorAll('#' + tid + ' tr').forEach(tr => {
-    const ins = tr.querySelectorAll('input');
-    if (!ins.length) return;
-    const r = {};
-    ins.forEach(inp => { r[inp.dataset.f] = inp.dataset.f === 'qty' || inp.dataset.f === 'price' ? (parseFloat(inp.value) || 0) : inp.value.trim(); });
-    if (r.desc || r.qty || r.price) rows.push({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' });
+function addUpaRow(section) {
+  _upaState[section].push({ desc: '', unit: '', qty: 0, price: 0, remark: '' });
+  renderUpaTable(section);
+  updateSumsAndWeights();
+}
+function removeUpaRow(section, idx) {
+  _upaState[section].splice(idx, 1);
+  renderUpaTable(section);
+  updateSumsAndWeights();
+}
+function moveUpaRow(section, idx) {
+  const other = section === 'orig' ? 'new' : 'orig';
+  const row = _upaState[section].splice(idx, 1)[0];
+  _upaState[other].push(row);
+  renderUpaTable(section);
+  renderUpaTable(other);
+  updateSumsAndWeights();
+}
+function attachPasteHandler(section) {
+  const wrap = document.getElementById('upaWrap_' + section);
+  wrap.addEventListener('paste', e => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text) return;
+    const lines = text.split(/\r\n|\n|\r/).filter(l => l.length > 0);
+    const looksMultiCell = lines.length > 1 || lines[0].includes('\t');
+    if (!looksMultiCell) return; // 單一數值貼到單一欄位：交給瀏覽器預設行為
+    e.preventDefault();
+    lines.forEach(line => {
+      const cols = line.split('\t');
+      _upaState[section].push({
+        desc: (cols[0] || '').trim(),
+        unit: (cols[1] || '').trim(),
+        qty: parseNum(cols[2]),
+        price: parseNum(cols[3]),
+        remark: (cols[4] || '').trim(),
+      });
+    });
+    renderUpaTable(section);
+    updateSumsAndWeights();
+    toast('已貼上 ' + lines.length + ' 列');
   });
-  return rows;
 }
-function updateUpaSum() {
-  const s = sumUpa(collectUpa('upaOrig')) + sumUpa(collectUpa('upaNew'));
-  const el = document.getElementById('upaSum');
-  if (el) el.textContent = '合計單價：' + s.toLocaleString();
+function calcWeights(rows) {
+  const subtotal = rows.reduce((s, r) => s + (parseNum(r.qty) * parseNum(r.price)), 0);
+  const byMat = {};
+  rows.forEach(r => {
+    if (!r.remark) return;
+    byMat[r.remark] = (byMat[r.remark] || 0) + parseNum(r.qty) * parseNum(r.price);
+  });
+  return MATERIAL_TYPES.filter(m => byMat[m]).map(m => ({
+    mat: m, amt: byMat[m], subtotal: subtotal,
+    pct: subtotal ? byMat[m] / subtotal : 0,
+  }));
+}
+function updateSumsAndWeights() {
+  ['orig', 'new'].forEach(section => {
+    const rows = _upaState[section];
+    const sub = sumUpa(rows);
+    document.getElementById('upaSum_' + section).textContent = '小計：' + sub.toLocaleString();
+    const weights = calcWeights(rows);
+    document.getElementById('upaWeights_' + section).innerHTML = weights.map(w =>
+      `物調權重：${esc(w.mat)}（${fmt(w.amt)}/${fmt(w.subtotal)}）＝${(w.pct * 100).toFixed(4)}%`
+    ).join('<br>');
+  });
+  const total = sumUpa(_upaState.orig) + sumUpa(_upaState.new);
+  const gt = document.getElementById('upaGrandTotal');
+  if (gt) gt.textContent = '每單位單價合計：' + total.toLocaleString();
 }
 function closeNiModal() { const m = document.getElementById('niModal'); if (m) m.remove(); _editing = null; }
 function saveNewItem() {
@@ -352,8 +656,8 @@ function saveNewItem() {
     desc: desc,
     unit: document.getElementById('niUnit').value.trim(),
     qty: parseFloat(document.getElementById('niQty').value) || 0,
-    upa_orig: collectUpa('upaOrig'),
-    upa_new: collectUpa('upaNew'),
+    upa_orig: _upaState.orig.filter(r => r.desc || r.qty || r.price),
+    upa_new: _upaState.new.filter(r => r.desc || r.qty || r.price),
   };
   if (_editing.ii !== null) newItems[_editing.ii] = item;
   else newItems.push(item);
