@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>變更設計工具</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Microsoft JhengHei', Arial, sans-serif; margin: 0; background: #f4f6f8; color: #333; }
+  header { background: #00695C; color: white; padding: 12px 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .spacer { flex: 1; }
+  header a { color: #b2dfdb; font-size: 13px; text-decoration: none; }
+  .toolbar { background: white; padding: 10px 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 50; }
+  .btn { border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; background: #eceff1; color: #333; }
+  .btn:hover { filter: brightness(0.95); }
+  .btn.primary { background: #00695C; color: white; }
+  .btn.blue { background: #1976D2; color: white; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .lbl-input { font-size: 12px; color: #666; display: flex; align-items: center; gap: 4px; }
+  .lbl-input input { width: 150px; padding: 5px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; }
+  #status { font-size: 12px; color: #888; margin-left: auto; }
+  main { padding: 14px 20px 60px; max-width: 1200px; margin: 0 auto; }
+  .hint { background: #fffde7; border: 1px solid #ffe082; border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.8; }
+  table.boq { width: 100%; border-collapse: collapse; background: white; font-size: 13px; margin-top: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  table.boq th { background: #37474F; color: white; padding: 7px 8px; font-size: 12px; position: sticky; top: 52px; }
+  table.boq td { border: 1px solid #e0e0e0; padding: 6px 8px; }
+  tr.grp td { background: #eceff1; font-weight: bold; color: #37474F; }
+  tr.grp .grp-add { float: right; font-size: 12px; padding: 2px 10px; }
+  tr.leaf.inc td { background: #e8f5e9; }
+  tr.leaf.dec td { background: #fff3e0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.qty-cell input { width: 90px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 13px; }
+  td.qty-cell .mini { font-size: 11px; color: #999; margin-left: 4px; cursor: pointer; }
+  tr.newitem td { background: #e3f2fd; }
+  tr.newitem .ni-ops { white-space: nowrap; }
+  tr.newitem .ni-ops span { cursor: pointer; margin-left: 8px; font-size: 12px; color: #1565C0; }
+  .rate-inputs input { width: 90px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 12px; }
+  .rate-inputs label { font-size: 11px; color: #777; }
+  /* modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 500; }
+  .modal { background: white; border-radius: 12px; padding: 20px; width: min(860px, 94vw); max-height: 90vh; overflow: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+  .modal h3 { margin: 0 0 12px; font-size: 15px; color: #00695C; }
+  .modal .row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .modal .row label { font-size: 12px; color: #666; display: block; margin-bottom: 3px; }
+  .modal .row input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; }
+  table.upa { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 4px; }
+  table.upa th { background: #f5f5f5; padding: 5px; border: 1px solid #ddd; }
+  table.upa td { border: 1px solid #ddd; padding: 3px; }
+  table.upa input { width: 100%; border: none; padding: 4px; font-size: 12px; background: transparent; }
+  table.upa td.n { width: 80px; } table.upa td.n input { text-align: right; }
+  .upa-sum { text-align: right; font-size: 12px; color: #00695C; font-weight: bold; }
+  .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  #toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.82); color: white; padding: 10px 22px; border-radius: 22px; font-size: 13px; display: none; z-index: 999; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📝 變更設計工具</h1>
+  <span style="font-size:12px;color:#b2dfdb;">載入原契約 → 增減數量 / 新增工項 → 產生變更設計明細表</span>
+  <div class="spacer"></div>
+  <a href="index.html">← 回管線進度系統</a>
+</header>
+
+<div class="toolbar">
+  <button class="btn primary" onclick="document.getElementById('fileInput').click()">① 載入原契約詳細表</button>
+  <input type="file" id="fileInput" accept=".xlsx" style="display:none" onchange="loadContract(this.files[0])">
+  <button class="btn" id="btnLoadState" disabled onclick="document.getElementById('stateInput').click()">讀入變更狀態</button>
+  <input type="file" id="stateInput" accept=".json" style="display:none" onchange="loadState(this.files[0])">
+  <button class="btn" id="btnSaveState" disabled onclick="saveState()">儲存變更狀態</button>
+  <span class="lbl-input">前次標題<input id="beforeLabel" value="第十二次修正預算"></span>
+  <span class="lbl-input">本次標題<input id="afterLabel" value="第一次變更設計"></span>
+  <button class="btn blue" id="btnGenerate" disabled onclick="generateXlsx()">② 產生變更設計明細表</button>
+  <span id="status"></span>
+</div>
+
+<main>
+  <div class="hint" id="hintBox">
+    <b>使用方式</b><br>
+    1. 按【① 載入原契約詳細表】選擇台水格式的原契約 .xlsx（需含「契約詳細表」分頁）。<br>
+    2. 在工項列的「變更後數量」欄直接輸入新數量（比原數量大＝增加/綠色，小＝減少/橘色；清空＝取消變更）。<br>
+    3. 費率型項目（單價為 --）改填「增加金額 / 減少金額」。<br>
+    4. 分組標題列右側【＋新增項目】可加入全新工項（含單價分析）。<br>
+    5. 【儲存變更狀態】會下載 .json，之後可【讀入變更狀態】接續編輯；<b>此檔與桌面版工具完全互通</b>。<br>
+    6. 按【② 產生變更設計明細表】下載完整 .xlsx（含增減表、新增項目、單價分析表）。
+  </div>
+  <div id="tableWrap"></div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ====== 設定：部署 API 後把網址填在這裡 ======
+const API_BASE = 'https://pipe-change-design-api-850504271041.asia-east1.run.app';
+// ============================================
+
+let contractFile = null;   // 原契約 File（generate 時要再上傳一次）
+let groups = [];           // /parse 回傳的分組樹
+let changes = {};          // code -> 變更後數量
+let rateAmounts = {};      // code -> {inc, dec}
+let newItems = [];         // NewItem 陣列（schema 同桌面版）
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.style.display = 'none', 2600);
+}
+function setStatus(s) { document.getElementById('status').textContent = s || ''; }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function authHeaders() {
+  const tk = localStorage.getItem('userToken');
+  return tk ? { 'X-User-Token': tk } : {};
+}
+
+// ---------- 載入原契約 ----------
+async function loadContract(file) {
+  if (!file) return;
+  contractFile = file;
+  setStatus('解析中…');
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(API_BASE + '/parse', { method: 'POST', body: fd, headers: authHeaders() });
+    if (!res.ok) throw new Error((await res.json()).detail || res.status);
+    const data = await res.json();
+    groups = data.groups || [];
+    changes = {}; rateAmounts = {}; newItems = [];
+    render();
+    document.getElementById('btnLoadState').disabled = false;
+    document.getElementById('btnSaveState').disabled = false;
+    document.getElementById('btnGenerate').disabled = false;
+    document.getElementById('hintBox').style.display = 'none';
+    setStatus('已載入：' + file.name + '（' + groups.length + ' 個分組）');
+  } catch (e) {
+    setStatus(''); toast('載入失敗：' + e.message);
+  }
+}
+
+// ---------- 畫面 ----------
+function shortCode(code) {
+  // 只顯示最後一節，完整編碼放 title
+  const m = String(code).match(/(\[\d+\]|[a-z]|\d+|<[^<>]+>)$/);
+  return m ? m[1] : code;
+}
+function render() {
+  let html = '<table class="boq"><thead><tr>' +
+    '<th style="width:70px;">項次</th><th>項目及說明</th><th style="width:52px;">單位</th>' +
+    '<th style="width:90px;">原數量</th><th style="width:90px;">單價</th>' +
+    '<th style="width:210px;">變更後數量</th></tr></thead><tbody>';
+
+  groups.forEach((g, gi) => {
+    html += `<tr class="grp"><td colspan="6">${esc(g.code)}　${esc(g.desc)}` +
+      `<button class="btn grp-add" onclick="openNewItemModal(${gi})">＋新增項目</button></td></tr>`;
+
+    g.leaves.forEach(lf => {
+      const codeAttr = esc(lf.code);
+      if (lf.is_rate) {
+        const ra = rateAmounts[lf.code] || { inc: '', dec: '' };
+        html += `<tr class="leaf" data-code="${codeAttr}"><td title="${codeAttr}">${esc(shortCode(lf.code))}</td>` +
+          `<td>${esc(lf.desc)} <span style="color:#999;font-size:11px;">（費率型）</span></td>` +
+          `<td>${esc(lf.unit)}</td><td class="num">${lf.orig_qty}</td><td class="num">--</td>` +
+          `<td class="rate-inputs"><label>增加$</label><input type="number" value="${ra.inc}" ` +
+          `onchange="setRate('${codeAttr}','inc',this.value)"> <label>減少$</label>` +
+          `<input type="number" value="${ra.dec}" onchange="setRate('${codeAttr}','dec',this.value)"></td></tr>`;
+      } else {
+        const nq = (lf.code in changes) ? changes[lf.code] : '';
+        const cls = nq === '' ? '' : (nq > lf.orig_qty ? 'inc' : (nq < lf.orig_qty ? 'dec' : ''));
+        html += `<tr class="leaf ${cls}" data-code="${codeAttr}"><td title="${codeAttr}">${esc(shortCode(lf.code))}</td>` +
+          `<td>${esc(lf.desc)}</td><td>${esc(lf.unit)}</td>` +
+          `<td class="num">${lf.orig_qty}</td><td class="num">${typeof lf.price === 'number' ? lf.price.toLocaleString() : esc(lf.price)}</td>` +
+          `<td class="qty-cell"><input type="number" value="${nq}" placeholder="（未變更）" ` +
+          `onchange="setQty('${codeAttr}', ${lf.orig_qty}, this.value)">` +
+          `<span class="mini" onclick="clearChange('${codeAttr}')">清除</span></td></tr>`;
+      }
+    });
+
+    // 此分組已加入的新增項目
+    newItems.forEach((it, ii) => {
+      if (it.group_code !== g.code) return;
+      const up = sumUpa(it.upa_orig) + sumUpa(it.upa_new);
+      html += `<tr class="newitem"><td>${esc(it.code)}</td>` +
+        `<td>🆕 ${esc(it.desc)}</td><td>${esc(it.unit)}</td>` +
+        `<td class="num">${it.qty}</td><td class="num">${up.toLocaleString()}</td>` +
+        `<td class="ni-ops">（新增項目）<span onclick="openNewItemModal(${gi}, ${ii})">編輯</span>` +
+        `<span onclick="deleteNewItem(${ii})">刪除</span></td></tr>`;
+    });
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = html;
+}
+
+// ---------- 變更操作 ----------
+function setQty(code, origQty, v) {
+  if (v === '' || v === null) { delete changes[code]; }
+  else { changes[code] = parseFloat(v); }
+  render();
+}
+function clearChange(code) { delete changes[code]; delete rateAmounts[code]; render(); }
+function setRate(code, kind, v) {
+  const cur = rateAmounts[code] || { inc: 0, dec: 0 };
+  cur[kind] = parseFloat(v) || 0;
+  if (!cur.inc && !cur.dec) delete rateAmounts[code];
+  else rateAmounts[code] = cur;
+}
+function deleteNewItem(ii) { newItems.splice(ii, 1); render(); }
+function sumUpa(rows) {
+  return Math.round((rows || []).reduce((s, r) => s + (parseFloat(r.qty) || 0) * (parseFloat(r.price) || 0), 0) * 100) / 100;
+}
+
+// ---------- 新增項目 modal ----------
+let _editing = null; // { gi, ii(可空=新建) }
+function openNewItemModal(gi, ii) {
+  _editing = { gi: gi, ii: (ii === undefined ? null : ii) };
+  const g = groups[gi];
+  const it = _editing.ii !== null ? newItems[_editing.ii]
+    : { code: '', desc: '', unit: '', qty: 0, upa_orig: [], upa_new: [] };
+
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg'; bg.id = 'niModal';
+  bg.innerHTML = `<div class="modal">
+    <h3>${_editing.ii !== null ? '編輯' : '新增'}項目 — ${esc(g.code)} ${esc(g.desc)}</h3>
+    <div class="row">
+      <div style="flex:2;"><label>項目說明</label><input id="niDesc" style="width:100%;" value="${esc(it.desc)}"></div>
+      <div><label>單位</label><input id="niUnit" style="width:80px;" value="${esc(it.unit)}"></div>
+      <div><label>數量</label><input id="niQty" type="number" style="width:100px;" value="${it.qty}"></div>
+    </div>
+    <div style="font-size:13px;font-weight:bold;color:#555;">單價分析 — 原契約單價部份</div>
+    <table class="upa" id="upaOrig"></table>
+    <button class="btn" onclick="addUpaRow('upaOrig')">＋新增一列</button>
+    <div style="font-size:13px;font-weight:bold;color:#555;margin-top:10px;">單價分析 — 新增單價部份</div>
+    <table class="upa" id="upaNew"></table>
+    <button class="btn" onclick="addUpaRow('upaNew')">＋新增一列</button>
+    <div class="upa-sum" id="upaSum" style="margin-top:10px;"></div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeNiModal()">取消</button>
+      <button class="btn primary" onclick="saveNewItem()">確定</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener('click', e => { if (e.target === bg) closeNiModal(); });
+  renderUpa('upaOrig', it.upa_orig);
+  renderUpa('upaNew', it.upa_new);
+  updateUpaSum();
+}
+function upaHeader() {
+  return '<tr><th>工料說明</th><th style="width:60px;">單位</th><th style="width:80px;">數量</th>' +
+         '<th style="width:90px;">單價</th><th style="width:90px;">備註(物調類別)</th><th style="width:34px;"></th></tr>';
+}
+function renderUpa(tid, rows) {
+  const t = document.getElementById(tid);
+  t.innerHTML = upaHeader() + (rows || []).map((r, i) =>
+    `<tr><td><input value="${esc(r.desc)}" data-f="desc"></td>` +
+    `<td><input value="${esc(r.unit)}" data-f="unit"></td>` +
+    `<td class="n"><input type="number" value="${r.qty}" data-f="qty" oninput="updateUpaSum()"></td>` +
+    `<td class="n"><input type="number" value="${r.price}" data-f="price" oninput="updateUpaSum()"></td>` +
+    `<td><input value="${esc(r.remark)}" data-f="remark"></td>` +
+    `<td style="text-align:center;cursor:pointer;color:#c62828;" onclick="this.closest('tr').remove();updateUpaSum()">✕</td></tr>`
+  ).join('');
+}
+function addUpaRow(tid) {
+  const t = document.getElementById(tid);
+  if (!t.querySelector('tr')) t.innerHTML = upaHeader();
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><input data-f="desc"></td><td><input data-f="unit"></td>` +
+    `<td class="n"><input type="number" data-f="qty" value="0" oninput="updateUpaSum()"></td>` +
+    `<td class="n"><input type="number" data-f="price" value="0" oninput="updateUpaSum()"></td>` +
+    `<td><input data-f="remark"></td>` +
+    `<td style="text-align:center;cursor:pointer;color:#c62828;" onclick="this.closest('tr').remove();updateUpaSum()">✕</td>`;
+  t.appendChild(tr);
+}
+function collectUpa(tid) {
+  const rows = [];
+  document.querySelectorAll('#' + tid + ' tr').forEach(tr => {
+    const ins = tr.querySelectorAll('input');
+    if (!ins.length) return;
+    const r = {};
+    ins.forEach(inp => { r[inp.dataset.f] = inp.dataset.f === 'qty' || inp.dataset.f === 'price' ? (parseFloat(inp.value) || 0) : inp.value.trim(); });
+    if (r.desc || r.qty || r.price) rows.push({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' });
+  });
+  return rows;
+}
+function updateUpaSum() {
+  const s = sumUpa(collectUpa('upaOrig')) + sumUpa(collectUpa('upaNew'));
+  const el = document.getElementById('upaSum');
+  if (el) el.textContent = '合計單價：' + s.toLocaleString();
+}
+function closeNiModal() { const m = document.getElementById('niModal'); if (m) m.remove(); _editing = null; }
+function saveNewItem() {
+  const g = groups[_editing.gi];
+  const desc = document.getElementById('niDesc').value.trim();
+  if (!desc) { toast('請填項目說明'); return; }
+  const item = {
+    group_code: g.code,
+    code: _editing.ii !== null ? newItems[_editing.ii].code : ('新' + (newItems.filter(x => x.group_code === g.code).length + 1)),
+    desc: desc,
+    unit: document.getElementById('niUnit').value.trim(),
+    qty: parseFloat(document.getElementById('niQty').value) || 0,
+    upa_orig: collectUpa('upaOrig'),
+    upa_new: collectUpa('upaNew'),
+  };
+  if (_editing.ii !== null) newItems[_editing.ii] = item;
+  else newItems.push(item);
+  closeNiModal();
+  render();
+}
+
+// ---------- 變更狀態存/讀（schema 與桌面版完全相同，檔案互通）----------
+function currentState() {
+  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts };
+}
+function saveState() {
+  const blob = new Blob([JSON.stringify(currentState(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '變更狀態.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function loadState(file) {
+  if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      changes = {}; Object.keys(d.changes || {}).forEach(k => changes[k] = parseFloat(d.changes[k]));
+      newItems = d.new_items || [];
+      rateAmounts = {};
+      Object.keys(d.rate_amounts || {}).forEach(k => rateAmounts[k] = { inc: parseFloat(d.rate_amounts[k].inc) || 0, dec: parseFloat(d.rate_amounts[k].dec) || 0 });
+      render();
+      toast('已讀入變更狀態');
+    } catch (e) { toast('讀取失敗：' + e.message); }
+  };
+  rd.readAsText(file);
+  document.getElementById('stateInput').value = '';
+}
+
+// ---------- 產生明細表 ----------
+async function generateXlsx() {
+  if (!contractFile) { toast('請先載入原契約'); return; }
+  setStatus('產生中…');
+  try {
+    const fd = new FormData();
+    fd.append('file', contractFile);
+    fd.append('state', JSON.stringify(currentState()));
+    fd.append('before_label', document.getElementById('beforeLabel').value || '前次修正預算');
+    fd.append('after_label', document.getElementById('afterLabel').value || '第N次變更設計');
+    const res = await fetch(API_BASE + '/generate', { method: 'POST', body: fd, headers: authHeaders() });
+    if (!res.ok) throw new Error((await res.json()).detail || res.status);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '變更設計明細表.xlsx';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setStatus('已下載');
+  } catch (e) {
+    setStatus(''); toast('產生失敗：' + e.message);
+  }
+}
+</script>
+</body>
+</html>
