@@ -41,8 +41,10 @@
   tr.newitem td { background: #e3f2fd; }
   tr.newitem .ni-ops { white-space: nowrap; }
   tr.newitem .ni-ops span { cursor: pointer; margin-left: 8px; font-size: 12px; color: #1565C0; }
-  .rate-inputs input { width: 90px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 12px; }
-  .rate-inputs label { font-size: 11px; color: #777; }
+  .rate-inputs { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
+  .rate-inputs .ri-grp { display: inline-flex; align-items: center; gap: 4px; }
+  .rate-inputs input { width: 84px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 12px; }
+  .rate-inputs label { font-size: 11px; color: #777; white-space: nowrap; }
   /* 右鍵選單 */
   .ctx-menu { position: fixed; background: white; border: 1px solid #cfd8dc; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.22); z-index: 900; min-width: 168px; overflow: hidden; padding: 4px 0; }
   .ctx-menu button { display: block; width: 100%; text-align: left; border: none; background: white; padding: 8px 14px; font-size: 13px; cursor: pointer; color: #333; }
@@ -72,6 +74,19 @@
   .upa-weights { font-size: 11.5px; color: #c62828; font-weight: bold; line-height: 1.9; min-height: 4px; }
   .upa-sum { text-align: right; font-size: 12px; color: #00695C; font-weight: bold; }
   .upa-total { text-align: right; font-size: 13.5px; color: #00695C; font-weight: bold; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; }
+  /* 單價分析總表 master-detail */
+  .modal.wide { width: min(1180px, 97vw); }
+  .ov-grid { display: grid; grid-template-columns: 300px 1fr; gap: 14px; align-items: start; }
+  .ov-list { border: 1px solid #e0e0e0; border-radius: 8px; max-height: 66vh; overflow: auto; background: #fafafa; }
+  .ov-list .ov-grp { font-size: 11px; font-weight: bold; color: #607D8B; background: #eceff1; padding: 5px 10px; position: sticky; top: 0; }
+  .ov-list .ov-item { padding: 7px 10px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; gap: 6px; align-items: baseline; }
+  .ov-list .ov-item:hover { background: #eef3f2; }
+  .ov-list .ov-item.sel { background: #d7ebe7; font-weight: bold; }
+  .ov-list .ov-item .dot { color: #c62828; font-size: 10px; }
+  .ov-list .ov-item .dot.empty { color: #bbb; }
+  .ov-list .ov-item .oc { color: #1565C0; white-space: nowrap; }
+  .ov-detail { min-width: 0; }
+  .ov-empty { padding: 40px 20px; text-align: center; color: #999; font-size: 13px; }
   .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
   #toast { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.82); color: white; padding: 10px 22px; border-radius: 22px; font-size: 13px; display: none; z-index: 999; }
 </style>
@@ -95,6 +110,7 @@
   <span class="lbl-input">前次標題<input id="beforeLabel" value="第十二次修正預算"></span>
   <span class="lbl-input">本次標題<input id="afterLabel" value="第一次變更設計"></span>
   <button class="btn blue" id="btnGenerate" disabled onclick="generateXlsx()">② 產生變更設計明細表</button>
+  <button class="btn" id="btnUpaOverview" disabled onclick="openUpaOverview()">📋 單價分析總表</button>
   <button class="btn small" id="btnExpandAll" disabled onclick="setAllCollapsed(false)">展開全部</button>
   <button class="btn small" id="btnCollapseLeaf" disabled onclick="collapseLeafGroups(true)">收合明細</button>
   <button class="btn small" id="btnCollapseAll" disabled onclick="setAllCollapsed(true)">收合全部</button>
@@ -228,6 +244,7 @@ async function loadContract(file) {
     document.getElementById('btnLoadState').disabled = false;
     document.getElementById('btnSaveState').disabled = false;
     document.getElementById('btnGenerate').disabled = false;
+    document.getElementById('btnUpaOverview').disabled = false;
     document.getElementById('btnExpandAll').disabled = false;
     document.getElementById('btnCollapseLeaf').disabled = false;
     document.getElementById('btnCollapseAll').disabled = false;
@@ -428,7 +445,7 @@ function render() {
   let html = '<table class="boq"><thead><tr>' +
     '<th style="width:70px;">項次</th><th>項目及說明</th><th style="width:52px;">單位</th>' +
     '<th style="width:90px;">原數量</th><th style="width:90px;">單價</th>' +
-    '<th style="width:210px;">變更後數量</th></tr></thead><tbody>';
+    '<th style="width:250px;">變更後數量</th></tr></thead><tbody>';
 
   rows.forEach(row => {
     const anc = row.ancestorCodes;
@@ -459,11 +476,12 @@ function render() {
         const ra = rateAmounts[lf.code] || { inc: '', dec: '' };
         html += `<tr class="leaf${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
           `<td title="${codeAttr}" style="padding-left:${indent}px;">${esc(shortCode(lf.code))}</td>` +
-          `<td>${esc(lf.desc)} <span style="color:#999;font-size:11px;">（費率型）</span></td>` +
+          `<td>${esc(lf.desc)}</td>` +
           `<td>${esc(lf.unit)}</td><td class="num">${lf.orig_qty}</td><td class="num">--</td>` +
-          `<td class="rate-inputs"><label>增加$</label><input type="number" value="${ra.inc}" ` +
-          `onchange="setRate('${codeAttr}','inc',this.value)"> <label>減少$</label>` +
-          `<input type="number" value="${ra.dec}" onchange="setRate('${codeAttr}','dec',this.value)"></td></tr>`;
+          `<td class="rate-inputs">` +
+          `<span class="ri-grp"><label>增加$</label><input type="number" value="${ra.inc}" onchange="setRate('${codeAttr}','inc',this.value)"></span>` +
+          `<span class="ri-grp"><label>減少$</label><input type="number" value="${ra.dec}" onchange="setRate('${codeAttr}','dec',this.value)"></span>` +
+          `</td></tr>`;
       } else {
         const nq = (lf.code in changes) ? changes[lf.code] : '';
         const cls = nq === '' ? '' : (nq > lf.orig_qty ? 'inc' : (nq < lf.orig_qty ? 'dec' : ''));
@@ -679,7 +697,110 @@ function saveNewItem() {
   render();
 }
 
-// ---------- 變更狀態存/讀（schema 與桌面版完全相同，檔案互通）----------
+// ---------- 單價分析總表（總覽視窗：左側所有新增項目、右側編輯該項）----------
+let _ovSelIndex = null;   // 目前選取的 newItems 索引
+function openUpaOverview() {
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg'; bg.id = 'ovModal';
+  if (!newItems.length) {
+    bg.innerHTML = `<div class="modal"><h3>📋 單價分析總表 — 所有新增項目</h3>
+      <div class="ov-empty">目前還沒有任何新增項目。<br>請先在工項分組標題右側按【＋新增項目】建立項目，之後就能在這裡總覽所有單價分析。</div>
+      <div class="modal-btns"><button class="btn" onclick="closeUpaOverview()">關閉</button></div></div>`;
+    document.body.appendChild(bg);
+    bg.addEventListener('click', e => { if (e.target === bg) closeUpaOverview(); });
+    return;
+  }
+  bg.innerHTML = `<div class="modal wide">
+    <h3>📋 單價分析總表 — 所有新增項目</h3>
+    <div style="font-size:12px;color:#888;margin:-6px 0 10px;">左側點選項目 → 右側可直接編輯（數量/單價可打 2,000 或 2000）；也可從 Excel 複製多列，點一下表格後按 Ctrl+V 貼上。切換項目時會自動保存。</div>
+    <div class="ov-grid">
+      <div class="ov-list" id="ovList"></div>
+      <div class="ov-detail" id="ovDetail"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeUpaOverview()">關閉</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener('click', e => { if (e.target === bg) closeUpaOverview(); });
+  _ovSelIndex = null;
+  renderOvList();
+  selectOvItem(0);
+}
+function renderOvList() {
+  const el = document.getElementById('ovList');
+  if (!el) return;
+  // 依 group_code 分組顯示，對照桌面版的左側清單
+  const byGroup = {};
+  newItems.forEach((it, i) => { (byGroup[it.group_code] = byGroup[it.group_code] || []).push(i); });
+  const groupDesc = {};
+  groups.forEach(g => { groupDesc[g.code] = g.desc; });
+  let html = '';
+  Object.keys(byGroup).forEach(gc => {
+    html += `<div class="ov-grp">${esc(gc)}　${esc(groupDesc[gc] || '')}</div>`;
+    byGroup[gc].forEach(i => {
+      const it = newItems[i];
+      const hasRows = (it.upa_orig.length + it.upa_new.length) > 0;
+      html += `<div class="ov-item${i === _ovSelIndex ? ' sel' : ''}" onclick="selectOvItem(${i})">` +
+        `<span class="dot${hasRows ? '' : ' empty'}">●</span>` +
+        `<span class="oc">${esc(it.code)}</span><span>${esc(it.desc)}</span></div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+function selectOvItem(idx) {
+  commitOvCurrent();              // 先保存目前這一項的編輯
+  _ovSelIndex = idx;
+  const it = newItems[idx];
+  _upaState = {
+    orig: (it.upa_orig || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
+    new: (it.upa_new || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
+  };
+  const detail = document.getElementById('ovDetail');
+  detail.innerHTML = `
+    <div class="row">
+      <div style="flex:2;"><label>項目說明</label><input id="niDesc" style="width:100%;" value="${esc(it.desc)}" oninput="ovTouchHeader()"></div>
+      <div><label>單位</label><input id="niUnit" style="width:80px;" value="${esc(it.unit)}" oninput="ovTouchHeader()"></div>
+      <div><label>數量</label><input id="niQty" type="text" inputmode="decimal" style="width:100px;" value="${it.qty}" oninput="ovTouchHeader()"></div>
+    </div>
+    <div class="upa-sec-title">一、原契約單價部份 <span class="upa-hint">可從 Excel 選取多列直接 Ctrl+V 貼上</span></div>
+    <div id="upaWrap_orig"><table class="upa" id="upaTbl_orig"></table></div>
+    <button class="btn small" onclick="addUpaRow('orig')">＋新增一列</button>
+    <div class="upa-weights" id="upaWeights_orig"></div>
+    <div class="upa-sum" id="upaSum_orig"></div>
+    <div class="upa-sec-title" style="margin-top:16px;">二、新增單價部份 <span class="upa-hint">可從 Excel 選取多列直接 Ctrl+V 貼上</span></div>
+    <div id="upaWrap_new"><table class="upa" id="upaTbl_new"></table></div>
+    <button class="btn small" onclick="addUpaRow('new')">＋新增一列</button>
+    <div class="upa-weights" id="upaWeights_new"></div>
+    <div class="upa-sum" id="upaSum_new"></div>
+    <div class="upa-total" id="upaGrandTotal"></div>`;
+  renderUpaTable('orig');
+  renderUpaTable('new');
+  attachPasteHandler('orig');
+  attachPasteHandler('new');
+  updateSumsAndWeights();
+  renderOvList();
+}
+function ovTouchHeader() { /* 佔位：欄位變更即時保存交給 commitOvCurrent（切換/關閉時） */ }
+function commitOvCurrent() {
+  if (_ovSelIndex === null || !newItems[_ovSelIndex]) return;
+  const dEl = document.getElementById('niDesc');
+  if (!dEl) return; // detail 尚未建立
+  const it = newItems[_ovSelIndex];
+  it.desc = dEl.value.trim() || it.desc;
+  it.unit = document.getElementById('niUnit').value.trim();
+  it.qty = parseNum(document.getElementById('niQty').value);
+  it.upa_orig = _upaState.orig.filter(r => r.desc || r.qty || r.price);
+  it.upa_new = _upaState.new.filter(r => r.desc || r.qty || r.price);
+}
+function closeUpaOverview() {
+  commitOvCurrent();
+  const m = document.getElementById('ovModal');
+  if (m) m.remove();
+  _ovSelIndex = null;
+  render();
+}
+
 function currentState() {
   return { changes: changes, new_items: newItems, rate_amounts: rateAmounts };
 }
