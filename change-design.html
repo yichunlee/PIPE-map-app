@@ -104,6 +104,7 @@
 <div class="toolbar">
   <button class="btn primary" id="btnLoadContract" disabled onclick="document.getElementById('fileInput').click()">① 載入原契約詳細表</button>
   <input type="file" id="fileInput" accept=".xlsx" style="display:none" onchange="loadContract(this.files[0])">
+  <a class="btn small" href="原契約詳細表_範例.xlsx" download style="text-decoration:none;color:#00695C;background:#e0f2f1;" title="下載可上傳的原契約詳細表範例，供對照正確格式">⬇ 下載範例格式</a>
   <button class="btn" id="btnLoadState" disabled onclick="document.getElementById('stateInput').click()">讀入變更狀態</button>
   <input type="file" id="stateInput" accept=".json" style="display:none" onchange="loadState(this.files[0])">
   <button class="btn" id="btnSaveState" disabled onclick="saveState()">儲存變更狀態</button>
@@ -121,7 +122,7 @@
 <main>
   <div class="hint" id="hintBox">
     <b>使用方式</b><br>
-    1. 按【① 載入原契約詳細表】選擇台水格式的原契約 .xlsx（需含「契約詳細表」分頁）。<br>
+    1. 按【① 載入原契約詳細表】選擇台水格式的原契約 .xlsx（需含「契約詳細表」分頁）。不確定格式的話，可先按工具列的【⬇ 下載範例格式】對照。<br>
     2. 在工項列的「變更後數量」欄直接輸入新數量（比原數量大＝增加/綠色，小＝減少/橘色；清空＝取消變更）。滑鼠右鍵點一列可快速跳到編輯欄位或清除變更。<br>
     3. 費率型項目（單價為 --）改填「增加金額 / 減少金額」。<br>
     4. 分組標題列可點擊展開/收合；右側【＋新增項目】可加入全新工項（含單價分析）。標題列變紅＝底下有變更。<br>
@@ -670,7 +671,7 @@ function updateSumsAndWeights() {
     document.getElementById('upaSum_' + section).textContent = '小計：' + sub.toLocaleString();
     const weights = calcWeights(rows);
     document.getElementById('upaWeights_' + section).innerHTML = weights.map(w =>
-      `物調權重：${esc(w.mat)}（${fmt(w.amt)}/${fmt(w.subtotal)}）＝${(w.pct * 100).toFixed(4)}%`
+      `物調權重：${esc(w.mat)}（${w.amt.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}/${w.subtotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}）＝${(w.pct * 100).toFixed(4)}%`
     ).join('<br>');
   });
   const total = sumUpa(_upaState.orig) + sumUpa(_upaState.new);
@@ -717,7 +718,8 @@ function openUpaOverview() {
       <div class="ov-list" id="ovList"></div>
       <div class="ov-detail" id="ovDetail"></div>
     </div>
-    <div class="modal-btns">
+    <div class="modal-btns" style="align-items:center;">
+      <span style="margin-right:auto;font-size:11.5px;color:#999;">編輯會自動保存（切換項目、關閉視窗時皆會存回）。</span>
       <button class="btn" onclick="closeUpaOverview()">關閉</button>
     </div>
   </div>`;

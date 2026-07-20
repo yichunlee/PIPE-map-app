@@ -318,10 +318,10 @@ def generate_change_xlsx(model: ChangeModel, out_path,
     r = 3  # 目前寫入列
 
     def money_fmt(cell):
-        cell.number_format = '#,##0;(#,##0);-'
+        cell.number_format = '#,##0.00;(#,##0.00);-'
 
     def qty_fmt(cell):
-        cell.number_format = '#,##0.##;(#,##0.##);-'
+        cell.number_format = '#,##0.00;(#,##0.00);-'
 
     def dedup_ancestors(ancestors):
         """去除相鄰重複的祖先 code，回傳 [(code, desc), ...]"""
@@ -655,6 +655,19 @@ def generate_change_xlsx(model: ChangeModel, out_path,
     _add_analysis_sheets(wb, model)
     _add_upa_sheet(wb, model)
 
+    # ---- 全表文字自動換行（保留原水平對齊；垂直預設置中）----
+    for _w in wb.worksheets:
+        for _row in _w.iter_rows():
+            for _cell in _row:
+                if _cell.value is None or _cell.value == '':
+                    continue
+                _al = _cell.alignment
+                _cell.alignment = Alignment(
+                    horizontal=_al.horizontal,
+                    vertical=_al.vertical or 'center',
+                    wrap_text=True,
+                )
+
     wb.save(out_path)
     return out_path
 
@@ -885,8 +898,8 @@ def _add_upa_sheet(wb, model):
                 num = '+'.join(f'F{i}' for i in mdict[mat])
                 # 標籤用活公式顯示完整算式：物調權重：鋼筋（170,765/222,298）＝
                 lbl = ws.cell(row=r, column=2,
-                              value=(f'="物調權重："&"{mat}"&"（"&TEXT({num},"#,##0")'
-                                     f'&"/"&TEXT(F{sub_row},"#,##0")&"）＝"'))
+                              value=(f'="物調權重："&"{mat}"&"（"&TEXT({num},"#,##0.00")'
+                                     f'&"/"&TEXT(F{sub_row},"#,##0.00")&"）＝"'))
                 lbl.font = red_bold
                 wc = ws.cell(row=r, column=6,
                              value=f'=IF(F{sub_row}=0,0,({num})/F{sub_row})')
