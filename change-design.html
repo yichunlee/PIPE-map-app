@@ -69,6 +69,7 @@
   table.upa td { border: 1px solid #ddd; padding: 3px; }
   table.upa input, table.upa select { width: 100%; border: none; padding: 4px; font-size: 12px; background: transparent; }
   table.upa td.n { width: 82px; } table.upa td.n input { text-align: right; }
+  table.upa td.amt { width: 92px; text-align: right; padding-right: 7px; color: #00695C; font-variant-numeric: tabular-nums; background: #fafafa; }
   table.upa td.mv { width: 30px; text-align: center; cursor: pointer; color: #1565C0; }
   table.upa td.rm { width: 28px; text-align: center; cursor: pointer; color: #c62828; }
   .upa-weights { font-size: 11.5px; color: #c62828; font-weight: bold; line-height: 1.9; min-height: 4px; }
@@ -584,9 +585,11 @@ function matDatalist() {
 }
 function upaHeader() {
   return '<tr><th>工料說明</th><th style="width:60px;">單位</th><th style="width:78px;">數量</th>' +
-         '<th style="width:88px;">單價</th><th style="width:110px;">備註(物調類別)</th>' +
+         '<th style="width:82px;">單價</th><th style="width:92px;">複價</th><th style="width:110px;">備註(物調類別)</th>' +
          '<th style="width:30px;" title="搬到另一區">搬</th><th style="width:28px;"></th></tr>';
 }
+function rowAmt(r) { return parseNum(r.qty) * parseNum(r.price); }
+function fmtAmt(v) { return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function renderUpaTable(section) {
   const rows = _upaState[section];
   const t = document.getElementById('upaTbl_' + section);
@@ -597,6 +600,7 @@ function renderUpaTable(section) {
     `<td><input value="${esc(r.unit)}" oninput="updateCell('${section}',${i},'unit',this.value)"></td>` +
     `<td class="n"><input type="text" inputmode="decimal" value="${r.qty}" oninput="updateCell('${section}',${i},'qty',this.value)"></td>` +
     `<td class="n"><input type="text" inputmode="decimal" value="${r.price}" oninput="updateCell('${section}',${i},'price',this.value)"></td>` +
+    `<td class="amt" id="upaAmt_${section}_${i}">${fmtAmt(rowAmt(r))}</td>` +
     `<td><input list="matTypesList" value="${esc(r.remark)}" oninput="updateCell('${section}',${i},'remark',this.value)"></td>` +
     `<td class="mv" title="${arrow}" onclick="moveUpaRow('${section}',${i})">⇄</td>` +
     `<td class="rm" onclick="removeUpaRow('${section}',${i})">✕</td>` +
@@ -606,8 +610,13 @@ function renderUpaTable(section) {
 function updateCell(section, idx, field, value) {
   const r = _upaState[section][idx];
   if (!r) return;
-  if (field === 'qty' || field === 'price') r[field] = parseNum(value);
-  else r[field] = value;
+  if (field === 'qty' || field === 'price') {
+    r[field] = parseNum(value);
+    const amtCell = document.getElementById('upaAmt_' + section + '_' + idx);
+    if (amtCell) amtCell.textContent = fmtAmt(rowAmt(r));
+  } else {
+    r[field] = value;
+  }
   updateSumsAndWeights();
 }
 function addUpaRow(section) {
