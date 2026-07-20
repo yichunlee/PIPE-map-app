@@ -125,6 +125,7 @@ class NewItem:
         self.qty = qty
         self.upa_orig = []   # list[UPARow]  原契約單價部份
         self.upa_new = []    # list[UPARow]  新增單價部份
+        self.reason = ''     # 新增項目原因分析（匯出到分析表三）
 
     @property
     def orig_unit_price(self):
@@ -137,7 +138,7 @@ class NewItem:
     def to_dict(self):
         return {
             'group_code': self.group_code, 'code': self.code, 'desc': self.desc,
-            'unit': self.unit, 'qty': self.qty,
+            'unit': self.unit, 'qty': self.qty, 'reason': self.reason,
             'upa_orig': [r.to_dict() for r in self.upa_orig],
             'upa_new': [r.to_dict() for r in self.upa_new],
         }
@@ -145,6 +146,7 @@ class NewItem:
     @staticmethod
     def from_dict(d):
         it = NewItem(d['group_code'], d['code'], d['desc'], d['unit'], d['qty'])
+        it.reason = _clean(d.get('reason', ''))
         it.upa_orig = [UPARow(**r) for r in d.get('upa_orig', [])]
         it.upa_new = [UPARow(**r) for r in d.get('upa_new', [])]
         return it
@@ -221,6 +223,7 @@ class ChangeModel:
         self.changes = {}      # code -> new_qty
         self.new_items = []    # list[NewItem]
         self.rate_amounts = {} # code -> {'inc': 增加金額, 'dec': 減少金額}（費率型項目手填）
+        self.reasons = {}      # code -> 數量增加/減少原因分析（原契約工項用）
 
     # ---- 變更操作 ----
     def set_new_qty(self, code, new_qty):
@@ -249,6 +252,7 @@ class ChangeModel:
             'changes': self.changes,
             'new_items': [it.to_dict() for it in self.new_items],
             'rate_amounts': self.rate_amounts,
+            'reasons': self.reasons,
         }
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -260,6 +264,7 @@ class ChangeModel:
         self.new_items = [NewItem.from_dict(d) for d in data.get('new_items', [])]
         self.rate_amounts = {k: {'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
                              for k, v in data.get('rate_amounts', {}).items()}
+        self.reasons = {k: str(v) for k, v in data.get('reasons', {}).items() if str(v).strip()}
 
 
 def is_rate_item(lf):
@@ -755,11 +760,11 @@ def _add_analysis_sheets(wb, model, proj_name='', proj_no=''):
             if kind in ('inc', 'dec'):
                 lf, nq = rec[1], rec[2]
                 vals = [lf.code, lf.desc, lf.unit,
-                        lf.orig_qty, nq, '']
+                        lf.orig_qty, nq, model.reasons.get(lf.code, '')]
             else:  # new
                 it = rec[1]
                 unit_price = round(it.orig_unit_price + it.new_unit_price, 2)
-                vals = [it.code, it.desc, it.unit, unit_price, it.qty, '']
+                vals = [it.code, it.desc, it.unit, unit_price, it.qty, getattr(it, 'reason', '')]
             for ci, v in enumerate(vals, start=1):
                 c = ws.cell(row=r, column=ci, value=v)
                 c.font = normal; c.border = border

@@ -38,6 +38,8 @@
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.qty-cell input { width: 90px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 13px; }
   td.qty-cell .mini { font-size: 11px; color: #999; margin-left: 4px; cursor: pointer; }
+  td.reason-cell input { width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
+  td.reason-cell input:focus { border-color: #00695C; outline: none; }
   tr.newitem td { background: #e3f2fd; }
   tr.newitem .ni-ops { white-space: nowrap; }
   tr.newitem .ni-ops span { cursor: pointer; margin-left: 8px; font-size: 12px; color: #1565C0; }
@@ -158,6 +160,7 @@ let groups = [];           // /parse 回傳的分組樹（扁平陣列，每個 
 let changes = {};          // code -> 變更後數量
 let rateAmounts = {};      // code -> {inc, dec}
 let newItems = [];         // NewItem 陣列（schema 同桌面版）
+let reasons = {};          // code -> 數量增減原因分析（匯出到分析表）
 let leafByCode = {};        // code -> leaf 物件（快查表）
 let collapsedNodes = new Set(); // 已收合的節點 code
 
@@ -169,8 +172,14 @@ function toast(msg) {
 function setStatus(s) { document.getElementById('status').textContent = s || ''; }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function authHeaders() {
+  // 只附帶「還沒過期」的 token（與主系統共用 localStorage）；過期或無 token 一律匿名。
   const tk = localStorage.getItem('userToken');
-  return tk ? { 'X-User-Token': tk } : {};
+  if (!tk) return {};
+  try {
+    const payload = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload.exp || payload.exp * 1000 < Date.now()) return {};
+  } catch (e) { return {}; }
+  return { 'X-User-Token': tk };
 }
 // 容錯數字解析：接受 "2,000"、"2000"、空白等
 function parseNum(v) {
@@ -190,7 +199,7 @@ async function loadContract(file) {
     if (!res.ok) throw new Error((await res.json()).detail || res.status);
     const data = await res.json();
     groups = data.groups || [];
-    changes = {}; rateAmounts = {}; newItems = [];
+    changes = {}; rateAmounts = {}; newItems = []; reasons = {};
     leafByCode = {};
     groups.forEach(g => g.leaves.forEach(lf => { leafByCode[lf.code] = lf; }));
     collapseLeafGroups();   // 預設：只收合「直接掛工項的那一組」，上層結構保持展開
@@ -379,7 +388,7 @@ function headerCtxMenu(evt, code) {
   ]);
 }
 function clearGroupChanges(g) {
-  g.leaves.forEach(lf => { delete changes[lf.code]; delete rateAmounts[lf.code]; });
+  g.leaves.forEach(lf => { delete changes[lf.code]; delete rateAmounts[lf.code]; delete reasons[lf.code]; });
   newItems = newItems.filter(it => it.group_code !== g.code);
   render();
   toast('已清除「' + g.desc + '」的所有變更');
@@ -444,7 +453,7 @@ function render() {
   let html = '<table class="boq"><thead><tr>' +
     '<th style="width:70px;">項次</th><th>項目及說明</th><th style="width:52px;">單位</th>' +
     '<th style="width:90px;">原數量</th><th style="width:90px;">單價</th>' +
-    '<th style="width:250px;">變更後數量</th></tr></thead><tbody>';
+    '<th style="width:250px;">變更後數量</th><th style="width:210px;">變更原因</th></tr></thead><tbody>';
 
   rows.forEach(row => {
     const anc = row.ancestorCodes;
@@ -461,7 +470,7 @@ function render() {
         : '';
       html += `<tr class="hdr${hasChange ? ' changed' : ''}" data-code="${esc(node.code)}"${style} ` +
         `onclick="toggleNode('${esc(node.code)}')" oncontextmenu="${node.groupIndex !== null ? 'groupCtxMenu(event,' + node.groupIndex + ')' : 'headerCtxMenu(event,\'' + esc(node.code) + '\')'}">` +
-        `<td colspan="6" style="padding-left:${14 + indent}px;"><span class="toggle">${collapsed ? '⊞' : '⊟'}</span>` +
+        `<td colspan="7" style="padding-left:${14 + indent}px;"><span class="toggle">${collapsed ? '⊞' : '⊟'}</span>` +
         `${esc(node.code)}　${esc(node.desc)}${hasChange ? '<span class="badge">● 有變更</span>' : ''}${addBtn}</td></tr>`;
       return;
     }
@@ -480,17 +489,23 @@ function render() {
           `<td class="rate-inputs">` +
           `<span class="ri-grp"><label>增加$</label><input type="number" value="${ra.inc}" onchange="setRate('${codeAttr}','inc',this.value)"></span>` +
           `<span class="ri-grp"><label>減少$</label><input type="number" value="${ra.dec}" onchange="setRate('${codeAttr}','dec',this.value)"></span>` +
-          `</td></tr>`;
+          `</td><td></td></tr>`;
       } else {
         const nq = (lf.code in changes) ? changes[lf.code] : '';
         const cls = nq === '' ? '' : (nq > lf.orig_qty ? 'inc' : (nq < lf.orig_qty ? 'dec' : ''));
+        const reasonCell = row.isChanged
+          ? `<td class="reason-cell"><input type="text" value="${esc(reasons[lf.code] || '')}" ` +
+            `placeholder="（選填）數量${nq > lf.orig_qty ? '增加' : '減少'}原因" ` +
+            `onchange="setReason('${codeAttr}', this.value)"></td>`
+          : `<td></td>`;
         html += `<tr class="leaf ${cls}${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
           `<td title="${codeAttr}" style="padding-left:${indent}px;">${esc(shortCode(lf.code))}</td>` +
           `<td>${esc(lf.desc)}</td><td>${esc(lf.unit)}</td>` +
           `<td class="num">${lf.orig_qty}</td><td class="num val">${typeof lf.price === 'number' ? lf.price.toLocaleString() : esc(lf.price)}</td>` +
           `<td class="qty-cell"><input type="number" value="${nq}" placeholder="（未變更）" ` +
           `onchange="setQty('${codeAttr}', ${lf.orig_qty}, this.value)">` +
-          `<span class="mini" onclick="clearChange('${codeAttr}')">清除</span></td></tr>`;
+          `<span class="mini" onclick="clearChange('${codeAttr}')">清除</span></td>` +
+          reasonCell + `</tr>`;
       }
     } else if (row.type === 'newitem') {
       const it = row.item, ii = row.ii, gi = row.gi;
@@ -499,7 +514,9 @@ function render() {
         `<td>${esc(it.desc)}</td><td>${esc(it.unit)}</td>` +
         `<td class="num">${it.qty}</td><td class="num">${up.toLocaleString()}</td>` +
         `<td class="ni-ops">（新增項目）<span onclick="openNewItemModal(${gi}, ${ii})">編輯</span>` +
-        `<span onclick="deleteNewItem(${ii})">刪除</span></td></tr>`;
+        `<span onclick="deleteNewItem(${ii})">刪除</span></td>` +
+        `<td class="reason-cell"><input type="text" value="${esc(it.reason || '')}" ` +
+        `placeholder="（選填）新增項目原因" onchange="setNewItemReason(${ii}, this.value)"></td></tr>`;
     }
   });
 
@@ -514,7 +531,17 @@ function setQty(code, origQty, v) {
   else { changes[code] = parseFloat(v); }
   render();
 }
-function clearChange(code) { delete changes[code]; delete rateAmounts[code]; render(); }
+function clearChange(code) { delete changes[code]; delete rateAmounts[code]; delete reasons[code]; render(); }
+function setReason(code, v) {
+  v = String(v || '').trim();
+  if (v) reasons[code] = v; else delete reasons[code];
+  // 不重繪：原因欄不影響其他顯示，保持輸入焦點
+}
+function setNewItemReason(ii, v) {
+  if (!newItems[ii]) return;
+  v = String(v || '').trim();
+  if (v) newItems[ii].reason = v; else delete newItems[ii].reason;
+}
 function setRate(code, kind, v) {
   const cur = rateAmounts[code] || { inc: 0, dec: 0 };
   cur[kind] = parseFloat(v) || 0;
@@ -860,7 +887,7 @@ function closeUpaOverview() {
 }
 
 function currentState() {
-  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts };
+  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts, reasons: reasons };
 }
 function saveState() {
   const blob = new Blob([JSON.stringify(currentState(), null, 2)], { type: 'application/json' });
@@ -881,6 +908,8 @@ function loadState(file) {
       sortNewItems();
       rateAmounts = {};
       Object.keys(d.rate_amounts || {}).forEach(k => rateAmounts[k] = { inc: parseFloat(d.rate_amounts[k].inc) || 0, dec: parseFloat(d.rate_amounts[k].dec) || 0 });
+      reasons = {};
+      Object.keys(d.reasons || {}).forEach(k => { const v = String(d.reasons[k] || '').trim(); if (v) reasons[k] = v; });
       collapseLeafGroups();
       render();
       toast('已讀入變更狀態');

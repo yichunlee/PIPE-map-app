@@ -148,6 +148,9 @@ async def generate(file: UploadFile = File(...),
         k: {'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
         for k, v in (data.get('rate_amounts') or {}).items()
     }
+    model.reasons = {
+        k: str(v) for k, v in (data.get('reasons') or {}).items() if str(v).strip()
+    }
 
     out_tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
     out_tmp.close()
