@@ -83,14 +83,10 @@
   .ov-list .ov-grp { font-size: 11px; font-weight: bold; color: #607D8B; background: #eceff1; padding: 5px 10px; position: sticky; top: 0; }
   .ov-list .ov-item { padding: 7px 10px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; gap: 6px; align-items: baseline; }
   .ov-list .ov-item:hover { background: #eef3f2; }
-  .ov-list .ov-item.ov-weight { background: #fff3cd; box-shadow: inset 3px 0 0 #f0ad4e; }
-  .ov-list .ov-item.ov-weight:hover { background: #ffe8a8; }
   .ov-list .ov-item.sel { background: #d7ebe7; font-weight: bold; }
-  .ov-list .ov-item.sel.ov-weight { background: #cfe8c9; box-shadow: inset 3px 0 0 #f0ad4e; }
   .ov-list .ov-item .dot { color: #c62828; font-size: 10px; }
   .ov-list .ov-item .dot.empty { color: #bbb; }
   .ov-list .ov-item .oc { color: #1565C0; white-space: nowrap; }
-  .ov-list .ov-item .wtag { margin-left: auto; font-size: 10px; color: #b26a00; background: #ffe08a; border-radius: 4px; padding: 1px 5px; white-space: nowrap; align-self: center; }
   .ov-detail { min-width: 0; }
   .ov-empty { padding: 40px 20px; text-align: center; color: #999; font-size: 13px; }
   .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
@@ -267,6 +263,51 @@ async function loadContract(file) {
 function shortCode(code) {
   const m = String(code).match(/(\[\d+\]|[a-z]|\d+|<[^<>]+>)$/);
   return m ? m[1] : code;
+}
+// 台水編碼排序（與後端 code_sort_key 一致）：中文大寫→小寫→英文→數字，再 [n]→字母→數字
+const _CN_BIG = '壹貳參叁肆伍陸柒捌玖拾';
+const _CN_SM = '一二三四五六七八九十';
+function codeSortKey(code) {
+  if (!code) return [];
+  const tokens = String(code).match(/<[^<>]+>|\[\d+\]|[a-z]|\d+|《[^》]*》/g) || [];
+  const key = [];
+  tokens.forEach(t => {
+    if (t.charAt(0) === '<' && t.charAt(t.length - 1) === '>') {
+      const ch = t.slice(1, -1);
+      if (ch.length === 1 && _CN_BIG.indexOf(ch) !== -1) key.push([0, _CN_BIG.indexOf(ch)]);
+      else if (ch.length === 1 && _CN_SM.indexOf(ch) !== -1) key.push([1, _CN_SM.indexOf(ch)]);
+      else if (/^[A-Z]+$/.test(ch)) key.push([2, ch]);
+      else if (/^\d+$/.test(ch)) key.push([3, parseInt(ch, 10)]);
+      else key.push([9, ch]);
+    } else if (t.charAt(0) === '[') {
+      key.push([4, parseInt(t.slice(1, -1), 10)]);
+    } else if (/^[a-z]$/.test(t)) {
+      key.push([5, t]);
+    } else if (/^\d+$/.test(t)) {
+      key.push([6, parseInt(t, 10)]);
+    } else {
+      key.push([9, t]);
+    }
+  });
+  return key;
+}
+function cmpKey(a, b) {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    if (a[i][0] !== b[i][0]) return a[i][0] - b[i][0];
+    if (a[i][1] < b[i][1]) return -1;
+    if (a[i][1] > b[i][1]) return 1;
+  }
+  return a.length - b.length;
+}
+// 編號是否已被佔用（撞到原契約工項或其他新增項目）；exceptIdx 為目前正在編輯的新增項目索引
+function isCodeTaken(code, exceptIdx) {
+  if (leafByCode[code]) return true;
+  for (let i = 0; i < newItems.length; i++) {
+    if (i === exceptIdx) continue;
+    if (newItems[i].code === code) return true;
+  }
+  return false;
 }
 function buildTree() {
   const root = { code: '__root__', desc: '', children: [], childMap: {}, groupIndex: null };
@@ -504,7 +545,7 @@ function render() {
       const it = row.item, ii = row.ii, gi = row.gi;
       const up = sumUpa(it.upa_orig) + sumUpa(it.upa_new);
       html += `<tr class="newitem"${style}><td title="${esc(it.code)}" style="padding-left:${indent}px;">${esc(shortCode(it.code))}</td>` +
-        `<td>🆕 ${esc(it.desc)}</td><td>${esc(it.unit)}</td>` +
+        `<td>${esc(it.desc)}</td><td>${esc(it.unit)}</td>` +
         `<td class="num">${it.qty}</td><td class="num">${up.toLocaleString()}</td>` +
         `<td class="ni-ops">（新增項目）<span onclick="openNewItemModal(${gi}, ${ii})">編輯</span>` +
         `<span onclick="deleteNewItem(${ii})">刪除</span></td></tr>`;
@@ -552,9 +593,11 @@ function openNewItemModal(gi, ii) {
 
   const bg = document.createElement('div');
   bg.className = 'modal-bg'; bg.id = 'niModal';
+  const initCode = _editing.ii !== null ? it.code : nextNewItemCode(g);
   bg.innerHTML = `<div class="modal">
     <h3>${_editing.ii !== null ? '編輯' : '新增'}項目 — ${esc(g.code)} ${esc(g.desc)}</h3>
     <div class="row">
+      <div><label>編號（序號）</label><input id="niCode" style="width:150px;" value="${esc(initCode)}" title="可修改以調整列印順序；不可與其他項次重複"></div>
       <div style="flex:2;"><label>項目說明</label><input id="niDesc" style="width:100%;" value="${esc(it.desc)}"></div>
       <div><label>單位</label><input id="niUnit" style="width:80px;" value="${esc(it.unit)}"></div>
       <div><label>數量</label><input id="niQty" type="number" style="width:100px;" value="${it.qty}"></div>
@@ -725,9 +768,12 @@ function saveNewItem() {
   const g = groups[_editing.gi];
   const desc = document.getElementById('niDesc').value.trim();
   if (!desc) { toast('請填項目說明'); return; }
+  const code = document.getElementById('niCode').value.trim();
+  if (!code) { toast('請填編號（序號）'); return; }
+  if (isCodeTaken(code, _editing.ii)) { toast('⚠ 編號重複：' + code + '，請改用其他編號'); return; }
   const item = {
     group_code: g.code,
-    code: _editing.ii !== null ? newItems[_editing.ii].code : nextNewItemCode(g),
+    code: code,
     desc: desc,
     unit: document.getElementById('niUnit').value.trim(),
     qty: parseFloat(document.getElementById('niQty').value) || 0,
@@ -774,25 +820,25 @@ function openUpaOverview() {
 function renderOvList() {
   const el = document.getElementById('ovList');
   if (!el) return;
-  // 依 group_code 分組顯示，對照桌面版的左側清單
-  const byGroup = {};
-  newItems.forEach((it, i) => { (byGroup[it.group_code] = byGroup[it.group_code] || []).push(i); });
   const groupDesc = {};
   groups.forEach(g => { groupDesc[g.code] = g.desc; });
-  let html = '';
-  Object.keys(byGroup).forEach(gc => {
-    html += `<div class="ov-grp">${esc(gc)}　${esc(groupDesc[gc] || '')}</div>`;
-    byGroup[gc].forEach(i => {
-      const it = newItems[i];
-      const allRows = (it.upa_orig || []).concat(it.upa_new || []);
-      const hasRows = allRows.length > 0;
-      const hasWeight = allRows.some(r => r.remark && MATERIAL_TYPES.indexOf(r.remark) !== -1);
-      html += `<div class="ov-item${i === _ovSelIndex ? ' sel' : ''}${hasWeight ? ' ov-weight' : ''}" onclick="selectOvItem(${i})" ` +
-        `title="${hasWeight ? '此項含物調權重' : ''}">` +
-        `<span class="dot${hasRows ? '' : ' empty'}">●</span>` +
-        `<span class="oc">${esc(it.code)}</span><span>${esc(it.desc)}</span>` +
-        `${hasWeight ? '<span class="wtag">物調</span>' : ''}</div>`;
-    });
+  // 依台水編號排序所有新增項目（與列印順序一致）
+  const order = newItems.map((it, i) => i).sort((a, b) =>
+    cmpKey(codeSortKey(newItems[a].code), codeSortKey(newItems[b].code)));
+  let html = '', lastGroup = null;
+  order.forEach(i => {
+    const it = newItems[i];
+    if (it.group_code !== lastGroup) {
+      lastGroup = it.group_code;
+      html += `<div class="ov-grp">${esc(it.group_code)}　${esc(groupDesc[it.group_code] || '')}</div>`;
+    }
+    const allRows = (it.upa_orig || []).concat(it.upa_new || []);
+    // 紅點＝此項含物調權重（工料有填物調類別）；否則灰點
+    const hasWeight = allRows.some(r => r.remark && MATERIAL_TYPES.indexOf(r.remark) !== -1);
+    html += `<div class="ov-item${i === _ovSelIndex ? ' sel' : ''}" onclick="selectOvItem(${i})" ` +
+      `title="${hasWeight ? '此項含物調權重' : ''}">` +
+      `<span class="dot${hasWeight ? '' : ' empty'}">●</span>` +
+      `<span class="oc">${esc(it.code)}</span><span>${esc(it.desc)}</span></div>`;
   });
   el.innerHTML = html;
 }
@@ -807,6 +853,7 @@ function selectOvItem(idx) {
   const detail = document.getElementById('ovDetail');
   detail.innerHTML = `
     <div class="row">
+      <div><label>編號（序號）</label><input id="niCode" style="width:150px;" value="${esc(it.code)}" onchange="validateOvCode(this)" title="可修改以調整排序/列印順序；不可與其他項次重複"></div>
       <div style="flex:2;"><label>項目說明</label><input id="niDesc" style="width:100%;" value="${esc(it.desc)}" oninput="ovTouchHeader()"></div>
       <div><label>單位</label><input id="niUnit" style="width:80px;" value="${esc(it.unit)}" oninput="ovTouchHeader()"></div>
       <div><label>數量</label><input id="niQty" type="text" inputmode="decimal" style="width:100px;" value="${it.qty}" oninput="ovTouchHeader()"></div>
@@ -830,6 +877,16 @@ function selectOvItem(idx) {
   renderOvList();
 }
 function ovTouchHeader() { /* 佔位：欄位變更即時保存交給 commitOvCurrent（切換/關閉時） */ }
+function validateOvCode(input) {
+  if (_ovSelIndex === null || !newItems[_ovSelIndex]) return;
+  const it = newItems[_ovSelIndex];
+  const code = input.value.trim();
+  if (!code) { toast('⚠ 編號不可空白'); input.value = it.code; return; }
+  if (code === it.code) return;               // 沒改
+  if (isCodeTaken(code, _ovSelIndex)) { toast('⚠ 編號重複：' + code + '，已還原'); input.value = it.code; return; }
+  it.code = code;      // 立即寫回
+  renderOvList();      // 左側清單依新編號重新排序
+}
 function commitOvCurrent() {
   if (_ovSelIndex === null || !newItems[_ovSelIndex]) return;
   const dEl = document.getElementById('niDesc');
