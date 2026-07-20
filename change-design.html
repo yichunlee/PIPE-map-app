@@ -69,6 +69,7 @@
   table.upa td { border: 1px solid #ddd; padding: 3px; }
   table.upa input, table.upa select { width: 100%; border: none; padding: 4px; font-size: 12px; background: transparent; }
   table.upa td.n { width: 82px; } table.upa td.n input { text-align: right; }
+  table.upa td.seq { width: 42px; text-align: center; color: #888; background: #fafafa; }
   table.upa td.amt { width: 92px; text-align: right; padding-right: 7px; color: #00695C; font-variant-numeric: tabular-nums; background: #fafafa; }
   table.upa td.mv { width: 30px; text-align: center; cursor: pointer; color: #1565C0; }
   table.upa td.rm { width: 28px; text-align: center; cursor: pointer; color: #c62828; }
@@ -82,10 +83,14 @@
   .ov-list .ov-grp { font-size: 11px; font-weight: bold; color: #607D8B; background: #eceff1; padding: 5px 10px; position: sticky; top: 0; }
   .ov-list .ov-item { padding: 7px 10px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; gap: 6px; align-items: baseline; }
   .ov-list .ov-item:hover { background: #eef3f2; }
+  .ov-list .ov-item.ov-weight { background: #fff3cd; box-shadow: inset 3px 0 0 #f0ad4e; }
+  .ov-list .ov-item.ov-weight:hover { background: #ffe8a8; }
   .ov-list .ov-item.sel { background: #d7ebe7; font-weight: bold; }
+  .ov-list .ov-item.sel.ov-weight { background: #cfe8c9; box-shadow: inset 3px 0 0 #f0ad4e; }
   .ov-list .ov-item .dot { color: #c62828; font-size: 10px; }
   .ov-list .ov-item .dot.empty { color: #bbb; }
   .ov-list .ov-item .oc { color: #1565C0; white-space: nowrap; }
+  .ov-list .ov-item .wtag { margin-left: auto; font-size: 10px; color: #b26a00; background: #ffe08a; border-radius: 4px; padding: 1px 5px; white-space: nowrap; align-self: center; }
   .ov-detail { min-width: 0; }
   .ov-empty { padding: 40px 20px; text-align: center; color: #999; font-size: 13px; }
   .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
@@ -498,7 +503,7 @@ function render() {
     } else if (row.type === 'newitem') {
       const it = row.item, ii = row.ii, gi = row.gi;
       const up = sumUpa(it.upa_orig) + sumUpa(it.upa_new);
-      html += `<tr class="newitem"${style}><td style="padding-left:${indent}px;">${esc(it.code)}</td>` +
+      html += `<tr class="newitem"${style}><td title="${esc(it.code)}" style="padding-left:${indent}px;">${esc(shortCode(it.code))}</td>` +
         `<td>🆕 ${esc(it.desc)}</td><td>${esc(it.unit)}</td>` +
         `<td class="num">${it.qty}</td><td class="num">${up.toLocaleString()}</td>` +
         `<td class="ni-ops">（新增項目）<span onclick="openNewItemModal(${gi}, ${ii})">編輯</span>` +
@@ -584,7 +589,7 @@ function matDatalist() {
   return '<datalist id="matTypesList">' + MATERIAL_TYPES.map(m => `<option value="${esc(m)}">`).join('') + '</datalist>';
 }
 function upaHeader() {
-  return '<tr><th>工料說明</th><th style="width:60px;">單位</th><th style="width:78px;">數量</th>' +
+  return '<tr><th style="width:42px;">項次</th><th>工料說明</th><th style="width:60px;">單位</th><th style="width:78px;">數量</th>' +
          '<th style="width:82px;">單價</th><th style="width:92px;">複價</th><th style="width:110px;">備註(物調類別)</th>' +
          '<th style="width:30px;" title="搬到另一區">搬</th><th style="width:28px;"></th></tr>';
 }
@@ -596,6 +601,7 @@ function renderUpaTable(section) {
   const arrow = section === 'orig' ? '→新增' : '→原契約';
   t.innerHTML = upaHeader() + rows.map((r, i) =>
     `<tr>` +
+    `<td class="seq">${i + 1}</td>` +
     `<td><input value="${esc(r.desc)}" oninput="updateCell('${section}',${i},'desc',this.value)"></td>` +
     `<td><input value="${esc(r.unit)}" oninput="updateCell('${section}',${i},'unit',this.value)"></td>` +
     `<td class="n"><input type="text" inputmode="decimal" value="${r.qty}" oninput="updateCell('${section}',${i},'qty',this.value)"></td>` +
@@ -688,13 +694,40 @@ function updateSumsAndWeights() {
   if (gt) gt.textContent = '每單位單價合計：' + total.toLocaleString();
 }
 function closeNiModal() { const m = document.getElementById('niModal'); if (m) m.remove(); _editing = null; }
+// 依台水編碼規則，算出某群組底下「下一個新增工項」的完整代碼。
+// 規則：leaf 代碼 = 群組碼 + 尾碼；尾碼分隔沿用原契約既有工項（群組碼結尾是數字→「-N」，是字母/括號→直接接「N」）。
+// 同時把已新增的項目一起納入，避免撞號。
+function nextNewItemCode(g) {
+  const G = g.code;
+  const parseSuffix = code => {
+    if (!code || code === G || code.indexOf(G) !== 0) return null;
+    const sfx = code.slice(G.length);
+    const m = sfx.match(/^(.*?)(\d+)$/);
+    if (!m) return null;
+    return { sep: m[1].endsWith('-') ? '-' : '', n: parseInt(m[2], 10) };
+  };
+  let sep = null, maxN = 0, any = false;
+  // 先用原契約 leaves 決定分隔符與目前最大序號（這是最正宗的編碼依據）
+  (g.leaves || []).forEach(lf => {
+    const p = parseSuffix(lf.code);
+    if (p) { any = true; if (sep === null) sep = p.sep; if (p.n > maxN) maxN = p.n; }
+  });
+  // 已新增項目也納入，避免與已存在的新代碼重複
+  newItems.forEach(it => {
+    if (it.group_code !== G) return;
+    const p = parseSuffix(it.code);
+    if (p) { any = true; if (sep === null) sep = p.sep; if (p.n > maxN) maxN = p.n; }
+  });
+  if (!any) { sep = '-'; maxN = 0; }   // 群組本身就是單一工項（leaf==group）→ 開一個子序列
+  return G + (sep || '') + (maxN + 1);
+}
 function saveNewItem() {
   const g = groups[_editing.gi];
   const desc = document.getElementById('niDesc').value.trim();
   if (!desc) { toast('請填項目說明'); return; }
   const item = {
     group_code: g.code,
-    code: _editing.ii !== null ? newItems[_editing.ii].code : ('新' + (newItems.filter(x => x.group_code === g.code).length + 1)),
+    code: _editing.ii !== null ? newItems[_editing.ii].code : nextNewItemCode(g),
     desc: desc,
     unit: document.getElementById('niUnit').value.trim(),
     qty: parseFloat(document.getElementById('niQty').value) || 0,
@@ -751,10 +784,14 @@ function renderOvList() {
     html += `<div class="ov-grp">${esc(gc)}　${esc(groupDesc[gc] || '')}</div>`;
     byGroup[gc].forEach(i => {
       const it = newItems[i];
-      const hasRows = (it.upa_orig.length + it.upa_new.length) > 0;
-      html += `<div class="ov-item${i === _ovSelIndex ? ' sel' : ''}" onclick="selectOvItem(${i})">` +
+      const allRows = (it.upa_orig || []).concat(it.upa_new || []);
+      const hasRows = allRows.length > 0;
+      const hasWeight = allRows.some(r => r.remark && MATERIAL_TYPES.indexOf(r.remark) !== -1);
+      html += `<div class="ov-item${i === _ovSelIndex ? ' sel' : ''}${hasWeight ? ' ov-weight' : ''}" onclick="selectOvItem(${i})" ` +
+        `title="${hasWeight ? '此項含物調權重' : ''}">` +
         `<span class="dot${hasRows ? '' : ' empty'}">●</span>` +
-        `<span class="oc">${esc(it.code)}</span><span>${esc(it.desc)}</span></div>`;
+        `<span class="oc">${esc(it.code)}</span><span>${esc(it.desc)}</span>` +
+        `${hasWeight ? '<span class="wtag">物調</span>' : ''}</div>`;
     });
   });
   el.innerHTML = html;
