@@ -92,19 +92,17 @@
   .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
   #toast { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.82); color: white; padding: 10px 22px; border-radius: 22px; font-size: 13px; display: none; z-index: 999; }
 </style>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <header>
   <h1>📝 變更設計工具</h1>
   <span style="font-size:12px;color:#b2dfdb;">載入原契約 → 增減數量 / 新增工項 → 產生變更設計明細表</span>
   <div class="spacer"></div>
-  <div id="authArea" style="display:flex;align-items:center;gap:8px;"></div>
   <a href="index.html">← 回管線進度系統</a>
 </header>
 
 <div class="toolbar">
-  <button class="btn primary" id="btnLoadContract" disabled onclick="document.getElementById('fileInput').click()">① 載入原契約詳細表</button>
+  <button class="btn primary" id="btnLoadContract" onclick="document.getElementById('fileInput').click()">① 載入原契約詳細表</button>
   <input type="file" id="fileInput" accept=".xlsx" style="display:none" onchange="loadContract(this.files[0])">
   <a class="btn small" href="原契約詳細表_範例.xlsx" download style="text-decoration:none;color:#00695C;background:#e0f2f1;" title="下載可上傳的原契約詳細表範例，供對照正確格式">⬇ 下載範例格式</a>
   <button class="btn" id="btnLoadState" disabled onclick="document.getElementById('stateInput').click()">讀入變更狀態</button>
@@ -151,56 +149,9 @@ const API_BASE = 'https://pipe-change-design-api-850504271041.asia-east1.run.app
 // ============================================
 
 // ====== 登入（獨立頁面，跟主系統用同一組 Google Client ID）======
-const GOOGLE_CLIENT_ID = '850504271041-0n2eqka71m9i9t2ss7b8gue27rk7cg26.apps.googleusercontent.com';
-
-function initAuth() {
-  const savedToken = localStorage.getItem('userToken');
-  const savedName = localStorage.getItem('userName');
-  if (savedToken && !isTokenExpired(savedToken)) {
-    renderLoggedIn(savedName || '使用者');
-  } else {
-    localStorage.removeItem('userToken');
-    renderLoginButton();
-  }
-}
-function isTokenExpired(token) {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-    return !payload.exp || payload.exp * 1000 < Date.now();
-  } catch (e) { return true; }
-}
-function renderLoginButton() {
-  document.getElementById('authArea').innerHTML = '<div id="gsiBtn"></div>';
-  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleSignIn });
-  google.accounts.id.renderButton(document.getElementById('gsiBtn'),
-    { theme: 'filled_blue', size: 'medium', text: 'signin' });
-  setButtonsEnabled(false);
-}
-function renderLoggedIn(name) {
-  document.getElementById('authArea').innerHTML =
-    '<span style="font-size:12px;color:#b2dfdb;">👤 ' + esc(name) + '</span>' +
-    '<button class="btn" style="background:#37474F;color:white;" onclick="logout()">登出</button>';
-  setButtonsEnabled(true);
-}
-function onGoogleSignIn(response) {
-  const token = response.credential;
-  let payload = {};
-  try { payload = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); } catch (e) {}
-  localStorage.setItem('userToken', token);
-  localStorage.setItem('userName', payload.name || payload.email || '使用者');
-  renderLoggedIn(payload.name || payload.email || '使用者');
-  toast('登入成功');
-}
-function logout() {
-  localStorage.removeItem('userToken');
-  localStorage.removeItem('userName');
-  renderLoginButton();
-}
-function setButtonsEnabled(loggedIn) {
-  const btn = document.getElementById('btnLoadContract');
-  if (btn) btn.disabled = !loggedIn;
-}
-window.addEventListener('load', () => { if (window.google && google.accounts) initAuth(); else setTimeout(initAuth, 300); });
+// ====== 免登入使用 ======
+// 此工具不需登入。若使用者已在主系統登入（同網域共用 localStorage），
+// authHeaders() 仍會自動附帶 token，與後端的選擇性驗證相容。
 
 let contractFile = null;   // 原契約 File（generate 時要再上傳一次）
 let groups = [];           // /parse 回傳的分組樹（扁平陣列，每個 group 帶 ancestors）

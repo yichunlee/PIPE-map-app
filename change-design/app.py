@@ -26,6 +26,8 @@ from change_core import ChangeModel, NewItem, generate_change_xlsx, is_rate_item
 
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+# 免登入模式：預設不驗證。只有明確設定 REQUIRE_AUTH=1（且有 GOOGLE_CLIENT_ID）才強制登入。
+REQUIRE_AUTH = os.environ.get('REQUIRE_AUTH', '') == '1'
 
 app = FastAPI(title='變更設計 API', version='1.0')
 app.add_middleware(
@@ -37,9 +39,9 @@ app.add_middleware(
 
 
 def _verify(token: str):
-    """驗證 Google ID Token（與主網站 Worker 相同的驗證邏輯）。"""
-    if not GOOGLE_CLIENT_ID:
-        return  # 未設定 client id = 開發模式，不驗證
+    """驗證 Google ID Token。免登入模式（預設）直接放行。"""
+    if not REQUIRE_AUTH or not GOOGLE_CLIENT_ID:
+        return  # 免登入模式：不驗證
     if not token:
         raise HTTPException(401, '需要登入（缺少 X-User-Token）')
     try:

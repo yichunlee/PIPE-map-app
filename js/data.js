@@ -118,6 +118,8 @@ function setMapContext(context, projectPipelines) {
         if (svgBtn1) svgBtn1.style.display = 'none';
         var scBtn = document.getElementById('projectSCurveBtn');
         if (scBtn) scBtn.style.display = 'flex';
+        var cdBtn1 = document.getElementById('changeDesignButton');
+        if (cdBtn1) cdBtn1.style.display = 'flex';   // 變更設計：免登入即可使用
         var ganttDrawerBtn0 = document.getElementById('ganttDrawerBtn');
         if (ganttDrawerBtn0) ganttDrawerBtn0.style.display = 'none';
         if (ids.layer)     { ids.layer.style.display = 'flex'; }
@@ -151,6 +153,8 @@ function setMapContext(context, projectPipelines) {
         if (svgBtn) svgBtn.style.display = 'flex';
         var scBtn2 = document.getElementById('projectSCurveBtn');
         if (scBtn2) scBtn2.style.display = 'flex';
+        var cdBtn2 = document.getElementById('changeDesignButton');
+        if (cdBtn2) cdBtn2.style.display = 'flex';   // 變更設計：免登入即可使用
         var ganttDrawerBtn = document.getElementById('ganttDrawerBtn');
         if (ganttDrawerBtn) ganttDrawerBtn.style.display = 'flex';
         if (ids.layer)     { ids.layer.style.display = 'flex'; }
