@@ -737,32 +737,31 @@ function updateSumsAndWeights() {
   if (gt) gt.textContent = '每單位單價合計：' + total.toLocaleString();
 }
 function closeNiModal() { const m = document.getElementById('niModal'); if (m) m.remove(); _editing = null; }
-// 依台水編碼規則，算出某群組底下「下一個新增工項」的完整代碼。
-// 規則：leaf 代碼 = 群組碼 + 尾碼；尾碼分隔沿用原契約既有工項（群組碼結尾是數字→「-N」，是字母/括號→直接接「N」）。
-// 同時把已新增的項目一起納入，避免撞號。
+// 「萬用」新增項目編號（完整移植單機版 _suggest_new_code 演算法）：
+// 1. 只看「群組碼後面純粹接 -N 或 N」的既有明細來決定分隔符與最大號
+//    （嚴格比對，巢狀子群組的明細不會被誤抓）；一切以原始檔案實際的編碼為準，不假設規則。
+// 2. 撞號檢查是全域的：所有明細碼 ∪ 所有群組碼 ∪ 已新增項目碼，
+//    用 while 迴圈遞增直到找到沒被用過的號碼，任何檔案編排都不會撞號。
 function nextNewItemCode(g) {
   const G = g.code;
-  const parseSuffix = code => {
-    if (!code || code === G || code.indexOf(G) !== 0) return null;
-    const sfx = code.slice(G.length);
-    const m = sfx.match(/^(.*?)(\d+)$/);
-    if (!m) return null;
-    return { sep: m[1].endsWith('-') ? '-' : '', n: parseInt(m[2], 10) };
-  };
-  let sep = null, maxN = 0, any = false;
-  // 先用原契約 leaves 決定分隔符與目前最大序號（這是最正宗的編碼依據）
+  let sep = null, maxN = 0;
   (g.leaves || []).forEach(lf => {
-    const p = parseSuffix(lf.code);
-    if (p) { any = true; if (sep === null) sep = p.sep; if (p.n > maxN) maxN = p.n; }
+    if (lf.code.indexOf(G) === 0) {
+      const m = lf.code.slice(G.length).match(/^(-?)(\d+)$/);
+      if (m) { sep = m[1]; maxN = Math.max(maxN, parseInt(m[2], 10)); }
+    }
   });
-  // 已新增項目也納入，避免與已存在的新代碼重複
-  newItems.forEach(it => {
-    if (it.group_code !== G) return;
-    const p = parseSuffix(it.code);
-    if (p) { any = true; if (sep === null) sep = p.sep; if (p.n > maxN) maxN = p.n; }
-  });
-  if (!any) { sep = '-'; maxN = 0; }   // 群組本身就是單一工項（leaf==group）→ 開一個子序列
-  return G + (sep || '') + (maxN + 1);
+  if (sep === null) { sep = '-'; maxN = 0; }   // 單項群組或找不到數字序列
+  const used = new Set(Object.keys(leafByCode));
+  groups.forEach(gr => used.add(gr.code));
+  newItems.forEach(it => used.add(it.code));
+  let n = maxN + 1;
+  while (used.has(G + sep + n)) n++;
+  return G + sep + n;
+}
+// 保持 newItems 依編碼排序（與單機版總表一致；匯出順序也會一致）
+function sortNewItems() {
+  newItems.sort((a, b) => cmpKey(codeSortKey(a.code), codeSortKey(b.code)));
 }
 function saveNewItem() {
   const g = groups[_editing.gi];
@@ -782,6 +781,7 @@ function saveNewItem() {
   };
   if (_editing.ii !== null) newItems[_editing.ii] = item;
   else newItems.push(item);
+  sortNewItems();
   closeNiModal();
   render();
 }
@@ -885,6 +885,8 @@ function validateOvCode(input) {
   if (code === it.code) return;               // 沒改
   if (isCodeTaken(code, _ovSelIndex)) { toast('⚠ 編號重複：' + code + '，已還原'); input.value = it.code; return; }
   it.code = code;      // 立即寫回
+  sortNewItems();      // 依新編號重新排序（含主表與匯出順序）
+  _ovSelIndex = newItems.indexOf(it);   // 排序後索引可能變動，重新對應
   renderOvList();      // 左側清單依新編號重新排序
 }
 function commitOvCurrent() {
@@ -925,6 +927,7 @@ function loadState(file) {
       const d = JSON.parse(rd.result);
       changes = {}; Object.keys(d.changes || {}).forEach(k => changes[k] = parseFloat(d.changes[k]));
       newItems = d.new_items || [];
+      sortNewItems();
       rateAmounts = {};
       Object.keys(d.rate_amounts || {}).forEach(k => rateAmounts[k] = { inc: parseFloat(d.rate_amounts[k].inc) || 0, dec: parseFloat(d.rate_amounts[k].dec) || 0 });
       collapseLeafGroups();
