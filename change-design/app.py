@@ -135,6 +135,15 @@ async def generate(file: UploadFile = File(...),
     except KeyError as e:
         raise HTTPException(400, f'變更狀態含有原契約找不到的項次：{e}')
     model.new_items = [NewItem.from_dict(d) for d in (data.get('new_items') or [])]
+    # 編號防呆（前端已擋，這裡是最後防線；.json 可能被手改或來自舊版檔案）：
+    # 新增項目編號不可與原契約項次/群組重複，彼此之間也不可重複。
+    seen_codes = set()
+    for it in model.new_items:
+        if it.code in model.leaf_by_code or it.code in model.group_by_code:
+            raise HTTPException(400, f'新增項目編號「{it.code}」與原契約項次重複，請修改後再產生')
+        if it.code in seen_codes:
+            raise HTTPException(400, f'新增項目編號「{it.code}」重複出現，請修改後再產生')
+        seen_codes.add(it.code)
     model.rate_amounts = {
         k: {'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
         for k, v in (data.get('rate_amounts') or {}).items()

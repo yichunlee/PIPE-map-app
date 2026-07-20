@@ -649,6 +649,9 @@ def generate_change_xlsx(model: ChangeModel, out_path,
     widths = [16, 44, 6, 11, 11, 10, 10, 16, 16, 14, 14]
     for ci, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(ci)].width = w
+    # 依標題長度動態放寬 H/I 欄（設上限 34 避免過寬；更長的字交給自動換行處理）
+    for col, label in (('H', before_label), ('I', after_label)):
+        ws.column_dimensions[col].width = max(16, min(34, int(len(str(label)) * 2.2)))
     ws.freeze_panes = 'A3'
 
     # ---- 附加分析表 ----
