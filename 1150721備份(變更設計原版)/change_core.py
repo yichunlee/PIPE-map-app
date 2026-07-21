@@ -57,10 +57,9 @@ def code_sort_key(code):
 # 資料模型
 # ----------------------------------------------------------------------------
 class Leaf:
-    """一個原契約明細項目（唯讀基準）。
-    orig_* = 原契約（永不變）；prev_* = 前次變更後（首次變更時等於原契約）。"""
+    """一個原契約明細項目（唯讀基準）。"""
     __slots__ = ('code', 'desc', 'unit', 'orig_qty', 'price', 'orig_total',
-                 'remark', 'group_code', 'prev_qty', 'prev_total')
+                 'remark', 'group_code')
 
     def __init__(self, code, desc, unit, qty, price, total, remark, group_code):
         self.code = code
@@ -71,9 +70,6 @@ class Leaf:
         self.orig_total = total if total is not None else 0
         self.remark = remark
         self.group_code = group_code
-        # 前次基準：首次變更時 = 原契約；第二次以後由 history 疊算後覆寫
-        self.prev_qty = self.orig_qty
-        self.prev_total = self.orig_total
 
 
 class Group:
@@ -224,55 +220,10 @@ class ChangeModel:
         roots, _, _, _ = parse_workbook(src_path)
         self.roots = roots
         self.groups, self.leaf_by_code, self.group_by_code = build_groups(roots)
-        self.changes = {}      # code -> new_qty（本次）
-        self.new_items = []    # list[NewItem]（本次新增）
-        self.rate_amounts = {} # code -> {'inc','dec'}（本次，費率型手填）
-        self.reasons = {}      # code -> 原因（本次）
-        # ---- 多次變更版本化 ----
-        self.revision = 1      # 目前是第幾次變更
-        self.history = []      # list[dict]：前面每一次的完整編輯內容（rev 由小到大）
-        # prev_new_items：前次（含以前）已存在的新增項目，攤平後當基準的一部分
-        self.prev_new_items = []   # list[NewItem]（唯讀基準，可被本次再增減/議價調價）
-        self.prev_rate_amounts = {} # code -> {'inc','dec'}（前次費率型累計金額）
-
-    def contract_signature(self):
-        """原契約指紋：用所有工項 code 串接雜湊，避免把甲工程的變更套到乙工程。"""
-        import hashlib
-        h = hashlib.md5()
-        for c in sorted(self.leaf_by_code):
-            h.update(c.encode('utf-8'))
-        return h.hexdigest()[:16]
-
-    def apply_history(self, history):
-        """把 history（前面每一次的編輯）依序疊算，得出「前次結果」作為本次基準。
-        - 原契約工項：prev_qty 覆寫為歷史最後一次改到的數量（沒改過就維持原契約）。
-        - 費率型項目：prev_rate_amounts 記前次累計到的增加/減少金額。
-        - 前次新增項目：收集進 self.prev_new_items，本次可再對它們增減/調單價。
-        """
-        self.history = list(history or [])
-        # 重置基準為原契約
-        for lf in self.leaf_by_code.values():
-            lf.prev_qty = lf.orig_qty
-            lf.prev_total = lf.orig_total
-        self.prev_rate_amounts = {}   # code -> {'inc','dec'}（前次費率型累計金額）
-        prev_items = {}   # code -> NewItem（後出現的覆蓋先出現的，代表最新狀態）
-        for rev in self.history:
-            # 原契約工項數量：後面的 revision 覆蓋前面的
-            for code, q in (rev.get('changes') or {}).items():
-                lf = self.leaf_by_code.get(code)
-                if lf is not None:
-                    lf.prev_qty = float(q)
-                    if isinstance(lf.price, (int, float)):
-                        lf.prev_total = round(float(q) * lf.price, 2)
-            # 費率型手填增減金額：後面的 revision 覆蓋前面的（議價後直接改的值）
-            for code, v in (rev.get('rate_amounts') or {}).items():
-                self.prev_rate_amounts[code] = {
-                    'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
-            # 新增項目：以 code 為鍵，後面的版本覆蓋（含議價後改的單價）
-            for d in (rev.get('new_items') or []):
-                it = NewItem.from_dict(d)
-                prev_items[it.code] = it
-        self.prev_new_items = list(prev_items.values())
+        self.changes = {}      # code -> new_qty
+        self.new_items = []    # list[NewItem]
+        self.rate_amounts = {} # code -> {'inc': 增加金額, 'dec': 減少金額}（費率型項目手填）
+        self.reasons = {}      # code -> 數量增加/減少原因分析（原契約工項用）
 
     # ---- 變更操作 ----
     def set_new_qty(self, code, new_qty):
@@ -295,102 +246,25 @@ class ChangeModel:
     def add_new_item(self, item: NewItem):
         self.new_items.append(item)
 
-    # ---- 儲存 / 讀取變更狀態（鏈狀多次格式；相容舊單層格式）----
-    def _current_dict(self):
-        return {
+    # ---- 儲存 / 讀取變更狀態 ----
+    def save_state(self, path):
+        data = {
             'changes': self.changes,
             'new_items': [it.to_dict() for it in self.new_items],
             'rate_amounts': self.rate_amounts,
             'reasons': self.reasons,
         }
-
-    def save_state(self, path):
-        data = {
-            'revision': self.revision,
-            'contract_sig': self.contract_signature(),
-            'history': self.history,
-            'current': self._current_dict(),
-        }
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-
-    def _load_current(self, cur):
-        self.changes = {k: float(v) for k, v in (cur.get('changes') or {}).items()}
-        self.new_items = [NewItem.from_dict(d) for d in (cur.get('new_items') or [])]
-        self.rate_amounts = {k: {'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
-                             for k, v in (cur.get('rate_amounts') or {}).items()}
-        self.reasons = {k: str(v) for k, v in (cur.get('reasons') or {}).items() if str(v).strip()}
 
     def load_state(self, path):
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
-        self.load_state_dict(data)
-
-    def load_state_dict(self, data):
-        """載入變更狀態。支援兩種格式：
-        - 新版鏈狀：{revision, contract_sig, history:[...], current:{...}}
-        - 舊版單層：{changes, new_items, rate_amounts, reasons}（視為 revision 1）
-        """
-        if 'current' in data or 'history' in data or 'revision' in data:
-            self.revision = int(data.get('revision', 1))
-            self.apply_history(data.get('history') or [])
-            self._load_current(data.get('current') or {})
-        else:
-            # 舊版單層 → 當作第一次變更，沒有歷史
-            self.revision = 1
-            self.apply_history([])
-            self._load_current(data)
-
-    def advance_to_next_revision(self):
-        """把『本次』收進 history，開始編下一次（供前端『另存為下一次』使用）。"""
-        self.history = list(self.history) + [self._current_dict()]
-        self.revision += 1
-        self.apply_history(self.history)
-        self.changes, self.new_items, self.rate_amounts, self.reasons = {}, [], {}, {}
-
-    def effective_changes(self, basis):
-        """basis='prev'：只本次的 changes。
-           basis='orig'：歷史所有 changes 疊完 + 本次覆蓋（相對原契約的累計數量）。"""
-        if basis == 'prev':
-            return dict(self.changes)
-        merged = {}
-        for rev in self.history:
-            for code, q in (rev.get('changes') or {}).items():
-                merged[code] = float(q)
-        merged.update(self.changes)
-        return merged
-
-    def effective_rate_amounts(self, basis):
-        """費率型手填增減金額。
-        - basis='orig'（累計表）：本次填的絕對金額（相對原契約 0）。
-        - basis='prev'（本次表）：本次相對前次的淨額 = 本次 − 前次累計。
-          淨額為正放 inc、為負放 dec，讓本次表只呈現這一次的增減。"""
-        if basis == 'orig':
-            return {k: {'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
-                    for k, v in self.rate_amounts.items()}
-        # basis == 'prev'
-        out = {}
-        codes = set(self.rate_amounts) | set(self.prev_rate_amounts)
-        for c in codes:
-            cur = self.rate_amounts.get(c, {'inc': 0, 'dec': 0})
-            prv = self.prev_rate_amounts.get(c, {'inc': 0, 'dec': 0})
-            # 淨值 = (本次inc-本次dec) - (前次inc-前次dec)
-            net = (float(cur.get('inc', 0)) - float(cur.get('dec', 0))) \
-                - (float(prv.get('inc', 0)) - float(prv.get('dec', 0)))
-            if abs(net) < 1e-9:
-                continue
-            out[c] = {'inc': net, 'dec': 0} if net > 0 else {'inc': 0, 'dec': -net}
-        return out
-
-    def effective_new_items(self, basis):
-        """basis='prev'：只本次新增。
-           basis='orig'：前次已存在的新增項目 + 本次新增（相對原契約，全部都算新增）。"""
-        if basis == 'prev':
-            return list(self.new_items)
-        by_code = {it.code: it for it in self.prev_new_items}
-        for it in self.new_items:
-            by_code[it.code] = it   # 本次若調整了前次項目（議價/改量），以本次為準
-        return list(by_code.values())
+        self.changes = {k: float(v) for k, v in data.get('changes', {}).items()}
+        self.new_items = [NewItem.from_dict(d) for d in data.get('new_items', [])]
+        self.rate_amounts = {k: {'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
+                             for k, v in data.get('rate_amounts', {}).items()}
+        self.reasons = {k: str(v) for k, v in data.get('reasons', {}).items() if str(v).strip()}
 
 
 def is_rate_item(lf):
@@ -410,35 +284,10 @@ C_CODE, C_DESC, C_UNIT, C_OQTY, C_NQTY, C_DQTY, C_PRICE, C_BEFORE, C_AFTER, C_IN
 
 def generate_change_xlsx(model: ChangeModel, out_path,
                          before_label='前次修正預算',
-                         after_label='第N次變更設計',
-                         basis='orig', _wb=None, _sheet_title='變更設計明細表',
-                         _add_extra_sheets=True):
-    """basis='orig'：增減相對原契約（累計變更表）；
-       basis='prev'：增減相對前次結果（本次變更表）。
-       兩者差別只在「基準數量/基準複價」取 orig_* 還是 prev_*。
-       _wb 傳入時寫進該活頁簿的新分頁（供雙表產出），否則自建並存檔。"""
-    def base_qty(lf):
-        return lf.prev_qty if basis == 'prev' else lf.orig_qty
-    def base_total(lf):
-        return lf.prev_total if basis == 'prev' else lf.orig_total
-    # 依 basis 取得有效的變更狀態（累計表要疊上歷史）
-    eff_changes = model.effective_changes(basis)
-    eff_rate = model.effective_rate_amounts(basis)
-    eff_new = model.effective_new_items(basis)
-    def rate_base_total(lf):
-        """費率型的『前次結果金額』：原契約複價 +（prev 基準時）前次累計增減淨額。"""
-        amt = lf.prev_total if basis == 'prev' else lf.orig_total
-        if basis == 'prev':
-            prv = model.prev_rate_amounts.get(lf.code, {'inc': 0, 'dec': 0})
-            amt = round(amt + float(prv.get('inc', 0)) - float(prv.get('dec', 0)), 2)
-        return amt
-    if _wb is not None:
-        wb = _wb
-        ws = wb.create_sheet(_sheet_title)
-    else:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = _sheet_title
+                         after_label='第N次變更設計'):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '變更設計明細表'
 
     thin = Side(style='thin', color='000000')
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -561,33 +410,31 @@ def generate_change_xlsx(model: ChangeModel, out_path,
         decreased, increased, unchanged_total = [], [], 0.0
         changed_orig_sum = 0.0
         for lf in g.leaves:
-            if lf.code in eff_rate:
+            if lf.code in model.rate_amounts:
                 # 費率型項目：手填增加/減少金額
-                ra = eff_rate[lf.code]
-                changed_orig_sum += rate_base_total(lf)
+                ra = model.rate_amounts[lf.code]
+                changed_orig_sum += lf.orig_total
                 if ra.get('inc', 0) > 0:
                     increased.append((lf, None))     # None 代表費率型
                 elif ra.get('dec', 0) > 0:
                     decreased.append((lf, None))
                 else:
-                    changed_orig_sum -= rate_base_total(lf)
-            elif lf.code in eff_changes:
-                nq = eff_changes[lf.code]
-                changed_orig_sum += base_total(lf)
-                if nq < base_qty(lf):
+                    changed_orig_sum -= lf.orig_total
+            elif lf.code in model.changes:
+                nq = model.changes[lf.code]
+                changed_orig_sum += lf.orig_total
+                if nq < lf.orig_qty:
                     decreased.append((lf, nq))
-                elif nq > base_qty(lf):
+                elif nq > lf.orig_qty:
                     increased.append((lf, nq))
                 # 等於就當未變動（但已被扣掉，補回）
                 else:
-                    changed_orig_sum -= base_total(lf)
+                    changed_orig_sum -= lf.orig_total
             # 未變動的稍後用殘差計算
-        group_orig_total = sum(
-            rate_base_total(lf) if not isinstance(lf.price, (int, float)) else base_total(lf)
-            for lf in g.leaves)
+        group_orig_total = sum(lf.orig_total for lf in g.leaves)
         unchanged_before = round(group_orig_total - changed_orig_sum, 2)
 
-        news = [it for it in eff_new if it.group_code == g.code]
+        news = [it for it in model.new_items if it.group_code == g.code]
         rendered_new_items.update(id(it) for it in news)
 
         # ---- 群組標題列（若本身就是層級，層級標題已印，不重複）----
@@ -620,19 +467,18 @@ def generate_change_xlsx(model: ChangeModel, out_path,
             ws.cell(row=r, column=C_CODE, value=lf.code).font = normal
             ws.cell(row=r, column=C_DESC, value=lf.desc).font = normal
             ws.cell(row=r, column=C_UNIT, value=lf.unit).font = normal
-            if nq is None:   # 費率型項目：單價為 '--'，金額用基準複價 + 手填增減
-                ra = eff_rate.get(lf.code, {'inc': 0, 'dec': 0})
-                base_amt = rate_base_total(lf)   # 前次結果金額（prev 基準含前次累計）
-                oq = ws.cell(row=r, column=C_OQTY, value=base_qty(lf)); qty_fmt(oq); oq.font = normal
-                nqc = ws.cell(row=r, column=C_NQTY, value=base_qty(lf)); qty_fmt(nqc); nqc.font = normal
+            if nq is None:   # 費率型項目：單價為 '--'，金額用 orig_total + 手填增減
+                ra = model.rate_amounts.get(lf.code, {'inc': 0, 'dec': 0})
+                oq = ws.cell(row=r, column=C_OQTY, value=lf.orig_qty); qty_fmt(oq); oq.font = normal
+                nqc = ws.cell(row=r, column=C_NQTY, value=lf.orig_qty); qty_fmt(nqc); nqc.font = normal
                 ws.cell(row=r, column=C_DQTY, value='').font = normal
                 ws.cell(row=r, column=C_PRICE, value='--').font = normal
-                hb = ws.cell(row=r, column=C_BEFORE, value=base_amt); money_fmt(hb); hb.font = normal
+                hb = ws.cell(row=r, column=C_BEFORE, value=lf.orig_total); money_fmt(hb); hb.font = normal
                 ha = ws.cell(row=r, column=C_AFTER, value=f'=H{r}+J{r}-K{r}'); money_fmt(ha); ha.font = normal
                 hi = ws.cell(row=r, column=C_INC, value=ra.get('inc', 0)); money_fmt(hi); hi.font = normal
                 hd = ws.cell(row=r, column=C_DEC, value=ra.get('dec', 0)); money_fmt(hd); hd.font = normal
             else:
-                oq = ws.cell(row=r, column=C_OQTY, value=base_qty(lf)); qty_fmt(oq); oq.font = normal
+                oq = ws.cell(row=r, column=C_OQTY, value=lf.orig_qty); qty_fmt(oq); oq.font = normal
                 nqc = ws.cell(row=r, column=C_NQTY, value=nq); qty_fmt(nqc); nqc.font = normal
                 dq = ws.cell(row=r, column=C_DQTY, value=f'=E{r}-D{r}'); qty_fmt(dq); dq.font = normal
                 pr = ws.cell(row=r, column=C_PRICE, value=lf.price); pr.number_format = '#,##0.00'; pr.font = normal
@@ -778,7 +624,7 @@ def generate_change_xlsx(model: ChangeModel, out_path,
     close_levels_to(0)
 
     # ---- 安全網：把 group_code 對不上任何群組的新增項目補在最後，避免遺漏 ----
-    orphans = [it for it in eff_new if id(it) not in rendered_new_items]
+    orphans = [it for it in model.new_items if id(it) not in rendered_new_items]
     if orphans:
         ws.cell(row=r, column=C_CODE, value='＊').font = bold
         ws.cell(row=r, column=C_DESC, value='其他新增項目（未歸入既有分組）').font = bold
@@ -813,60 +659,30 @@ def generate_change_xlsx(model: ChangeModel, out_path,
         ws.column_dimensions[col].width = max(16, min(34, int(len(str(label)) * 2.2)))
     ws.freeze_panes = 'A3'
 
-    # ---- 附加分析表（單表模式才在這裡加；雙表由 orchestrator 統一加）----
-    if _add_extra_sheets:
-        _add_analysis_sheets(wb, model)
-        _add_upa_sheet(wb, model)
-
-    # ---- 全表文字自動換行（保留原水平對齊；垂直預設置中）----
-    if _wb is None:
-        for _w in wb.worksheets:
-            for _row in _w.iter_rows():
-                for _cell in _row:
-                    if _cell.value is None or _cell.value == '':
-                        continue
-                    _al = _cell.alignment
-                    _cell.alignment = Alignment(
-                        horizontal=_al.horizontal,
-                        vertical=_al.vertical or 'center',
-                        wrap_text=True,
-                    )
-        wb.save(out_path)
-    return out_path
-
-
-def generate_change_workbook(model: ChangeModel, out_path,
-                             before_label='前次修正預算',
-                             after_label='第N次變更設計',
-                             orig_label='原契約'):
-    """依 revision 決定產出內容：
-    - revision == 1（首次）：單一主表（相對原契約），行為與舊版完全相同。
-    - revision >= 2：兩張主表——本次變更(前次→本次) + 累計變更(原契約→本次)。
-      分析表與單價分析表以累計(orig)為準。"""
-    if model.revision <= 1 or not model.history:
-        return generate_change_xlsx(model, out_path,
-                                    before_label=before_label, after_label=after_label,
-                                    basis='orig')
-    wb = openpyxl.Workbook()
-    wb.remove(wb.active)
-    generate_change_xlsx(model, out_path, before_label=before_label, after_label=after_label,
-                         basis='prev', _wb=wb, _sheet_title='本次變更明細表',
-                         _add_extra_sheets=False)
-    generate_change_xlsx(model, out_path, before_label=orig_label, after_label=after_label,
-                         basis='orig', _wb=wb, _sheet_title='累計變更明細表',
-                         _add_extra_sheets=False)
+    # ---- 附加分析表 ----
     _add_analysis_sheets(wb, model)
     _add_upa_sheet(wb, model)
+
+    # ---- 全表文字自動換行（保留原水平對齊；垂直預設置中）----
     for _w in wb.worksheets:
         for _row in _w.iter_rows():
             for _cell in _row:
                 if _cell.value is None or _cell.value == '':
                     continue
                 _al = _cell.alignment
-                _cell.alignment = Alignment(horizontal=_al.horizontal,
-                                            vertical=_al.vertical or 'center', wrap_text=True)
+                _cell.alignment = Alignment(
+                    horizontal=_al.horizontal,
+                    vertical=_al.vertical or 'center',
+                    wrap_text=True,
+                )
+
     wb.save(out_path)
     return out_path
+
+
+# ----------------------------------------------------------------------------
+# 分析表：原契約數量增加 / 減少 / 新增項目（比照契約變更分析表格式）
+# ----------------------------------------------------------------------------
 def _collect_ancestor_chain(model, code):
     """回傳某群組（依 code）由外到內的祖先 (code, desc) 清單。"""
     g = model.group_by_code.get(code)
@@ -883,19 +699,17 @@ def _add_analysis_sheets(wb, model, proj_name='', proj_no=''):
     title_fill = PatternFill('solid', fgColor='D9E1F2')
     anc_fill = PatternFill('solid', fgColor='F2F2F2')
 
-    # 蒐集三類資料（以累計 orig 基準：疊上歷史所有變更），保留群組順序與祖先鏈
-    eff_changes = model.effective_changes('orig')
-    eff_new = model.effective_new_items('orig')
+    # 蒐集三類資料，並保留群組順序與其祖先鏈
     inc_rows, dec_rows, new_rows = [], [], []
     for g in model.groups:
         for lf in g.leaves:
-            if lf.code in eff_changes:
-                nq = eff_changes[lf.code]
+            if lf.code in model.changes:
+                nq = model.changes[lf.code]
                 if nq > lf.orig_qty:
                     inc_rows.append((g, lf, nq))
                 elif nq < lf.orig_qty:
                     dec_rows.append((g, lf, nq))
-        for it in eff_new:
+        for it in model.new_items:
             if it.group_code == g.code:
                 new_rows.append((g, it))
 
@@ -1000,7 +814,7 @@ def _leaf_seq(code):
 # 單價分析表工作表：把所有新增項目的單價分析整理成一張（可微調）
 # ----------------------------------------------------------------------------
 def _add_upa_sheet(wb, model):
-    news = model.effective_new_items('orig')
+    news = list(model.new_items)
     if not news:
         return
     thin = Side(style='thin', color='000000')
