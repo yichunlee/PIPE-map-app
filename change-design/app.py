@@ -22,8 +22,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from change_core import (ChangeModel, NewItem, generate_change_xlsx,
-                         generate_change_workbook, is_rate_item)
+from change_core import ChangeModel, NewItem, generate_change_xlsx, is_rate_item
 
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
@@ -129,33 +128,35 @@ async def generate(file: UploadFile = File(...),
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f'變更狀態 JSON 格式錯誤：{e}')
 
-    # 套用變更狀態（支援新版鏈狀 {revision,history,current} 與舊版單層）
+    # 套用變更（與桌面版 load_state 相同語意）
     try:
-        model.load_state_dict(data)
+        for code, qty in (data.get('changes') or {}).items():
+            model.set_new_qty(code, float(qty))
     except KeyError as e:
         raise HTTPException(400, f'變更狀態含有原契約找不到的項次：{e}')
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f'變更狀態格式錯誤：{e}')
-
-    # 指紋防呆：狀態檔若標了 contract_sig，需與本次原契約相符
-    sig = (data.get('contract_sig') if isinstance(data, dict) else '') or ''
-    if sig and sig != model.contract_signature():
-        raise HTTPException(400, '變更狀態檔與這份原契約不符（指紋不同），請確認上傳的是同一件工程的原契約與狀態檔')
-
-    # 編號防呆（累計所有新增項目後，不可與原契約或彼此重複）
+    model.new_items = [NewItem.from_dict(d) for d in (data.get('new_items') or [])]
+    # 編號防呆（前端已擋，這裡是最後防線；.json 可能被手改或來自舊版檔案）：
+    # 新增項目編號不可與原契約項次/群組重複，彼此之間也不可重複。
     seen_codes = set()
-    for it in model.effective_new_items('orig'):
+    for it in model.new_items:
         if it.code in model.leaf_by_code or it.code in model.group_by_code:
             raise HTTPException(400, f'新增項目編號「{it.code}」與原契約項次重複，請修改後再產生')
         if it.code in seen_codes:
             raise HTTPException(400, f'新增項目編號「{it.code}」重複出現，請修改後再產生')
         seen_codes.add(it.code)
+    model.rate_amounts = {
+        k: {'inc': float(v.get('inc', 0)), 'dec': float(v.get('dec', 0))}
+        for k, v in (data.get('rate_amounts') or {}).items()
+    }
+    model.reasons = {
+        k: str(v) for k, v in (data.get('reasons') or {}).items() if str(v).strip()
+    }
 
     out_tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
     out_tmp.close()
     try:
-        generate_change_workbook(model, out_tmp.name,
-                                 before_label=before_label, after_label=after_label)
+        generate_change_xlsx(model, out_tmp.name,
+                             before_label=before_label, after_label=after_label)
         with open(out_tmp.name, 'rb') as f:
             content = f.read()
     except Exception as e:  # noqa: BLE001

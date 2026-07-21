@@ -41,7 +41,6 @@
   td.reason-cell input { width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
   td.reason-cell input:focus { border-color: #00695C; outline: none; }
   tr.newitem td { background: #e3f2fd; }
-  tr.previtem td { background: #fdf6e3; color: #5d4d1e; }
   tr.newitem .ni-ops { white-space: nowrap; }
   tr.newitem .ni-ops span { cursor: pointer; margin-left: 8px; font-size: 12px; color: #1565C0; }
   .rate-inputs { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
@@ -111,8 +110,6 @@
   <button class="btn" id="btnLoadState" disabled onclick="document.getElementById('stateInput').click()">讀入變更狀態</button>
   <input type="file" id="stateInput" accept=".json" style="display:none" onchange="loadState(this.files[0])">
   <button class="btn" id="btnSaveState" disabled onclick="saveState()">儲存變更狀態</button>
-  <button class="btn" id="btnNextRev" disabled onclick="advanceToNextRevision()" style="background:#fff3cd;" title="把目前這次定案，開始編輯下一次變更（前次結果會變成新基準）">⏭ 另存為下一次變更</button>
-  <span id="revBadge" style="font-size:12px;padding:4px 10px;border-radius:12px;background:#e0f2f1;color:#00695C;white-space:nowrap;">第 1 次變更（基準：原契約）</span>
   <span class="lbl-input">前次標題<input id="beforeLabel" value="第十二次修正預算"></span>
   <span class="lbl-input">本次標題<input id="afterLabel" value="第一次變更設計"></span>
   <button class="btn blue" id="btnGenerate" disabled onclick="generateXlsx()">② 產生變更設計明細表</button>
@@ -132,9 +129,8 @@
     3. 費率型項目（單價為 --）改填「增加金額 / 減少金額」。<br>
     4. 分組標題列可點擊展開/收合；右側【＋新增項目】可加入全新工項（含單價分析）。標題列變紅＝底下有變更。<br>
     5. 單價分析視窗：原契約 / 新增兩區可各自貼上 Excel 多列（Ctrl+V）、用「→」按鈕互相搬移列，物調權重即時顯示。<br>
-    6. 【儲存變更狀態】會下載 .json，之後可【讀入變更狀態】接續編輯；<b>此檔與桌面版工具相容</b>。<br>
-    7. 按【② 產生變更設計明細表】下載完整 .xlsx（含增減表、新增項目、單價分析表）。<br>
-    8. <b>第二次以後的變更設計</b>：先【儲存變更狀態】保留這一次，再按【⏭ 另存為下一次變更】——前次的結果會變成新基準，原數量欄會顯示「前次數量」，你在這個基礎上做下一次增減；前次的新增項目會以淡黃底列出，可按「調整/議價」修改單價或數量。第二次起產生的 .xlsx 會有「本次變更明細表（前次→本次）」與「累計變更明細表（原契約→本次）」兩張表。
+    6. 【儲存變更狀態】會下載 .json，之後可【讀入變更狀態】接續編輯；<b>此檔與桌面版工具完全互通</b>。<br>
+    7. 按【② 產生變更設計明細表】下載完整 .xlsx（含增減表、新增項目、單價分析表）。
   </div>
   <div id="tableWrap"></div>
 </main>
@@ -165,12 +161,6 @@ let changes = {};          // code -> 變更後數量
 let rateAmounts = {};      // code -> {inc, dec}
 let newItems = [];         // NewItem 陣列（schema 同桌面版）
 let reasons = {};          // code -> 數量增減原因分析（匯出到分析表）
-// ---- 多次變更版本化 ----
-let revision = 1;          // 目前在編第幾次變更
-let history = [];          // 前面每一次的完整編輯內容（rev 由小到大）
-let contractSig = '';      // 原契約指紋（載入契約後由前端算出，供存檔標記）
-// prevBaseline：把 history 疊算後得到的「前次結果」，供顯示前次數量/金額
-let prevBaseline = { qty: {}, rate: {}, items: {} };  // code -> 前次數量 / 前次費率淨額 / 前次新增項目
 let leafByCode = {};        // code -> leaf 物件（快查表）
 let collapsedNodes = new Set(); // 已收合的節點 code
 
@@ -210,18 +200,14 @@ async function loadContract(file) {
     const data = await res.json();
     groups = data.groups || [];
     changes = {}; rateAmounts = {}; newItems = []; reasons = {};
-    revision = 1; history = []; prevBaseline = { qty: {}, rate: {}, items: {} };
     leafByCode = {};
     groups.forEach(g => g.leaves.forEach(lf => { leafByCode[lf.code] = lf; }));
-    contractSig = computeContractSig();
     collapseLeafGroups();   // 預設：只收合「直接掛工項的那一組」，上層結構保持展開
     render();
-    updateRevisionUI();
     document.getElementById('btnLoadState').disabled = false;
     document.getElementById('btnSaveState').disabled = false;
     document.getElementById('btnGenerate').disabled = false;
     document.getElementById('btnUpaOverview').disabled = false;
-    document.getElementById('btnNextRev').disabled = false;
     document.getElementById('btnExpandAll').disabled = false;
     document.getElementById('btnCollapseLeaf').disabled = false;
     document.getElementById('btnCollapseAll').disabled = false;
@@ -281,11 +267,6 @@ function isCodeTaken(code, exceptIdx) {
     if (i === exceptIdx) continue;
     if (newItems[i].code === code) return true;
   }
-  // 前次新增項目也算佔用；但若本次正在編輯的就是同一碼（議價調整），不算重複
-  if (prevBaseline.items[code]) {
-    const editingCode = (exceptIdx != null && newItems[exceptIdx]) ? newItems[exceptIdx].code : null;
-    if (code !== editingCode) return true;
-  }
   return false;
 }
 function buildTree() {
@@ -316,14 +297,6 @@ function flattenTree(root) {
     if (node.groupIndex !== null) {
       const g = groups[node.groupIndex];
       g.leaves.forEach(lf => rows.push({ type: 'leaf', leaf: lf, gi: node.groupIndex, ancestorCodes: newAnc, depth: newAnc.length }));
-      // 前次已存在的新增項目（本次尚未編輯的）→ 唯讀顯示
-      const curCodes = new Set(newItems.map(it => it.code));
-      Object.keys(prevBaseline.items).forEach(code => {
-        const d = prevBaseline.items[code];
-        if (d.group_code === g.code && !curCodes.has(code)) {
-          rows.push({ type: 'previtem', item: d, gi: node.groupIndex, ancestorCodes: newAnc, depth: newAnc.length });
-        }
-      });
       newItems.forEach((it, ii) => {
         if (it.group_code === g.code) rows.push({ type: 'newitem', item: it, ii: ii, gi: node.groupIndex, ancestorCodes: newAnc, depth: newAnc.length });
       });
@@ -429,16 +402,11 @@ function calcTotals() {
       base += Number(lf.orig_total) || 0;
       if (lf.is_rate) {
         const ra = rateAmounts[lf.code];
-        if (ra) {
-          // 本次相對前次的淨額（費率型）
-          const prv = prevBaseline.rate[lf.code] || { inc: 0, dec: 0 };
-          const net = ((ra.inc || 0) - (ra.dec || 0)) - ((prv.inc || 0) - (prv.dec || 0));
-          if (net > 0) incAmt += net; else decAmt += -net;
-        }
+        if (ra) { incAmt += ra.inc || 0; decAmt += ra.dec || 0; }
       } else if (lf.code in changes) {
         const nq = changes[lf.code];
         const price = typeof lf.price === 'number' ? lf.price : 0;
-        const delta = (nq - prevQtyOf(lf)) * price;   // 相對前次
+        const delta = (nq - lf.orig_qty) * price;
         if (delta > 0) incAmt += delta; else decAmt += -delta;
       }
     });
@@ -474,7 +442,7 @@ function render() {
       const lf = row.leaf;
       isChanged = lf.is_rate
         ? !!(rateAmounts[lf.code] && (rateAmounts[lf.code].inc || rateAmounts[lf.code].dec))
-        : (lf.code in changes && changes[lf.code] !== prevQtyOf(lf));
+        : (lf.code in changes && changes[lf.code] !== lf.orig_qty);
     } else if (row.type === 'newitem') {
       isChanged = true;
     }
@@ -523,24 +491,19 @@ function render() {
           `<span class="ri-grp"><label>減少$</label><input type="number" value="${ra.dec}" onchange="setRate('${codeAttr}','dec',this.value)"></span>` +
           `</td><td></td></tr>`;
       } else {
-        const baseQty = prevQtyOf(lf);              // 本次編輯的基準（第1次=原契約，第2次起=前次結果）
         const nq = (lf.code in changes) ? changes[lf.code] : '';
-        const cls = nq === '' ? '' : (nq > baseQty ? 'inc' : (nq < baseQty ? 'dec' : ''));
+        const cls = nq === '' ? '' : (nq > lf.orig_qty ? 'inc' : (nq < lf.orig_qty ? 'dec' : ''));
         const reasonCell = row.isChanged
           ? `<td class="reason-cell"><input type="text" value="${esc(reasons[lf.code] || '')}" ` +
-            `placeholder="（選填）數量${nq > baseQty ? '增加' : '減少'}原因" ` +
+            `placeholder="（選填）數量${nq > lf.orig_qty ? '增加' : '減少'}原因" ` +
             `onchange="setReason('${codeAttr}', this.value)"></td>`
           : `<td></td>`;
-        // 原數量欄：第2次起顯示「前次數量」，滑鼠移上去看原契約數量
-        const baseCell = (revision > 1 && baseQty !== lf.orig_qty)
-          ? `<td class="num" title="原契約：${lf.orig_qty}" style="color:#b26a00;">${baseQty}<span style="font-size:10px;color:#999;"> (前次)</span></td>`
-          : `<td class="num">${lf.orig_qty}</td>`;
         html += `<tr class="leaf ${cls}${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
           `<td title="${codeAttr}" style="padding-left:${indent}px;">${esc(shortCode(lf.code))}</td>` +
           `<td>${esc(lf.desc)}</td><td>${esc(lf.unit)}</td>` +
-          baseCell + `<td class="num val">${typeof lf.price === 'number' ? lf.price.toLocaleString() : esc(lf.price)}</td>` +
+          `<td class="num">${lf.orig_qty}</td><td class="num val">${typeof lf.price === 'number' ? lf.price.toLocaleString() : esc(lf.price)}</td>` +
           `<td class="qty-cell"><input type="number" value="${nq}" placeholder="（未變更）" ` +
-          `onchange="setQty('${codeAttr}', ${baseQty}, this.value)">` +
+          `onchange="setQty('${codeAttr}', ${lf.orig_qty}, this.value)">` +
           `<span class="mini" onclick="clearChange('${codeAttr}')">清除</span></td>` +
           reasonCell + `</tr>`;
       }
@@ -554,14 +517,6 @@ function render() {
         `<span onclick="deleteNewItem(${ii})">刪除</span></td>` +
         `<td class="reason-cell"><input type="text" value="${esc(it.reason || '')}" ` +
         `placeholder="（選填）新增項目原因" onchange="setNewItemReason(${ii}, this.value)"></td></tr>`;
-    } else if (row.type === 'previtem') {
-      const it = row.item;
-      const up = sumUpa(it.upa_orig || []) + sumUpa(it.upa_new || []);
-      html += `<tr class="previtem"${style}><td title="${esc(it.code)}" style="padding-left:${indent}px;">${esc(shortCode(it.code))}</td>` +
-        `<td>${esc(it.desc)} <span style="font-size:11px;color:#b26a00;">（前次新增）</span></td><td>${esc(it.unit)}</td>` +
-        `<td class="num">${it.qty}</td><td class="num">${up.toLocaleString()}</td>` +
-        `<td class="ni-ops"><span onclick="adjustPrevItem('${esc(it.code)}')" style="color:#00695C;">調整/議價</span></td>` +
-        `<td></td></tr>`;
     }
   });
 
@@ -586,18 +541,6 @@ function setNewItemReason(ii, v) {
   if (!newItems[ii]) return;
   v = String(v || '').trim();
   if (v) newItems[ii].reason = v; else delete newItems[ii].reason;
-}
-// 把「前次新增項目」帶入本次編輯（議價調價 / 改量）：複製成本次 newItem 後開編輯視窗
-function adjustPrevItem(code) {
-  const d = prevBaseline.items[code];
-  if (!d) return;
-  const copy = JSON.parse(JSON.stringify(d));
-  newItems.push(copy);
-  sortNewItems();
-  render();
-  const ii = newItems.findIndex(x => x.code === code);
-  const gi = groups.findIndex(g => g.code === copy.group_code);
-  if (ii >= 0 && gi >= 0) openNewItemModal(gi, ii);
 }
 function setRate(code, kind, v) {
   const cur = rateAmounts[code] || { inc: 0, dec: 0 };
@@ -790,7 +733,6 @@ function nextNewItemCode(g) {
   const used = new Set(Object.keys(leafByCode));
   groups.forEach(gr => used.add(gr.code));
   newItems.forEach(it => used.add(it.code));
-  Object.keys(prevBaseline.items).forEach(c => used.add(c));
   let n = maxN + 1;
   while (used.has(G + sep + n)) n++;
   return G + sep + n;
@@ -944,101 +886,16 @@ function closeUpaOverview() {
   render();
 }
 
-// ---- 原契約指紋：與後端一致（md5(sorted(所有工項code) 串接) 前16碼）----
-// 瀏覽器 WebCrypto 不支援 MD5，這裡用精簡的純 JS MD5 實作，確保與後端 hashlib.md5 相同。
-function md5hex(str) {
-  function rl(n, c) { return (n << c) | (n >>> (32 - c)); }
-  function add(x, y) { const l = (x & 0xFFFF) + (y & 0xFFFF); return (((x >> 16) + (y >> 16) + (l >> 16)) << 16) | (l & 0xFFFF); }
-  function cmn(q, a, b, x, s, t) { return add(rl(add(add(a, q), add(x, t)), s), b); }
-  function ff(a, b, c, d, x, s, t) { return cmn((b & c) | (~b & d), a, b, x, s, t); }
-  function gg(a, b, c, d, x, s, t) { return cmn((b & d) | (c & ~d), a, b, x, s, t); }
-  function hh(a, b, c, d, x, s, t) { return cmn(b ^ c ^ d, a, b, x, s, t); }
-  function ii(a, b, c, d, x, s, t) { return cmn(c ^ (b | ~d), a, b, x, s, t); }
-  function toBytes(s) { const utf8 = unescape(encodeURIComponent(s)); const b = []; for (let i = 0; i < utf8.length; i++) b.push(utf8.charCodeAt(i)); return b; }
-  const bytes = toBytes(str); const len = bytes.length;
-  const words = [];
-  for (let i = 0; i < len; i++) words[i >> 2] = (words[i >> 2] || 0) | (bytes[i] << ((i % 4) * 8));
-  words[len >> 2] = (words[len >> 2] || 0) | (0x80 << ((len % 4) * 8));
-  const nBits = len * 8;
-  const nWords = (((len + 8) >> 6) + 1) * 16;
-  while (words.length < nWords) words.push(0);
-  words[nWords - 2] = nBits & 0xFFFFFFFF;
-  words[nWords - 1] = Math.floor(nBits / 0x100000000);
-  let a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
-  for (let i = 0; i < words.length; i += 16) {
-    const oa = a, ob = b, oc = c, od = d; const x = words.slice(i, i + 16);
-    a = ff(a, b, c, d, x[0], 7, -680876936); d = ff(d, a, b, c, x[1], 12, -389564586); c = ff(c, d, a, b, x[2], 17, 606105819); b = ff(b, c, d, a, x[3], 22, -1044525330);
-    a = ff(a, b, c, d, x[4], 7, -176418897); d = ff(d, a, b, c, x[5], 12, 1200080426); c = ff(c, d, a, b, x[6], 17, -1473231341); b = ff(b, c, d, a, x[7], 22, -45705983);
-    a = ff(a, b, c, d, x[8], 7, 1770035416); d = ff(d, a, b, c, x[9], 12, -1958414417); c = ff(c, d, a, b, x[10], 17, -42063); b = ff(b, c, d, a, x[11], 22, -1990404162);
-    a = ff(a, b, c, d, x[12], 7, 1804603682); d = ff(d, a, b, c, x[13], 12, -40341101); c = ff(c, d, a, b, x[14], 17, -1502002290); b = ff(b, c, d, a, x[15], 22, 1236535329);
-    a = gg(a, b, c, d, x[1], 5, -165796510); d = gg(d, a, b, c, x[6], 9, -1069501632); c = gg(c, d, a, b, x[11], 14, 643717713); b = gg(b, c, d, a, x[0], 20, -373897302);
-    a = gg(a, b, c, d, x[5], 5, -701558691); d = gg(d, a, b, c, x[10], 9, 38016083); c = gg(c, d, a, b, x[15], 14, -660478335); b = gg(b, c, d, a, x[4], 20, -405537848);
-    a = gg(a, b, c, d, x[9], 5, 568446438); d = gg(d, a, b, c, x[14], 9, -1019803690); c = gg(c, d, a, b, x[3], 14, -187363961); b = gg(b, c, d, a, x[8], 20, 1163531501);
-    a = gg(a, b, c, d, x[13], 5, -1444681467); d = gg(d, a, b, c, x[2], 9, -51403784); c = gg(c, d, a, b, x[7], 14, 1735328473); b = gg(b, c, d, a, x[12], 20, -1926607734);
-    a = hh(a, b, c, d, x[5], 4, -378558); d = hh(d, a, b, c, x[8], 11, -2022574463); c = hh(c, d, a, b, x[11], 16, 1839030562); b = hh(b, c, d, a, x[14], 23, -35309556);
-    a = hh(a, b, c, d, x[1], 4, -1530992060); d = hh(d, a, b, c, x[4], 11, 1272893353); c = hh(c, d, a, b, x[7], 16, -155497632); b = hh(b, c, d, a, x[10], 23, -1094730640);
-    a = hh(a, b, c, d, x[13], 4, 681279174); d = hh(d, a, b, c, x[0], 11, -358537222); c = hh(c, d, a, b, x[3], 16, -722521979); b = hh(b, c, d, a, x[6], 23, 76029189);
-    a = hh(a, b, c, d, x[9], 4, -640364487); d = hh(d, a, b, c, x[12], 11, -421815835); c = hh(c, d, a, b, x[15], 16, 530742520); b = hh(b, c, d, a, x[2], 23, -995338651);
-    a = ii(a, b, c, d, x[0], 6, -198630844); d = ii(d, a, b, c, x[7], 10, 1126891415); c = ii(c, d, a, b, x[14], 15, -1416354905); b = ii(b, c, d, a, x[5], 21, -57434055);
-    a = ii(a, b, c, d, x[12], 6, 1700485571); d = ii(d, a, b, c, x[3], 10, -1894986606); c = ii(c, d, a, b, x[10], 15, -1051523); b = ii(b, c, d, a, x[1], 21, -2054922799);
-    a = ii(a, b, c, d, x[8], 6, 1873313359); d = ii(d, a, b, c, x[15], 10, -30611744); c = ii(c, d, a, b, x[6], 15, -1560198380); b = ii(b, c, d, a, x[13], 21, 1309151649);
-    a = ii(a, b, c, d, x[4], 6, -145523070); d = ii(d, a, b, c, x[11], 10, -1120210379); c = ii(c, d, a, b, x[2], 15, 718787259); b = ii(b, c, d, a, x[9], 21, -343485551);
-    a = add(a, oa); b = add(b, ob); c = add(c, oc); d = add(d, od);
-  }
-  function hex(n) { let s = ''; for (let i = 0; i < 4; i++) s += ((n >> (i * 8)) & 0xFF).toString(16).padStart(2, '0'); return s; }
-  return hex(a) + hex(b) + hex(c) + hex(d);
-}
-function computeContractSig() {
-  const codes = Object.keys(leafByCode).sort();
-  return md5hex(codes.join('')).slice(0, 16);
-}
-
-// ---- 疊算歷史，算出「前次結果」基準 ----
-function applyHistory(hist) {
-  history = Array.isArray(hist) ? hist.slice() : [];
-  const qty = {}, rate = {}, items = {};
-  history.forEach(rev => {
-    Object.keys(rev.changes || {}).forEach(code => { qty[code] = parseFloat(rev.changes[code]); });
-    Object.keys(rev.rate_amounts || {}).forEach(code => {
-      rate[code] = { inc: parseFloat(rev.rate_amounts[code].inc) || 0, dec: parseFloat(rev.rate_amounts[code].dec) || 0 };
-    });
-    (rev.new_items || []).forEach(d => { items[d.code] = d; });
-  });
-  prevBaseline = { qty: qty, rate: rate, items: items };
-}
-// 前次數量（沒動過就用原契約）
-function prevQtyOf(lf) {
-  return (lf.code in prevBaseline.qty) ? prevBaseline.qty[lf.code] : lf.orig_qty;
-}
-
-function currentDict() {
-  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts, reasons: reasons };
-}
 function currentState() {
-  return {
-    revision: revision,
-    contract_sig: contractSig,
-    history: history,
-    current: currentDict(),
-  };
+  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts, reasons: reasons };
 }
 function saveState() {
   const blob = new Blob([JSON.stringify(currentState(), null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `變更狀態_第${revision}次.json`;
+  a.download = '變更狀態.json';
   a.click();
   URL.revokeObjectURL(a.href);
-}
-function loadCurrentDict(cur) {
-  cur = cur || {};
-  changes = {}; Object.keys(cur.changes || {}).forEach(k => changes[k] = parseFloat(cur.changes[k]));
-  newItems = cur.new_items || [];
-  sortNewItems();
-  rateAmounts = {};
-  Object.keys(cur.rate_amounts || {}).forEach(k => rateAmounts[k] = { inc: parseFloat(cur.rate_amounts[k].inc) || 0, dec: parseFloat(cur.rate_amounts[k].dec) || 0 });
-  reasons = {};
-  Object.keys(cur.reasons || {}).forEach(k => { const v = String(cur.reasons[k] || '').trim(); if (v) reasons[k] = v; });
 }
 function loadState(file) {
   if (!file) return;
@@ -1046,62 +903,20 @@ function loadState(file) {
   rd.onload = () => {
     try {
       const d = JSON.parse(rd.result);
-      // 指紋防呆：對不上就擋（沒有指紋的舊檔照舊放行）
-      if (d.contract_sig && contractSig && d.contract_sig !== contractSig) {
-        toast('⚠ 這份變更狀態檔與目前的原契約不符（指紋不同），請確認是同一件工程');
-        document.getElementById('stateInput').value = '';
-        return;
-      }
-      if (d.current || d.history || d.revision) {
-        // 新版鏈狀格式
-        revision = parseInt(d.revision, 10) || 1;
-        applyHistory(d.history || []);
-        loadCurrentDict(d.current || {});
-      } else {
-        // 舊版單層格式 → 當作第一次，沒有歷史
-        revision = 1;
-        applyHistory([]);
-        loadCurrentDict(d);
-      }
+      changes = {}; Object.keys(d.changes || {}).forEach(k => changes[k] = parseFloat(d.changes[k]));
+      newItems = d.new_items || [];
+      sortNewItems();
+      rateAmounts = {};
+      Object.keys(d.rate_amounts || {}).forEach(k => rateAmounts[k] = { inc: parseFloat(d.rate_amounts[k].inc) || 0, dec: parseFloat(d.rate_amounts[k].dec) || 0 });
+      reasons = {};
+      Object.keys(d.reasons || {}).forEach(k => { const v = String(d.reasons[k] || '').trim(); if (v) reasons[k] = v; });
       collapseLeafGroups();
       render();
-      updateRevisionUI();
-      toast(`已讀入變更狀態（第 ${revision} 次變更）`);
+      toast('已讀入變更狀態');
     } catch (e) { toast('讀取失敗：' + e.message); }
   };
   rd.readAsText(file);
   document.getElementById('stateInput').value = '';
-}
-
-// ---- 另存為下一次變更：把本次收進 history，開始編下一次 ----
-function advanceToNextRevision() {
-  const hasEdits = Object.keys(changes).length || newItems.length ||
-    Object.keys(rateAmounts).length;
-  if (!hasEdits) { toast('本次還沒有任何變更，不需另存為下一次'); return; }
-  if (!confirm(`確定要把目前的「第 ${revision} 次變更」定案，開始編輯「第 ${revision + 1} 次變更」嗎？\n\n（建議先按「儲存變更狀態」保留這一次的檔案）`)) return;
-  history = history.concat([currentDict()]);
-  revision += 1;
-  applyHistory(history);          // 重算前次基準（含剛加入的這次）
-  changes = {}; newItems = []; rateAmounts = {}; reasons = {};   // 本次清空
-  // 標題欄自動往前推
-  const beforeEl = document.getElementById('beforeLabel');
-  const afterEl = document.getElementById('afterLabel');
-  beforeEl.value = afterEl.value || `第${revision - 1}次變更設計`;
-  afterEl.value = `第${revision}次變更設計`;
-  collapseLeafGroups();
-  render();
-  updateRevisionUI();
-  toast(`已進入第 ${revision} 次變更；前次結果已設為基準`);
-}
-
-// ---- 更新版本相關的畫面提示 ----
-function updateRevisionUI() {
-  const badge = document.getElementById('revBadge');
-  if (badge) {
-    badge.textContent = revision === 1 ? '第 1 次變更（基準：原契約）'
-      : `第 ${revision} 次變更（基準：前次結果）`;
-    badge.style.background = revision === 1 ? '#e0f2f1' : '#fff3cd';
-  }
 }
 
 // ---------- 產生明細表 ----------
