@@ -15,7 +15,7 @@ import json
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
-from parse_boq import parse_workbook
+from parse_boq import parse_workbook, is_boilerplate, is_discard_rollup
 
 import re as _re
 
@@ -59,9 +59,9 @@ def code_sort_key(code):
 class Leaf:
     """一個原契約明細項目（唯讀基準）。"""
     __slots__ = ('code', 'desc', 'unit', 'orig_qty', 'price', 'orig_total',
-                 'remark', 'group_code')
+                 'remark', 'group_code', 'row_no')
 
-    def __init__(self, code, desc, unit, qty, price, total, remark, group_code):
+    def __init__(self, code, desc, unit, qty, price, total, remark, group_code, row_no=None):
         self.code = code
         self.desc = desc
         self.unit = unit
@@ -70,6 +70,7 @@ class Leaf:
         self.orig_total = total if total is not None else 0
         self.remark = remark
         self.group_code = group_code
+        self.row_no = row_no
 
 
 class Group:
@@ -165,7 +166,7 @@ def build_groups(roots):
         g = Group(code, desc, list(ancestors))
         for lf in leaves_src:
             leaf = Leaf(lf.code, lf.desc, lf.unit, lf.qty, lf.price,
-                        lf.total, lf.remark, code)
+                        lf.total, lf.remark, code, getattr(lf, 'row_no', None))
             g.leaves.append(leaf)
             leaf_by_code[lf.code] = leaf
         groups.append(g)
@@ -205,7 +206,7 @@ def build_groups(roots):
             # 頂層就是明細（例如 <柒>營業稅）：自成一個單項群組（無祖先）
             g = Group(r.code, r.desc, [])
             leaf = Leaf(r.code, r.desc, r.unit, r.qty, r.price, r.total,
-                        r.remark, r.code)
+                        r.remark, r.code, getattr(r, 'row_no', None))
             g.leaves.append(leaf)
             groups.append(g)
             group_by_code[r.code] = g
@@ -217,6 +218,7 @@ def build_groups(roots):
 
 class ChangeModel:
     def __init__(self, src_path):
+        self.src_path = src_path      # 保留原始檔路徑，供產生「變更後詳細價目表」時重用其 A 欄編碼
         roots, _, _, _ = parse_workbook(src_path)
         self.roots = roots
         self.groups, self.leaf_by_code, self.group_by_code = build_groups(roots)
@@ -280,6 +282,127 @@ COLS = ['項次', '項目及說明', '單位', '原定數量', '變更後數量'
 # 這裡「第十二次修正預算 / 第一次變更設計」的文字可由呼叫端覆寫
 
 C_CODE, C_DESC, C_UNIT, C_OQTY, C_NQTY, C_DQTY, C_PRICE, C_BEFORE, C_AFTER, C_INC, C_DEC = range(1, 12)
+
+
+def _newitem_rel_code(model, it):
+    """新增項目在詳細表 A 欄要放的『相對代號』。
+    新增項目編號 = 所屬 group 完整編碼 + 尾碼，尾碼即相對代號（如 <A><1>[1]16 → 16）。"""
+    gcode = it.group_code or ''
+    if it.code.startswith(gcode):
+        rel = it.code[len(gcode):]
+        return rel.lstrip('-') if rel.startswith('-') else rel
+    return _short_code(it.code)
+
+
+def generate_detail_boq(model: ChangeModel, out_path, title_suffix='（第一次變更設計後）'):
+    """產生『變更後詳細價目表』，格式與台水原契約詳細表相同，可被 parse_workbook 再次讀入。
+
+    策略（零風險、無公式快取問題）：
+      逐列掃描原始檔，把每一列原樣搬到新檔（A 欄相對代號、B 說明、C 單位直接沿用原檔值），
+      唯一改動：工項列的 D(數量) 換成變更後數量、E(單價)/F(複價) 一律寫『具體數值』(不留公式)。
+      小計/合計列丟棄（parse 會自行重算）。每個分組的新增項目，插在該組最後一列工項之後。
+    """
+    import openpyxl as _oxl
+    from openpyxl.styles import Alignment as _Al, Font as _Ft
+    src = _oxl.load_workbook(model.src_path, data_only=True)   # data_only：讀到公式的快取值
+    sws = src['契約詳細表'] if '契約詳細表' in src.sheetnames else src[src.sheetnames[0]]
+
+    # row_no -> leaf（用於取變更後數量、單價）
+    leaf_by_row = {lf.row_no: lf for lf in model.leaf_by_code.values() if lf.row_no}
+    # group 最後一列 -> 該組新增項目
+    news_by_last_row = {}
+    for it in model.new_items:
+        g = model.group_by_code.get(it.group_code)
+        rows = [lf.row_no for lf in (g.leaves if g else []) if lf.row_no]
+        if rows:
+            news_by_last_row.setdefault(max(rows), []).append(it)
+
+    out = _oxl.Workbook()
+    ows = out.active
+    ows.title = '契約詳細表'
+    left = _Al(horizontal='left', vertical='center', wrap_text=True)
+    right = _Al(horizontal='right', vertical='center')
+    center = _Al(horizontal='center', vertical='center')
+
+    def newitem_unit_price(it):
+        rows = ([d.to_dict() for d in it.upa_orig] + [d.to_dict() for d in it.upa_new]) \
+            if hasattr(it, 'upa_orig') else []
+        return round(sum((r.get('qty', 0) or 0) * (r.get('price', 0) or 0) for r in rows), 2)
+
+    orow = 0
+    for sr in range(1, sws.max_row + 1):
+        a = sws.cell(sr, 1).value
+        b = sws.cell(sr, 2).value
+        c = sws.cell(sr, 3).value
+        d = sws.cell(sr, 4).value
+        e = sws.cell(sr, 5).value
+        f = sws.cell(sr, 6).value
+        g = sws.cell(sr, 7).value
+
+        if is_boilerplate(a, b, c, d, e, f, g):
+            # 表頭原樣保留（給人看，parse 會跳過）
+            orow += 1
+            for col, val in enumerate([a, b, c, d, e, f, g], start=1):
+                if val is not None:
+                    ows.cell(orow, col, val)
+            continue
+        if is_discard_rollup(a, c, d, e, f):
+            continue   # 小計/合計列丟棄
+
+        lf = leaf_by_row.get(sr)
+        if lf is not None:
+            # 工項列：A/B/C 沿用原檔，D 換變更後數量，E/F 寫具體值
+            orow += 1
+            qty = model.changes.get(lf.code, lf.orig_qty)
+            price = lf.price
+            ows.cell(orow, 1, a); ows.cell(orow, 1).alignment = center
+            ows.cell(orow, 2, b); ows.cell(orow, 2).alignment = left
+            ows.cell(orow, 3, c); ows.cell(orow, 3).alignment = center
+            dcell = ows.cell(orow, 4, qty); dcell.alignment = right
+            if isinstance(price, (int, float)):
+                ows.cell(orow, 5, price).alignment = right
+                ows.cell(orow, 6, round(qty * price, 2)).alignment = right
+            else:
+                # 費率型：單價 '--'，複價沿用原檔快取值（或原契約複價）
+                ows.cell(orow, 5, price if price is not None else '--').alignment = center
+                ows.cell(orow, 6, f if f is not None else lf.orig_total).alignment = right
+            if g is not None:
+                ows.cell(orow, 7, g).alignment = left
+        else:
+            # 階層標題列（A 欄是代號、無 F 值）：原樣搬
+            orow += 1
+            for col, val in enumerate([a, b, c, d, e, f, g], start=1):
+                if val is not None:
+                    ows.cell(orow, col, val)
+            ows.cell(orow, 1).alignment = center
+            ows.cell(orow, 2).alignment = left
+
+        # 這列是某組最後一列工項 → 接著插入該組新增項目
+        if sr in news_by_last_row:
+            for it in news_by_last_row[sr]:
+                orow += 1
+                up = newitem_unit_price(it)
+                qty = float(it.qty or 0)
+                ows.cell(orow, 1, _newitem_rel_code(model, it)).alignment = center
+                ows.cell(orow, 2, it.desc).alignment = left
+                ows.cell(orow, 3, it.unit).alignment = center
+                ows.cell(orow, 4, qty).alignment = right
+                ows.cell(orow, 5, up).alignment = right
+                ows.cell(orow, 6, round(up * qty, 2)).alignment = right
+
+    # 表頭標注變更後版本
+    for rr in range(1, min(orow, 6) + 1):
+        v = ows.cell(rr, 1).value
+        if v and '詳細價目表' in str(v):
+            ows.cell(rr, 1, str(v) + '  ' + title_suffix)
+            break
+
+    # 欄寬
+    for col, w in zip('ABCDEFG', [16, 46, 6, 11, 12, 14, 12]):
+        ows.column_dimensions[col].width = w
+
+    out.save(out_path)
+    return out_path
 
 
 def generate_change_xlsx(model: ChangeModel, out_path,

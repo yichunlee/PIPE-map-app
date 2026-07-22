@@ -150,7 +150,8 @@ def parse_workbook(path, sheet_name='契約詳細表'):
             continue
 
         cls = classify(a)
-        is_leaf_row = f is not None
+        # 工項判準：F(複價)有值，或 有單位C且有數量D（小計列已於上面排除）
+        is_leaf_row = (f is not None) or (c is not None and d is not None)
 
         if a is None:
             # ---- 未編號列 ----
@@ -161,6 +162,7 @@ def parse_workbook(path, sheet_name='契約詳細表'):
                 leaf = Node('UN', (parent.code if parent else '') , b, 
                             (parent.tier + 1) if parent else 1, True,
                             unit=c, qty=d, price=e, total=f, remark=g)
+                leaf.row_no = r
                 attach_leaf(parent, leaf)
             else:
                 # 未編號標題：視為與目前開啟中的未編號標題平行(攤平一層)
@@ -182,6 +184,7 @@ def parse_workbook(path, sheet_name='契約詳細表'):
                 leaf = Node('UNK', (parent.code if parent else '') + str(a), b,
                             (parent.tier + 1) if parent else 1, True,
                             unit=c, qty=d, price=e, total=f, remark=g)
+                leaf.row_no = r
                 attach_leaf(parent, leaf)
             else:
                 node = Node('UNK', (parent.code if parent else '') + str(a), b,
@@ -201,6 +204,7 @@ def parse_workbook(path, sheet_name='契約詳細表'):
             if is_leaf_row:
                 leaf = Node(kind, code, b, tier, True, unit=c, qty=d, price=e,
                             total=f, remark=g)
+                leaf.row_no = r
                 attach_leaf(parent, leaf)
             else:
                 node = Node(kind, code, b, tier, False)
@@ -240,6 +244,7 @@ def parse_workbook(path, sheet_name='契約詳細表'):
         if is_leaf_row:
             leaf = Node(kind, code, b, tier, True, unit=c, qty=d, price=e,
                         total=f, remark=g)
+            leaf.row_no = r
             attach_leaf(parent, leaf)
         else:
             node = Node(kind, code, b, tier, False)

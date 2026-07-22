@@ -22,7 +22,8 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from change_core import ChangeModel, NewItem, generate_change_xlsx, is_rate_item
+from change_core import (ChangeModel, NewItem, generate_change_xlsx,
+                         generate_detail_boq, is_rate_item)
 
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
@@ -111,32 +112,18 @@ async def parse(file: UploadFile = File(...),
     return {'success': True, 'groups': groups}
 
 
-@app.post('/generate')
-async def generate(file: UploadFile = File(...),
-                   state: str = Form('{}'),
-                   before_label: str = Form('前次修正預算'),
-                   after_label: str = Form('第N次變更設計'),
-                   x_user_token: str = Header(default='')):
-    _verify(x_user_token)
-    try:
-        model = _load_model(await file.read())
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f'解析原契約失敗：{e}')
-
+def _apply_state(model: ChangeModel, state: str):
+    """把前端送來的變更狀態 JSON 套用到 model（含編號防呆）。"""
     try:
         data = json.loads(state or '{}')
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f'變更狀態 JSON 格式錯誤：{e}')
-
-    # 套用變更（與桌面版 load_state 相同語意）
     try:
         for code, qty in (data.get('changes') or {}).items():
             model.set_new_qty(code, float(qty))
     except KeyError as e:
         raise HTTPException(400, f'變更狀態含有原契約找不到的項次：{e}')
     model.new_items = [NewItem.from_dict(d) for d in (data.get('new_items') or [])]
-    # 編號防呆（前端已擋，這裡是最後防線；.json 可能被手改或來自舊版檔案）：
-    # 新增項目編號不可與原契約項次/群組重複，彼此之間也不可重複。
     seen_codes = set()
     for it in model.new_items:
         if it.code in model.leaf_by_code or it.code in model.group_by_code:
@@ -151,6 +138,51 @@ async def generate(file: UploadFile = File(...),
     model.reasons = {
         k: str(v) for k, v in (data.get('reasons') or {}).items() if str(v).strip()
     }
+    return model
+
+
+@app.post('/generate_detail')
+async def generate_detail(file: UploadFile = File(...),
+                          state: str = Form('{}'),
+                          title_suffix: str = Form('（變更設計後）'),
+                          x_user_token: str = Header(default='')):
+    """產生『變更後詳細價目表』——格式同原契約，可作為下一次變更設計的輸入。"""
+    _verify(x_user_token)
+    try:
+        model = _load_model(await file.read())
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f'解析原契約失敗：{e}')
+    _apply_state(model, state)
+
+    out_tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+    out_tmp.close()
+    try:
+        generate_detail_boq(model, out_tmp.name, title_suffix=title_suffix)
+        with open(out_tmp.name, 'rb') as f:
+            content = f.read()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f'產生變更後詳細價目表失敗：{e}')
+    finally:
+        os.unlink(out_tmp.name)
+    return Response(
+        content,
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="detail_boq.xlsx"'},
+    )
+
+
+@app.post('/generate')
+async def generate(file: UploadFile = File(...),
+                   state: str = Form('{}'),
+                   before_label: str = Form('前次修正預算'),
+                   after_label: str = Form('第N次變更設計'),
+                   x_user_token: str = Header(default='')):
+    _verify(x_user_token)
+    try:
+        model = _load_model(await file.read())
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f'解析原契約失敗：{e}')
+    _apply_state(model, state)
 
     out_tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
     out_tmp.close()

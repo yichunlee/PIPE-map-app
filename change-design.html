@@ -113,6 +113,7 @@
   <span class="lbl-input">前次標題<input id="beforeLabel" value="第十二次修正預算"></span>
   <span class="lbl-input">本次標題<input id="afterLabel" value="第一次變更設計"></span>
   <button class="btn blue" id="btnGenerate" disabled onclick="generateXlsx()">② 產生變更設計明細表</button>
+  <button class="btn" id="btnGenerateDetail" disabled onclick="generateDetailBoq()" style="background:#d7ccc8;color:#4e342e;" title="產出變更後的詳細價目表（格式同原契約）。做下一次變更設計時，直接載入這份當原契約即可。">③ 產生變更後詳細價目表</button>
   <button class="btn" id="btnUpaOverview" disabled onclick="openUpaOverview()">📋 單價分析總表</button>
   <button class="btn small" id="btnExpandAll" disabled onclick="setAllCollapsed(false)">展開全部</button>
   <button class="btn small" id="btnCollapseLeaf" disabled onclick="collapseLeafGroups(true)">收合明細</button>
@@ -130,7 +131,8 @@
     4. 分組標題列可點擊展開/收合；右側【＋新增項目】可加入全新工項（含單價分析）。標題列變紅＝底下有變更。<br>
     5. 單價分析視窗：原契約 / 新增兩區可各自貼上 Excel 多列（Ctrl+V）、用「→」按鈕互相搬移列，物調權重即時顯示。<br>
     6. 【儲存變更狀態】會下載 .json，之後可【讀入變更狀態】接續編輯；<b>此檔與桌面版工具完全互通</b>。<br>
-    7. 按【② 產生變更設計明細表】下載完整 .xlsx（含增減表、新增項目、單價分析表）。
+    7. 按【② 產生變更設計明細表】下載完整 .xlsx（含增減表、新增項目、單價分析表）。<br>
+    8. <b>要做第二次（第 N 次）變更設計</b>：按【③ 產生變更後詳細價目表】下載一份「變更後的詳細價目表」（格式跟原契約一樣，新增項目會變成正式項次）。下次要變更時，把這份當作原契約【① 載入】即可——前次的結果就是這次的基準，依此類推。
   </div>
   <div id="tableWrap"></div>
 </main>
@@ -207,6 +209,7 @@ async function loadContract(file) {
     document.getElementById('btnLoadState').disabled = false;
     document.getElementById('btnSaveState').disabled = false;
     document.getElementById('btnGenerate').disabled = false;
+    document.getElementById('btnGenerateDetail').disabled = false;
     document.getElementById('btnUpaOverview').disabled = false;
     document.getElementById('btnExpandAll').disabled = false;
     document.getElementById('btnCollapseLeaf').disabled = false;
@@ -938,6 +941,30 @@ async function generateXlsx() {
     a.click();
     URL.revokeObjectURL(a.href);
     setStatus('已下載');
+  } catch (e) {
+    setStatus(''); toast('產生失敗：' + e.message);
+  }
+}
+
+async function generateDetailBoq() {
+  if (!contractFile) { toast('請先載入原契約'); return; }
+  setStatus('產生變更後詳細價目表中…');
+  try {
+    const fd = new FormData();
+    fd.append('file', contractFile);
+    fd.append('state', JSON.stringify(currentState()));
+    const suffix = '（' + (document.getElementById('afterLabel').value || '變更設計') + '後）';
+    fd.append('title_suffix', suffix);
+    const res = await fetch(API_BASE + '/generate_detail', { method: 'POST', body: fd, headers: authHeaders() });
+    if (!res.ok) throw new Error((await res.json()).detail || res.status);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '詳細價目表' + suffix + '.xlsx';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setStatus('已下載變更後詳細價目表');
+    toast('已產生變更後詳細價目表，下次變更設計可直接載入它作為原契約');
   } catch (e) {
     setStatus(''); toast('產生失敗：' + e.message);
   }
