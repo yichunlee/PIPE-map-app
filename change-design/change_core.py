@@ -363,9 +363,18 @@ def generate_detail_boq(model: ChangeModel, out_path, title_suffix='（第一次
                 ows.cell(orow, 5, price).alignment = right
                 ows.cell(orow, 6, round(qty * price, 2)).alignment = right
             else:
-                # 費率型：單價 '--'，複價沿用原檔快取值（或原契約複價）
+                # 費率型（單價 '--'）：變更後複價 = 原複價 + 手填增加 − 手填減少
+                # （與②變更設計明細表相同；③先前漏帶 rate_amounts，導致間接費用沿用舊值）
+                base_amt = f if f is not None else lf.orig_total
+                ra = model.rate_amounts.get(lf.code)
+                if ra:
+                    new_amt = round((base_amt or 0)
+                                    + float(ra.get('inc', 0) or 0)
+                                    - float(ra.get('dec', 0) or 0), 2)
+                else:
+                    new_amt = base_amt
                 ows.cell(orow, 5, price if price is not None else '--').alignment = center
-                ows.cell(orow, 6, f if f is not None else lf.orig_total).alignment = right
+                ows.cell(orow, 6, new_amt).alignment = right
             if g is not None:
                 ows.cell(orow, 7, g).alignment = left
         else:

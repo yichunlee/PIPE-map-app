@@ -146,24 +146,35 @@ async def generate_detail(file: UploadFile = File(...),
                           state: str = Form('{}'),
                           title_suffix: str = Form('（變更設計後）'),
                           x_user_token: str = Header(default='')):
-    """產生『變更後詳細價目表』——格式同原契約，可作為下一次變更設計的輸入。"""
+    """產生『變更後詳細價目表』——格式同原契約，可作為下一次變更設計的輸入。
+    注意：generate_detail_boq 需要重新開啟原始檔（逐列搬 A 欄相對代號），
+    因此這裡自行保留原始暫存檔，直到產完詳細表才刪除（不能用會即時刪檔的 _load_model）。"""
     _verify(x_user_token)
-    try:
-        model = _load_model(await file.read())
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f'解析原契約失敗：{e}')
-    _apply_state(model, state)
-
+    src_tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
     out_tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
     out_tmp.close()
     try:
-        generate_detail_boq(model, out_tmp.name, title_suffix=title_suffix)
-        with open(out_tmp.name, 'rb') as f:
-            content = f.read()
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(500, f'產生變更後詳細價目表失敗：{e}')
+        src_tmp.write(await file.read())
+        src_tmp.close()
+        try:
+            model = ChangeModel(src_tmp.name)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, f'解析原契約失敗：{e}')
+        _apply_state(model, state)
+        try:
+            generate_detail_boq(model, out_tmp.name, title_suffix=title_suffix)
+            with open(out_tmp.name, 'rb') as f:
+                content = f.read()
+        except HTTPException:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(500, f'產生變更後詳細價目表失敗：{e}')
     finally:
-        os.unlink(out_tmp.name)
+        for p in (src_tmp.name, out_tmp.name):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
     return Response(
         content,
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
