@@ -6,6 +6,7 @@
   GET  /health    健康檢查
   POST /parse     上傳原契約 .xlsx → 回傳分組/工項樹（JSON）
   POST /generate  上傳原契約 .xlsx + 變更狀態(JSON) → 回傳變更設計明細表 .xlsx
+  GET  /dgs       代抓公路局道路申挖 KML（給 Cloudflare Worker 用的中繼站）
 
 驗證：
   設定環境變數 GOOGLE_CLIENT_ID 後，所有請求需帶 X-User-Token
@@ -212,3 +213,151 @@ async def generate(file: UploadFile = File(...),
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': 'attachment; filename="change_design.xlsx"'},
     )
+
+
+# ══════════════════════════════════════════════════════════════════
+# 公路局道路申挖 KML 中繼站
+#
+# 為什麼需要這個：公路局（dgs.thb.gov.tw）擋在 Imperva Incapsula 後面，
+# 會封鎖來自 Cloudflare 的出口 IP（回 403 + _Incapsula_Resource 頁面），
+# 所以 Cloudflare Worker 沒辦法直接抓。這台在 fly.io（東京），IP 段不同，
+# 由它代抓再轉給 Worker 解析。
+# ══════════════════════════════════════════════════════════════════
+
+DGS_CITIES = {
+    '基隆市', '新北市', '台北市', '桃園市', '新竹縣', '新竹市', '苗栗縣',
+    '台中市', '南投縣', '彰化縣', '雲林縣', '嘉義縣', '嘉義市', '台南市',
+    '高雄市', '屏東縣', '宜蘭縣', '花蓮縣', '台東縣',
+}
+
+# 程序內快取（機器會自動休眠，所以只是盡力而為，能省一次是一次）
+_DGS_CACHE: dict = {}
+_DGS_TTL = 300  # 秒
+
+
+@app.get('/dgs')
+def dgs_kml(city: str = '台中市', force: int = 0):
+    """代抓指定縣市的道路申挖 KML，原封不動回傳文字。"""
+    import time
+
+    import requests
+
+    city = (city or '台中市').strip().replace('臺', '台')
+    if city not in DGS_CITIES:
+        raise HTTPException(400, f'不支援的縣市：{city}（離島無省道）')
+
+    now = time.time()
+    hit = _DGS_CACHE.get(city)
+    if hit and not force and (now - hit[0]) < _DGS_TTL:
+        return Response(hit[1], media_type='application/vnd.google-earth.kml+xml',
+                        headers={'X-Dgs-Cache': 'hit'})
+
+    url = f'https://dgs.thb.gov.tw/thbdgs/CMMDGS/TEMP/DGS_{city}.kml'
+    headers = {
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                       '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://dgs.thb.gov.tw/THBDGS/',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+    }
+    try:
+        r = requests.get(url, headers=headers, timeout=30)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f'連線公路局失敗：{e}')
+
+    if r.status_code != 200:
+        # 把上游回應原樣帶出來，才分得清是被 WAF 擋還是單純掛掉
+        preview = ' '.join(r.text.split())[:600] if r.text else ''
+        blocked = '_Incapsula_Resource' in r.text or 'incap_ses' in str(r.headers)
+        raise HTTPException(502, {
+            'error': f'公路局回應 HTTP {r.status_code}',
+            'blockedByWaf': blocked,
+            'upstreamStatus': r.status_code,
+            'bodyPreview': preview,
+        })
+
+    r.encoding = 'utf-8'
+    text = r.text
+
+    # Incapsula 也會用 HTTP 200 包裝 JS 挑戰頁，不能只看狀態碼
+    if _looks_blocked(text):
+        raise HTTPException(502, {
+            'error': '公路局回應 200 但內容是 WAF 挑戰頁',
+            'blockedByWaf': True,
+            'upstreamStatus': r.status_code,
+            'bodyPreview': ' '.join(text.split())[:600],
+        })
+    if '<Placemark' not in text and '<kml' not in text:
+        raise HTTPException(502, {
+            'error': '回應內容不是 KML',
+            'blockedByWaf': False,
+            'upstreamStatus': r.status_code,
+            'bodyPreview': ' '.join(text.split())[:600],
+        })
+
+    _DGS_CACHE[city] = (now, text)
+    return Response(text, media_type='application/vnd.google-earth.kml+xml',
+                    headers={'X-Dgs-Cache': 'miss'})
+
+
+def _looks_blocked(text: str) -> bool:
+    """判斷回應是不是 WAF 的攔截／挑戰頁（Incapsula 會用 200 或 403 兩種包法）。"""
+    if not text:
+        return False
+    marks = ('_Incapsula_Resource', 'incap_ses', 'visid_incap',
+             'Incapsula incident', 'Request unsuccessful')
+    return any(m in text for m in marks)
+
+
+@app.get('/dgs/probe')
+def dgs_probe():
+    """一次探測所有候選資料來源，回報各自能不能從這台機器抓到。
+
+    目的：確認除了被 Incapsula 擋住的 dgs.thb.gov.tw 之外，
+    有沒有別的網域可以拿到同一批申挖資料。
+    """
+    import requests
+
+    ua = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+          '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36')
+
+    targets = [
+        ('KML（目前用的，已知被擋）',
+         'https://dgs.thb.gov.tw/thbdgs/CMMDGS/TEMP/DGS_台中市.kml'),
+        ('公路局申挖系統首頁（getDgsApply 用的）',
+         'https://dgs.thb.gov.tw/THBDGS/'),
+        ('data.gov.tw 資料集 API',
+         'https://data.gov.tw/api/v2/rest/dataset/96513'),
+        ('交通部全台彙總 CSV',
+         'https://www.motc.gov.tw/uploaddowndoc?file=datagov/1317019914636103680.csv&flag=doc'),
+    ]
+
+    out = []
+    for label, url in targets:
+        row = {'label': label, 'url': url}
+        try:
+            r = requests.get(url, headers={'User-Agent': ua,
+                                           'Accept-Language': 'zh-TW,zh;q=0.9'},
+                             timeout=25)
+            body = r.content[:4000]
+            try:
+                text = body.decode('utf-8', errors='replace')
+            except Exception:  # noqa: BLE001
+                text = ''
+            row.update({
+                'status': r.status_code,
+                'contentType': r.headers.get('content-type', ''),
+                'totalBytes': len(r.content),
+                'blockedByWaf': _looks_blocked(text) or _looks_blocked(str(r.headers)),
+                'looksLikeKml': '<Placemark' in text,
+                'preview': ' '.join(text.split())[:250],
+            })
+        except Exception as e:  # noqa: BLE001
+            row.update({'status': None, 'error': str(e)})
+        out.append(row)
+
+    return {'ok': True, 'results': out}

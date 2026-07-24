@@ -10,6 +10,8 @@ let dgsPolyLayer = null;    // 真實挖掘面（放大時顯示）
 let dgsPointLayer = null;   // 圓點（縮小時顯示）
 let dgsLoading = false;
 let dgsZoomBound = false;
+let dgsMeta = {};
+let dgsUploadedCities = [];
 
 const DGS_ZOOM_THRESHOLD = 17;   // 這個層級以上換成真實挖掘面
 const DGS_COLOR = '#0288D1';     // 自來水＝藍
@@ -70,11 +72,13 @@ async function loadDgsPermits(force) {
 
         const result = await apiCall('getDgsPermits', params, { errorPrefix: '申挖資料' });
         dgsCases = result.cases || [];
+        dgsMeta = { sourceFile: result.sourceFile, uploadedAt: result.uploadedAt,
+                    uploadedBy: result.uploadedBy, totalInFile: result.totalInFile, empty: result.empty };
 
-        if (countEl) {
-            const shown = dgsFilteredCases().length;
-            countEl.innerHTML = '共 <b>' + shown + '</b> 件 / ' + result.pointCount + ' 個挖掘點' +
-                (shown !== dgsCases.length ? '<br><span style="color:#999;">（已隱藏 ' + (dgsCases.length - shown) + ' 件非施工期間）</span>' : '');
+        if (result.empty) {
+            if (countEl) countEl.innerHTML = '<span style="color:#999;">' + city + ' 尚未上傳 KML</span>';
+        } else {
+            updateDgsCount();
         }
         renderDgsList();
         if (dgsVisible) renderDgsPermits();
@@ -235,6 +239,7 @@ function toggleDgsLayer() {
     if (dgsVisible) {
         if (btn) btn.classList.add('active-blue');
         if (panel) panel.style.display = 'block';
+        loadDgsUploadList();
         if (dgsCases.length === 0) {
             loadDgsPermits(false);
         } else {
@@ -247,22 +252,109 @@ function toggleDgsLayer() {
     }
 }
 
+function updateDgsCount() {
+    const countEl = document.getElementById('dgsCount');
+    if (!countEl) return;
+    const shown = dgsFilteredCases();
+    const pts = shown.reduce((s, c) => s + c.locations.length, 0);
+    let h = '共 <b>' + shown.length + '</b> 件 / ' + pts + ' 個挖掘點';
+    if (shown.length !== dgsCases.length) {
+        h += '<br><span style="color:#999;">（已隱藏 ' + (dgsCases.length - shown.length) + ' 件非施工期間）</span>';
+    }
+    if (dgsMeta.uploadedAt) {
+        h += '<br><span style="color:#aaa;font-size:10px;">來源 ' + dgsEsc(dgsMeta.sourceFile || 'KML') +
+             '，' + dgsMeta.uploadedAt.slice(0, 10) + ' 上傳</span>';
+    }
+    countEl.innerHTML = h;
+}
+
 function onDgsFilterChange() {
     renderDgsList();
-    const countEl = document.getElementById('dgsCount');
-    if (countEl) {
-        const shown = dgsFilteredCases().length;
-        const pts = dgsFilteredCases().reduce((s, c) => s + c.locations.length, 0);
-        countEl.innerHTML = '共 <b>' + shown + '</b> 件 / ' + pts + ' 個挖掘點' +
-            (shown !== dgsCases.length ? '<br><span style="color:#999;">（已隱藏 ' + (dgsCases.length - shown) + ' 件非施工期間）</span>' : '');
-    }
+    updateDgsCount();
     if (dgsVisible) renderDgsPermits();
+}
+
+// ---------- 上傳 KML ----------
+async function uploadDgsKml(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    input.value = '';   // 讓同一個檔案可以重複選
+
+    if (!currentUser) { showToast('請先登入才能上傳', 'error'); return; }
+
+    // 從檔名猜縣市（DGS_彰化縣.kml），猜不到就用目前下拉選的
+    let city = (document.getElementById('dgsCity') || {}).value || '台中市';
+    const m = file.name.match(/(基隆市|新北市|台北市|桃園市|新竹縣|新竹市|苗栗縣|台中市|南投縣|彰化縣|雲林縣|嘉義縣|嘉義市|台南市|高雄市|屏東縣|宜蘭縣|花蓮縣|台東縣)/);
+    if (m) city = m[1];
+    else {
+        const ask = prompt('無法從檔名判斷縣市，請輸入（例：彰化縣）', city);
+        if (!ask) return;
+        city = ask.trim().replace(/^臺/, '台');
+    }
+
+    const btn = document.getElementById('dgsUploadBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 解析中…'; }
+
+    try {
+        const text = await file.text();
+        const res = await apiCall('uploadDgsKml', {}, {
+            body: { city: city, kml: text, fileName: file.name },
+            errorPrefix: '上傳失敗',
+        });
+        showToast(city + '：解析出 ' + res.count + ' 件案件、' + res.pointCount + ' 個挖掘點', 'success');
+
+        const sel = document.getElementById('dgsCity');
+        if (sel) sel.value = city;
+        await loadDgsUploadList();
+        await loadDgsPermits(false);
+    } catch (e) {
+        console.error('上傳 KML 失敗:', e);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📂 上傳 KML'; }
+    }
+}
+
+// 已上傳清單
+async function loadDgsUploadList() {
+    const el = document.getElementById('dgsUploadList');
+    if (!el) return;
+    try {
+        const res = await apiCall('listDgsUploads', {}, { silent: true });
+        const ups = res.uploads || [];
+        dgsUploadedCities = ups.map(u => u.city);
+        if (ups.length === 0) {
+            el.innerHTML = '<div style="color:#aaa;font-size:10px;padding:2px 0;">尚無上傳資料</div>';
+            return;
+        }
+        el.innerHTML = ups.map(u =>
+            '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:#666;padding:1px 0;">' +
+            '<span style="flex:1;cursor:pointer;" onclick="switchDgsCity(\'' + u.city + '\')">' +
+            dgsEsc(u.city) + '（' + u.case_count + ' 件）</span>' +
+            '<span style="cursor:pointer;color:#c62828;" onclick="deleteDgsUpload(\'' + u.city + '\')" title="刪除">✕</span>' +
+            '</div>'
+        ).join('');
+    } catch (e) { /* 沒有這個 action 也不要讓面板壞掉 */ }
+}
+
+function switchDgsCity(city) {
+    const sel = document.getElementById('dgsCity');
+    if (sel) sel.value = city;
+    loadDgsPermits(false);
+}
+
+async function deleteDgsUpload(city) {
+    if (!confirm('確定刪除 ' + city + ' 的申挖資料？')) return;
+    try {
+        await apiCall('deleteDgsUpload', { city: city }, { errorPrefix: '刪除失敗' });
+        showToast(city + ' 已刪除', 'success');
+        await loadDgsUploadList();
+        await loadDgsPermits(false);
+    } catch (e) { /* apiCall 已提示 */ }
 }
 
 async function refreshDgsPermits() {
     dgsCases = [];
     await loadDgsPermits(true);
-    showToast('已重新抓取公路局即時資料', 'success');
 }
 
 // 縣市下拉選單初始化
@@ -284,4 +376,7 @@ window.refreshDgsPermits = refreshDgsPermits;
 window.onDgsFilterChange = onDgsFilterChange;
 window.zoomToDgsCase = zoomToDgsCase;
 window.fitDgsBounds = fitDgsBounds;
+window.uploadDgsKml = uploadDgsKml;
+window.switchDgsCity = switchDgsCity;
+window.deleteDgsUpload = deleteDgsUpload;
 // ========== 公路局申挖路權圖層結束 ==========
