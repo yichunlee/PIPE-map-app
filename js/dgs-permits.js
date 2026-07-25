@@ -14,8 +14,14 @@ let dgsLoading = false;
 let dgsZoomBound = false;
 
 const DGS_ZOOM_THRESHOLD = 17;   // 這個層級以上換成真實挖掘面
-const DGS_COLOR = '#0288D1';     // 藍
-const DGS_COLOR_EXPIRED = '#90A4AE';
+const DGS_COLOR = '#0288D1';        // 自來水＝藍
+const DGS_COLOR_OTHER = '#9E9E9E';  // 其他管線＝灰
+
+// 是否屬「自來水」案件：比對管線種類／申請單位／監造／施工單位
+function dgsIsWater(c) {
+    const hay = [c.pipeType, c.applyUnit, c.superUnit, c.workUnit].join('|');
+    return hay.indexOf('自來水') >= 0;
+}
 
 // 可否編輯（上傳／刪除）：登入且權限 ≥ 2。訪客只能看。
 function dgsCanEdit() {
@@ -103,8 +109,10 @@ function updateDgsCount() {
 // ---------- 繪製 ----------
 function dgsPopupHtml(c, loc) {
     const active = dgsIsActive(c);
+    const titleColor = dgsIsWater(c) ? DGS_COLOR : DGS_COLOR_OTHER;
     let h = '<div style="min-width:250px;max-width:320px;font-size:12px;">';
-    h += '<div style="font-weight:bold;color:' + DGS_COLOR + ';margin-bottom:6px;">💧 公路局申挖路權' +
+    h += '<div style="font-weight:bold;color:' + titleColor + ';margin-bottom:6px;">' +
+        (dgsIsWater(c) ? '💧' : '⚙️') + ' 公路局申挖路權' +
         (active ? '' : ' <span style="color:#999;font-weight:normal;">(非施工期間)</span>') + '</div>';
     h += '<div style="margin:3px 0;"><b>核准文號：</b>' + dgsEsc(c.caseNo) + '</div>';
     h += '<div style="margin:3px 0;"><b>路線：</b>' + dgsEsc(c.route) + '</div>';
@@ -138,7 +146,7 @@ function renderDgsPermits() {
 
     dgsFilteredCases().forEach(c => {
         const active = dgsIsActive(c);
-        const color = active ? DGS_COLOR : DGS_COLOR_EXPIRED;
+        const color = dgsIsWater(c) ? DGS_COLOR : DGS_COLOR_OTHER;
 
         c.locations.forEach(loc => {
             const popup = dgsPopupHtml(c, loc);
@@ -197,8 +205,8 @@ function renderDgsList() {
     listEl.innerHTML = cases.map((c, i) => {
         const active = dgsIsActive(c);
         return '<div onclick="zoomToDgsCase(' + i + ')" style="padding:6px 8px;border-left:3px solid ' +
-            (active ? DGS_COLOR : DGS_COLOR_EXPIRED) + ';background:#f7f9fa;margin-bottom:4px;' +
-            'border-radius:0 4px 4px 0;cursor:pointer;line-height:1.5;">' +
+            (dgsIsWater(c) ? DGS_COLOR : DGS_COLOR_OTHER) + ';background:#f7f9fa;margin-bottom:4px;' +
+            'border-radius:0 4px 4px 0;cursor:pointer;line-height:1.5;' + (active ? '' : 'opacity:0.6;') + '">' +
             '<div style="font-weight:bold;">' + dgsEsc(c.caseNo) +
             ' <span style="color:#999;font-weight:normal;font-size:10px;">' + dgsEsc(c._city || '') + '</span></div>' +
             '<div style="color:#555;">' + dgsEsc(c.route) + '｜' + dgsEsc(c.pipeType) + '｜' + c.locations.length + ' 點</div>' +
@@ -224,7 +232,7 @@ function fitDgsBounds() {
     map.fitBounds(L.latLngBounds(pts).pad(0.2));
 }
 
-// ---------- 已上傳縣市清單 ----------
+// ---------- 已上傳縣市清單（收合，預設關閉，不佔版面）----------
 function renderDgsUploadList() {
     const el = document.getElementById('dgsUploadList');
     if (!el) return;
@@ -233,14 +241,20 @@ function renderDgsUploadList() {
         return;
     }
     const canEdit = dgsCanEdit();
-    el.innerHTML = dgsUploads.map(u => {
+    const rows = dgsUploads.map(u => {
         const del = canEdit
-            ? '<span style="cursor:pointer;color:#c62828;" onclick="deleteDgsUpload(\'' + u.city + '\')" title="刪除">✕</span>'
+            ? '<span style="cursor:pointer;color:#c62828;" onclick="event.stopPropagation();deleteDgsUpload(\'' + u.city + '\')" title="刪除">✕</span>'
             : '';
         return '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:#666;padding:1px 0;">' +
             '<span style="flex:1;cursor:pointer;" onclick="zoomToDgsCity(\'' + u.city + '\')">' +
             dgsEsc(u.city) + '（' + u.case_count + ' 件）</span>' + del + '</div>';
     }).join('');
+
+    el.innerHTML =
+        '<details style="font-size:11px;">' +
+        '<summary style="cursor:pointer;color:#0288D1;padding:2px 0;">已上傳 ' + dgsUploads.length + ' 個縣市（點開管理）</summary>' +
+        '<div style="margin-top:4px;">' + rows + '</div>' +
+        '</details>';
 }
 
 function zoomToDgsCity(city) {
