@@ -251,41 +251,48 @@ function zoomToDgsCity(city) {
     map.fitBounds(L.latLngBounds(pts).pad(0.2));
 }
 
-// ---------- 上傳（可一次多檔）----------
+// ---------- 上傳（可一次多檔；整合檔會自動依縣市別拆分）----------
 async function uploadDgsKml(input) {
     const files = input.files ? Array.from(input.files) : [];
     input.value = '';
     if (files.length === 0) return;
     if (!dgsCanEdit()) { showToast('需登入且具編輯權限才能上傳', 'error'); return; }
 
+    // 從檔名猜縣市，只當「案件裡讀不到縣市別」時的退路（整合檔通常用不到）
     const cityRe = /(基隆市|新北市|台北市|臺北市|桃園市|新竹縣|新竹市|苗栗縣|台中市|臺中市|南投縣|彰化縣|雲林縣|嘉義縣|嘉義市|台南市|臺南市|高雄市|屏東縣|宜蘭縣|花蓮縣|台東縣|臺東縣)/;
     const btn = document.getElementById('dgsUploadBtn');
-    if (btn) { btn.disabled = true; }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 上傳中…'; }
 
-    let ok = 0, fail = 0;
+    const citiesSaved = new Set();
+    let fileFail = 0;
+
     for (const file of files) {
-        let city = '';
         const m = file.name.match(cityRe);
-        if (m) city = m[1].replace(/^臺/, '台');
-        else {
-            const ask = prompt('無法從「' + file.name + '」判斷縣市，請輸入（例：彰化縣），取消則略過此檔', '');
-            if (!ask) { continue; }
-            city = ask.trim().replace(/^臺/, '台');
-        }
-        if (btn) btn.textContent = '⏳ ' + city + '…';
+        const fallbackCity = m ? m[1].replace(/^臺/, '台') : '';
         try {
             const text = await file.text();
             const res = await apiCall('uploadDgsKml', {}, {
-                body: { city: city, kml: text, fileName: file.name },
+                body: { city: fallbackCity, kml: text, fileName: file.name },
                 silent: true,
             });
-            if (res && res.success) { ok++; } else { fail++; console.warn(city, res && res.error); }
-        } catch (e) { fail++; console.error('上傳', file.name, '失敗:', e); }
+            if (res && res.success) {
+                (res.cities || []).forEach(c => citiesSaved.add(c.city));
+            } else {
+                fileFail++; console.warn(file.name, res && res.error);
+            }
+        } catch (e) { fileFail++; console.error('上傳', file.name, '失敗:', e); }
     }
 
     if (btn) { btn.disabled = false; btn.textContent = '📂 上傳 KML'; }
-    if (ok) showToast('已上傳 ' + ok + ' 個縣市' + (fail ? '，' + fail + ' 個失敗' : ''), fail ? 'info' : 'success');
-    else if (fail) showToast('上傳失敗，請確認檔案是否為有效 KML', 'error');
+
+    const n = citiesSaved.size;
+    if (n > 0) {
+        const names = [...citiesSaved].join('、');
+        showToast('已更新 ' + n + ' 個縣市：' + names + (fileFail ? '（' + fileFail + ' 個檔失敗）' : ''),
+                  fileFail ? 'info' : 'success');
+    } else {
+        showToast('上傳失敗，請確認是否為有效 KML（不是驗證頁）', 'error');
+    }
     await loadDgsPermits();
 }
 
