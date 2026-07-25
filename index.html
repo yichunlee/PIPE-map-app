@@ -27,20 +27,29 @@
     <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
     
     <!-- 左側工具抽屜 -->
-    <div id="leftDrawerToggle" style="display:none;position:absolute;top:125px;left:10px;z-index:1001;background:white;padding:8px;border-radius:4px;box-shadow:0 1px 5px rgba(0,0,0,0.4);cursor:pointer;font-size:18px;width:34px;height:34px;display:none;align-items:center;justify-content:center;" onclick="toggleLeftDrawer()" title="工具">🔧</div>
-    <div id="leftDrawer" style="display:none;position:absolute;top:169px;left:10px;z-index:1000;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);overflow:hidden;min-width:44px;">
+    <div id="leftDrawerToggle" style="display:none;position:absolute;top:125px;right:10px;z-index:1001;background:white;padding:8px;border-radius:4px;box-shadow:0 1px 5px rgba(0,0,0,0.4);cursor:pointer;font-size:18px;width:34px;height:34px;display:none;align-items:center;justify-content:center;" onclick="toggleLeftDrawer()" title="工具">🔧</div>
+    <div id="leftDrawer" style="display:none;position:absolute;top:169px;right:10px;z-index:1000;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);overflow:hidden;min-width:44px;">
         <div id="ganttDrawerBtn" class="left-drawer-btn" title="甘特圖" onclick="toggleGanttPanel()" style="display:none;">📊</div>
         <div id="measureButton" class="left-drawer-btn" title="測量距離" style="display:none;">📏</div>
         <div id="layerSwitchButton" class="left-drawer-btn" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
         <div id="elevationButton" class="left-drawer-btn" onclick="showElevationProfile()" title="高程剖面圖" style="display:none;">📈</div>
         <div id="roadworkButton" class="left-drawer-btn" title="台中市挖掘許可" onclick="toggleRoadworkLayer()" style="display:none;">🚧</div>
-        <div id="dgsButton" class="left-drawer-btn" title="省道申挖路權（自來水）" onclick="toggleDgsLayer()" style="display:none;">💧</div>
+        <div id="dgsButton" class="left-drawer-btn" title="公路局申挖路權" onclick="toggleDgsLayer()" style="display:none;">⛏️</div>
         <div id="permitZoneButton" class="left-drawer-btn" title="隱藏所有標記" onclick="toggleAllMarkers()" style="display:none;">👁️</div>
         <div id="dateLabelButton" class="left-drawer-btn" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()" style="display:none;">📅</div>
-        <div id="photoLayerButton" class="left-drawer-btn" title="顯示照片位置" onclick="togglePhotoLayer()" style="display:none;">📷</div>
-        <div id="photoExportButton" class="left-drawer-btn" title="匯出照片位置報告(Word)" onclick="exportPhotoReport()" style="display:none;background:#fff3e0;">📋</div>
-        <div id="projectSCurveBtn" class="left-drawer-btn" title="計畫S曲線" onclick="showProjectSCurve()" style="display:none;background:#f3e5f5;">📊</div>
-        <div id="changeDesignButton" class="left-drawer-btn" title="變更設計工具（免登入）" onclick="window.open('change-design.html','_blank')" style="display:none;background:#e0f2f1;">📝</div>
+        <div id="photoMenuButton" class="left-drawer-btn" title="照片" onclick="togglePhotoMenu(event)" style="display:none;">📷</div>
+        <div id="projectSCurveBtn" class="left-drawer-btn" title="計畫S曲線" onclick="showProjectSCurve()" style="display:none;background:#f3e5f5;">〽️</div>
+        <div id="changeDesignButton" class="left-drawer-btn" title="變更設計工具（免登入）" onclick="window.open('change-design.html','_blank')" style="display:none;background:#e0f2f1;">🛠️</div>
+    </div>
+
+    <!-- 照片子選單（由 📷 展開）-->
+    <div id="photoSubmenu" style="display:none;position:absolute;z-index:1002;background:white;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.25);overflow:hidden;">
+        <div class="photo-submenu-item" onclick="togglePhotoLayer();closePhotoMenu();">
+            <span style="font-size:16px;">📍</span><span>顯示照片位置</span>
+        </div>
+        <div class="photo-submenu-item" onclick="exportPhotoReport();closePhotoMenu();">
+            <span style="font-size:16px;">📄</span><span>匯出照片報告 (Word)</span>
+        </div>
     </div>
     <div id="layerPanel" class="layer-panel" onclick="event.stopPropagation()">
         <div class="layer-panel-header">🗺️ 圖層設定</div>
@@ -72,21 +81,16 @@
         <button onclick="updateRoadworkData()" style="width:100%; padding:5px 8px; background:#FF5722; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">🔄 更新資料</button>
     </div>
 
-    <!-- 省道申挖路權（公路局 DGS）-->
-    <div id="dgsPanel" class="roadwork-panel" style="bottom:30px; left:200px; width:260px; max-height:60vh; overflow:auto;">
-        <div style="font-weight:bold; margin-bottom:6px; color:#0288D1;">💧 省道申挖路權</div>
-        <div style="display:flex; gap:4px; margin-bottom:6px;">
-            <select id="dgsCity" onchange="loadDgsPermits(false)" style="flex:1; font-size:11px; padding:3px;"></select>
-            <input id="dgsKeyword" value="自來水" onchange="refreshDgsPermits()" title="比對管線種類／申請單位／施工單位，留空=全部" style="width:70px; font-size:11px; padding:3px;">
-        </div>
+    <!-- 公路局申挖路權（公路局 DGS）-->
+    <div id="dgsPanel" class="roadwork-panel" style="bottom:30px; right:64px; left:auto; width:260px; max-height:70vh; overflow:auto;">
+        <div style="font-weight:bold; margin-bottom:6px; color:#0288D1;">💧 公路局申挖路權</div>
         <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; margin-bottom:6px; cursor:pointer;">
             <input type="checkbox" id="dgsOnlyActive" checked onchange="onDgsFilterChange()"> 只顯示施工期間內
         </label>
         <div id="dgsCount" style="color:#666; margin-bottom:8px;">尚未載入</div>
-        <input type="file" id="dgsFileInput" accept=".kml" style="display:none;" onchange="uploadDgsKml(this)">
+        <input type="file" id="dgsFileInput" accept=".kml" multiple style="display:none;" onchange="uploadDgsKml(this)">
         <div style="display:flex; gap:4px; margin-bottom:6px;">
             <button id="dgsUploadBtn" onclick="document.getElementById('dgsFileInput').click()" style="flex:1; padding:5px 8px; background:#0288D1; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">📂 上傳 KML</button>
-            <button onclick="refreshDgsPermits()" style="padding:5px 8px; background:#eceff1; color:#333; border:none; border-radius:4px; cursor:pointer; font-size:11px;" title="重新載入">🔄</button>
             <button onclick="fitDgsBounds()" style="padding:5px 8px; background:#eceff1; color:#333; border:none; border-radius:4px; cursor:pointer; font-size:11px;" title="縮放到全部案件">🎯</button>
         </div>
         <div id="dgsUploadList" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px;"></div>
@@ -94,11 +98,11 @@
         <details style="margin-top:8px;">
             <summary style="color:#0288D1; font-size:10px; cursor:pointer;">📖 KML 從哪裡來？</summary>
             <div style="color:#888; font-size:10px; margin-top:4px; line-height:1.6;">
-                公路局網站擋掉了伺服器自動下載，需手動取得：<br>
+                公路局網站擋掉伺服器自動下載，需手動取得：<br>
                 1. 用瀏覽器開啟<br>
-                <code style="font-size:9px; word-break:break-all;">dgs.thb.gov.tw/thbdgs/CMMDGS/TEMP/DGS_彰化縣.kml</code><br>
-                2. 另存新檔，再用上面的按鈕上傳<br>
-                3. 縣市會自動從檔名判斷<br>
+                <code style="font-size:9px; word-break:break-all;">dgs.thb.gov.tw/thbdgs/CMMDGS/TEMP/DGS_縣市.kml</code><br>
+                2. 另存新檔（可一次選多個縣市上傳）<br>
+                3. 縣市自動從檔名判斷<br>
                 資料是即時快照，過期案件會消失，建議定期重新上傳。<br>
                 放大到 z17 以上顯示真實挖掘面。
             </div>

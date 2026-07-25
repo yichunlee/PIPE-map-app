@@ -264,6 +264,32 @@ window.toggleLeftDrawer = function() {
     if (toggle) toggle.style.background = _leftDrawerOpen ? '#e8f4f8' : 'white';
 };
 
+// 照片子選單（📷 展開「顯示位置 / 匯出報告」）
+window.togglePhotoMenu = function(ev) {
+    if (ev) ev.stopPropagation();
+    const menu = document.getElementById('photoSubmenu');
+    const btn = document.getElementById('photoMenuButton');
+    if (!menu || !btn) return;
+    if (menu.style.display === 'block') { menu.style.display = 'none'; return; }
+
+    // 對齊 📷 按鈕，往左側展開（抽屜在右邊）
+    const r = btn.getBoundingClientRect();
+    menu.style.top = r.top + 'px';
+    menu.style.left = 'auto';
+    menu.style.right = (window.innerWidth - r.left + 6) + 'px';
+    menu.style.display = 'block';
+
+    // 點別處就收起
+    setTimeout(() => {
+        document.addEventListener('click', window.closePhotoMenu, { once: true });
+    }, 0);
+};
+
+window.closePhotoMenu = function() {
+    const menu = document.getElementById('photoSubmenu');
+    if (menu) menu.style.display = 'none';
+};
+
 // ============================================================
 // 照片圖層 — 在地圖上顯示有照片的小段 📷 標記
 // ============================================================
@@ -273,7 +299,7 @@ let _photoLatLngMap = {}; // key: "segmentNumber-smallIndex" -> [lat, lng]
 
 window.togglePhotoLayer = async function() {
     _photoLayerActive = !_photoLayerActive;
-    const btn = document.getElementById('photoLayerButton');
+    const btn = document.getElementById('photoMenuButton');
     if (btn) btn.classList.toggle('active', _photoLayerActive);
 
     if (!_photoLayerActive) {

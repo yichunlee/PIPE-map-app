@@ -165,7 +165,8 @@
 .layer-panel {
     position: absolute;
     top: 80px;
-    left: 54px;
+    right: 64px;
+    left: auto;
     z-index: 1000;
     background: white;
     border-radius: 10px;
@@ -876,3 +877,17 @@ kbd {
     background: transparent !important;
     border: none !important;
 }
+
+/* 照片子選單（由 📷 展開）*/
+.photo-submenu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.photo-submenu-item:hover { background: #f0f7fa; }
+.photo-submenu-item + .photo-submenu-item { border-top: 1px solid #eee; }
