@@ -5,10 +5,13 @@
 
 let roadworkData = [];        // 許可陣列（每件含 areas[]）
 let roadworkVisible = false;
-let roadworkLayer = null;
+let roadworkPolyLayer = null; // 挖掘面（放大時顯示）
+let roadworkPointLayer = null;// 圓點（縮小時顯示）
+let roadworkZoomBound = false;
 let roadworkLoading = false;
 let roadworkMeta = {};
 
+const RW_ZOOM_THRESHOLD = 17;       // 這個層級以上顯示挖掘面，以下顯示圓點
 const RW_COLOR = '#FF5722';         // 施工期間內＝橘
 const RW_COLOR_OUT = '#BDBDBD';     // 非期間／無日期＝灰
 
@@ -100,7 +103,8 @@ function rwPopup(c) {
 function displayRoadworkMarkers() {
     clearRoadworkMarkers();
     if (!map) return;
-    roadworkLayer = L.layerGroup();
+    roadworkPolyLayer = L.layerGroup();
+    roadworkPointLayer = L.layerGroup();
 
     rwFiltered().forEach(c => {
         const active = rwIsActive(c);
@@ -114,15 +118,39 @@ function displayRoadworkMarkers() {
                     dashArray: active ? null : '4,3',
                 });
                 poly.bindPopup(popup);
-                roadworkLayer.addLayer(poly);
+                roadworkPolyLayer.addLayer(poly);
+
+                // 圓點放在該面的第一個座標
+                const marker = L.circleMarker(ar.coords[0], {
+                    radius: 6, fillColor: color, color: '#fff', weight: 2,
+                    opacity: 1, fillOpacity: active ? 0.9 : 0.5,
+                });
+                marker.bindPopup(popup);
+                roadworkPointLayer.addLayer(marker);
             }
         });
     });
-    roadworkLayer.addTo(map);
+
+    applyRoadworkZoomLevel();
+    if (!roadworkZoomBound) { map.on('zoomend', applyRoadworkZoomLevel); roadworkZoomBound = true; }
+}
+
+// 縮小看圓點、放大看真實挖掘面（挖掘面通常只有幾平方公尺，縮小看不到）
+function applyRoadworkZoomLevel() {
+    if (!roadworkVisible || !map || !roadworkPolyLayer || !roadworkPointLayer) return;
+    const z = map.getZoom();
+    if (z >= RW_ZOOM_THRESHOLD) {
+        if (!map.hasLayer(roadworkPolyLayer)) map.addLayer(roadworkPolyLayer);
+        if (map.hasLayer(roadworkPointLayer)) map.removeLayer(roadworkPointLayer);
+    } else {
+        if (map.hasLayer(roadworkPolyLayer)) map.removeLayer(roadworkPolyLayer);
+        if (!map.hasLayer(roadworkPointLayer)) map.addLayer(roadworkPointLayer);
+    }
 }
 
 function clearRoadworkMarkers() {
-    if (roadworkLayer) { map.removeLayer(roadworkLayer); roadworkLayer = null; }
+    if (roadworkPolyLayer) { if (map) map.removeLayer(roadworkPolyLayer); roadworkPolyLayer = null; }
+    if (roadworkPointLayer) { if (map) map.removeLayer(roadworkPointLayer); roadworkPointLayer = null; }
 }
 
 // ---------- 清單 ----------
