@@ -1,126 +1,234 @@
-// ========== 台中市挖掘許可功能 ==========
-let roadworkMarkers = [];
-let roadworkVisible = false;
-let roadworkData = [];
+// ========== 台中市自來水挖掘許可（上傳 JSONL）==========
+// 資料來源：台中市政府道路挖掘管理系統 GIS 匯出的 ArcGIS JSONL。
+// 由使用者上傳（含 attributes / geometry.rings / license），worker 解析存 D1。
+// 操作邏輯與「公路局申挖路權」「WGIS」一致：上傳、訪客只能看、面板收合。
 
+let roadworkData = [];        // 許可陣列（每件含 areas[]）
+let roadworkVisible = false;
+let roadworkLayer = null;
+let roadworkLoading = false;
+let roadworkMeta = {};
+
+const RW_COLOR = '#FF5722';         // 施工期間內＝橘
+const RW_COLOR_OUT = '#BDBDBD';     // 非期間／無日期＝灰
+
+function rwCanEdit() {
+    return typeof currentUser !== 'undefined' && currentUser &&
+        typeof getRoleLevel === 'function' && getRoleLevel(currentUser.role) >= 2;
+}
+
+function rwToday() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function rwIsActive(c) {
+    if (!c.startDate || !c.endDate) return false;   // 無核准期間 → 當非施工中
+    const t = rwToday();
+    return c.startDate <= t && t <= c.endDate;
+}
+function rwEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+}
+function rwFiltered() {
+    const onlyActive = document.getElementById('rwOnlyActive');
+    if (onlyActive && onlyActive.checked) return roadworkData.filter(rwIsActive);
+    return roadworkData;
+}
+
+// ---------- 載入 ----------
 async function loadRoadworkData() {
+    if (roadworkLoading) return;
+    roadworkLoading = true;
+    const countEl = document.getElementById('roadworkCount');
+    if (countEl) countEl.textContent = '載入中…';
     try {
-        document.getElementById('roadworkCount').textContent = '載入中...';
-        const result = await apiCall('getTaichungRoadwork');
-        if (result.success && result.data) {
-            roadworkData = result.data;
-            document.getElementById('roadworkCount').textContent = '共 ' + roadworkData.length + ' 筆許可';
-            if (roadworkVisible) displayRoadworkMarkers();
-        } else {
-            document.getElementById('roadworkCount').textContent = '載入失敗，請先更新資料';
-        }
-    } catch (error) {
-        document.getElementById('roadworkCount').textContent = '載入失敗';
-        console.error('載入挖掘許可失敗:', error);
+        const res = await apiCall('getTaichungRoadwork', {}, { silent: true });
+        roadworkData = res.data || [];
+        roadworkMeta = { sourceFile: res.sourceFile, uploadedAt: res.uploadedAt, areaCount: res.areaCount, empty: res.empty };
+        updateRoadworkCount();
+        renderRoadworkList();
+        if (roadworkVisible) displayRoadworkMarkers();
+    } catch (e) {
+        console.error('載入挖掘許可失敗:', e);
+        if (countEl) countEl.textContent = '載入失敗：' + e.message;
+    } finally {
+        roadworkLoading = false;
     }
 }
 
-// 解析 POLYGON (( lng lat, lng lat, ... )) 格式
-function parsePolygon(polygonStr) {
-    if (!polygonStr) return null;
-    const match = polygonStr.match(/POLYGON\s*\(\(\s*([^)]+)\)\)/i);
-    if (!match) return null;
-    const coords = match[1].trim().split(',').map(pair => {
-        const parts = pair.trim().split(/\s+/);
-        const lng = parseFloat(parts[0]);
-        const lat = parseFloat(parts[1]);
-        return [lat, lng];
-    }).filter(c => !isNaN(c[0]) && !isNaN(c[1]));
-    return coords.length >= 3 ? coords : null;
+function updateRoadworkCount() {
+    const el = document.getElementById('roadworkCount');
+    if (!el) return;
+    if (roadworkMeta.empty || roadworkData.length === 0) {
+        el.innerHTML = '<span style="color:#999;">尚未上傳 JSONL</span>';
+        return;
+    }
+    const shown = rwFiltered();
+    const areas = shown.reduce((s, c) => s + c.areas.length, 0);
+    let h = '共 <b>' + shown.length + '</b> 件許可 / ' + areas + ' 個挖掘面';
+    if (shown.length !== roadworkData.length) {
+        h += '<br><span style="color:#999;">（已隱藏 ' + (roadworkData.length - shown.length) + ' 件非施工期間）</span>';
+    }
+    if (roadworkMeta.uploadedAt) {
+        h += '<br><span style="color:#aaa;font-size:10px;">' + rwEsc(roadworkMeta.sourceFile || '') +
+             '，' + roadworkMeta.uploadedAt.slice(0,10) + ' 上傳</span>';
+    }
+    el.innerHTML = h;
+}
+
+// ---------- 繪製 ----------
+function rwPopup(c) {
+    const active = rwIsActive(c);
+    let h = '<div style="min-width:230px;max-width:320px;font-size:12px;">';
+    h += '<div style="font-weight:bold;color:' + (active ? RW_COLOR : RW_COLOR_OUT) + ';margin-bottom:6px;">🚧 自來水挖掘許可' +
+         (active ? '' : ' <span style="color:#999;font-weight:normal;">(非施工期間)</span>') + '</div>';
+    h += '<div style="margin:3px 0;"><b>工程名稱：</b>' + rwEsc(c.projectName) + '</div>';
+    if (c.route) h += '<div style="margin:3px 0;"><b>地點：</b>' + rwEsc(c.route) + '</div>';
+    if (c.district) h += '<div style="margin:3px 0;"><b>行政區：</b>' + rwEsc(c.district) + '</div>';
+    if (c.customer) h += '<div style="margin:3px 0;"><b>用戶：</b>' + rwEsc(c.customer) + '</div>';
+    if (c.applicant) h += '<div style="margin:3px 0;"><b>申請單位：</b>' + rwEsc(c.applicant) + '</div>';
+    h += '<div style="margin:3px 0;color:#666;"><b>核准施工：</b>' +
+         (c.startDate ? rwEsc(c.startDate) + ' ~ ' + rwEsc(c.endDate) : '（未核發）') +
+         (c.workTime ? '　' + rwEsc(c.workTime) : '') + '</div>';
+    if (c.permitNo) h += '<div style="margin:3px 0;color:#666;"><b>許可證號：</b>' + rwEsc(c.permitNo) + '</div>';
+    if (c.issueDate) h += '<div style="margin:3px 0;color:#666;"><b>發證：</b>' + rwEsc(c.issueDate) + '（' + rwEsc(c.permitState) + '）</div>';
+    h += '<div style="margin:3px 0;color:#999;font-size:11px;">申請書編號 ' + rwEsc(c.appNo) + '</div>';
+    h += '</div>';
+    return h;
 }
 
 function displayRoadworkMarkers() {
-    roadworkMarkers.forEach(m => map.removeLayer(m));
-    roadworkMarkers = [];
-    
-    roadworkData.forEach(work => {
-        const lat = parseFloat(work['緯度']);
-        const lng = parseFloat(work['經度']);
-        const polygonCoords = parsePolygon(work['施工範圍坐標']);
-        
-        const popupContent =
-            '<div style="min-width:220px; font-size:12px;">' +
-            '<div style="font-weight:bold; color:#FF5722; margin-bottom:6px;">🚧 挖掘許可</div>' +
-            '<div style="margin:3px 0;"><b>地點：</b>' + (work['地點'] || '-') + '</div>' +
-            '<div style="margin:3px 0;"><b>工程名稱：</b>' + (work['工程名稱'] || '-') + '</div>' +
-            '<div style="margin:3px 0;"><b>申請單位：</b>' + (work['申請單位'] || '-') + '</div>' +
-            '<div style="margin:3px 0; color:#666;"><b>許可證：</b>' + (work['許可證編號'] || '-') + '</div>' +
-            '<div style="margin:3px 0; color:#666;"><b>核准期間：</b>' + (work['核准起日期'] || '') + ' ~ ' + (work['核准迄日期'] || '') + '</div>' +
-            '</div>';
-        
-        // 有 POLYGON 就畫範圍，沒有就畫圓點
-        if (polygonCoords) {
-            const polygon = L.polygon(polygonCoords, {
-                color: '#FF5722',
-                weight: 2,
-                fillColor: '#FF5722',
-                fillOpacity: 0.3
-            }).addTo(map);
-            polygon.bindPopup(popupContent);
-            roadworkMarkers.push(polygon);
-        } else if (!isNaN(lat) && !isNaN(lng) && lat && lng) {
-            const marker = L.circleMarker([lat, lng], {
-                radius: 8,
-                fillColor: '#FF5722',
-                color: '#fff',
-                weight: 2,
-                opacity: 1,
-                fillOpacity: 0.85
-            }).addTo(map);
-            marker.bindPopup(popupContent);
-            roadworkMarkers.push(marker);
-        }
+    clearRoadworkMarkers();
+    if (!map) return;
+    roadworkLayer = L.layerGroup();
+
+    rwFiltered().forEach(c => {
+        const active = rwIsActive(c);
+        const color = active ? RW_COLOR : RW_COLOR_OUT;
+        const popup = rwPopup(c);
+        c.areas.forEach(ar => {
+            if (ar.coords.length >= 3) {
+                const poly = L.polygon(ar.coords, {
+                    color: color, weight: 2, fillColor: color,
+                    fillOpacity: active ? 0.35 : 0.2,
+                    dashArray: active ? null : '4,3',
+                });
+                poly.bindPopup(popup);
+                roadworkLayer.addLayer(poly);
+            }
+        });
     });
+    roadworkLayer.addTo(map);
 }
 
 function clearRoadworkMarkers() {
-    roadworkMarkers.forEach(m => map.removeLayer(m));
-    roadworkMarkers = [];
+    if (roadworkLayer) { map.removeLayer(roadworkLayer); roadworkLayer = null; }
 }
 
+// ---------- 清單 ----------
+function renderRoadworkList() {
+    const el = document.getElementById('roadworkList');
+    if (!el) return;
+    const cases = rwFiltered();
+    if (cases.length === 0) {
+        el.innerHTML = '<div style="color:#999;padding:8px 0;text-align:center;">目前沒有許可</div>';
+        return;
+    }
+    // 清單最多顯示 200 件，避免 DOM 過大（全台中 800 件）
+    const show = cases.slice(0, 200);
+    el.innerHTML = show.map((c, i) => {
+        const active = rwIsActive(c);
+        return '<div onclick="zoomToRoadwork(' + i + ')" style="padding:6px 8px;border-left:3px solid ' +
+            (active ? RW_COLOR : RW_COLOR_OUT) + ';background:#fafafa;margin-bottom:4px;border-radius:0 4px 4px 0;' +
+            'cursor:pointer;line-height:1.4;' + (active ? '' : 'opacity:0.7;') + '">' +
+            '<div style="font-weight:bold;font-size:12px;">' + rwEsc((c.projectName || c.appNo).slice(0, 24)) + '</div>' +
+            '<div style="color:#777;font-size:11px;">' + rwEsc(c.district || c.route || '') + '｜' + c.areas.length + ' 面</div>' +
+            '<div style="color:#999;font-size:10px;">' + (c.startDate ? rwEsc(c.startDate) + ' ~ ' + rwEsc(c.endDate) : '未核發') + '</div>' +
+            '</div>';
+    }).join('') + (cases.length > 200 ? '<div style="color:#aaa;font-size:10px;text-align:center;padding:4px;">（僅列前 200 件，地圖顯示全部）</div>' : '');
+}
 
-        function toggleRoadworkLayer() {
+function zoomToRoadwork(index) {
+    const c = rwFiltered()[index];
+    if (!c || !map || !c.areas.length) return;
+    const pts = [];
+    c.areas.forEach(ar => ar.coords.forEach(p => pts.push(p)));
+    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.4));
+}
+
+function fitRoadworkBounds() {
+    const pts = [];
+    rwFiltered().forEach(c => c.areas.forEach(ar => ar.coords.forEach(p => pts.push(p))));
+    if (!pts.length) { showToast('目前沒有可顯示的許可', 'info'); return; }
+    map.fitBounds(L.latLngBounds(pts).pad(0.1));
+}
+
+// ---------- 上傳 ----------
+async function uploadRoadworkJsonl(input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    if (!rwCanEdit()) { showToast('需登入且具編輯權限才能上傳', 'error'); return; }
+
+    const btn = document.getElementById('rwUploadBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 解析中…'; }
+    try {
+        const text = await file.text();
+        const res = await apiCall('uploadTaichungDig', {}, {
+            body: { data: text, fileName: file.name },
+            errorPrefix: '上傳失敗',
+        });
+        showToast('已解析 ' + res.count + ' 件許可、' + res.areaCount + ' 個挖掘面', 'success');
+        await loadRoadworkData();
+    } catch (e) {
+        console.error('上傳 JSONL 失敗:', e);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📂 上傳 JSONL'; }
+    }
+}
+
+async function deleteRoadworkData() {
+    if (!rwCanEdit()) { showToast('沒有刪除權限', 'error'); return; }
+    if (!confirm('確定清空目前的挖掘許可資料？')) return;
+    try {
+        await apiCall('deleteTaichungDig', {}, { errorPrefix: '刪除失敗' });
+        roadworkData = [];
+        showToast('已清空', 'success');
+        await loadRoadworkData();
+    } catch (e) { /* apiCall 已提示 */ }
+}
+
+// ---------- 開關 ----------
+function toggleRoadworkLayer() {
     const btn = document.getElementById('roadworkButton');
     const panel = document.getElementById('roadworkPanel');
     roadworkVisible = !roadworkVisible;
     if (roadworkVisible) {
-        btn.classList.add('active');
-        panel.style.display = 'block';
-        if (roadworkData.length === 0) {
-            loadRoadworkData();
-        } else {
-            displayRoadworkMarkers();
-        }
+        if (btn) btn.classList.add('active');
+        if (panel) panel.style.display = 'block';
+        const up = document.getElementById('rwUploadBtn');
+        if (up) up.style.display = rwCanEdit() ? '' : 'none';
+        const del = document.getElementById('rwDeleteBtn');
+        if (del) del.style.display = rwCanEdit() ? '' : 'none';
+        if (roadworkData.length === 0) loadRoadworkData();
+        else displayRoadworkMarkers();
     } else {
-        btn.classList.remove('active');
-        panel.style.display = 'none';
+        if (btn) btn.classList.remove('active');
+        if (panel) panel.style.display = 'none';
         clearRoadworkMarkers();
     }
 }
 
-async function updateRoadworkData() {
-    const btn = event.target;
-    btn.textContent = '更新中...';
-    btn.disabled = true;
-    try {
-        const result = await apiCall('updateTaichungRoadwork');
-        if (result.success) {
-            document.getElementById('roadworkCount').textContent = '更新成功，重新載入中...';
-            await loadRoadworkData();
-            showToast('已更新 ' + result.count + ' 筆台中市挖掘許可資料', 'success');
-        } else {
-            showToast('更新失敗：' + (result.error || '未知錯誤'), 'error');
-        }
-    } catch (error) {
-        showToast('更新失敗：' + error.message, 'error');
-    } finally {
-        btn.textContent = '🔄 更新資料';
-        btn.disabled = false;
-    }
+function onRoadworkFilterChange() {
+    updateRoadworkCount();
+    renderRoadworkList();
+    if (roadworkVisible) displayRoadworkMarkers();
 }
-// ========== 台中市挖掘許可功能結束 ==========
+
+window.toggleRoadworkLayer = toggleRoadworkLayer;
+window.uploadRoadworkJsonl = uploadRoadworkJsonl;
+window.deleteRoadworkData = deleteRoadworkData;
+window.onRoadworkFilterChange = onRoadworkFilterChange;
+window.zoomToRoadwork = zoomToRoadwork;
+window.fitRoadworkBounds = fitRoadworkBounds;
+// ========== 台中市自來水挖掘許可結束 ==========
