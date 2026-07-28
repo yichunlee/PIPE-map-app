@@ -93,8 +93,9 @@
         <div style="display:flex; gap:4px; margin-bottom:6px;">
             <button id="rwUploadBtn" onclick="document.getElementById('rwFileInput').click()" style="flex:1; padding:5px 8px; background:#FF5722; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">📂 上傳 JSONL</button>
             <button onclick="fitRoadworkBounds()" style="padding:5px 8px; background:#eceff1; color:#333; border:none; border-radius:4px; cursor:pointer; font-size:11px;" title="縮放到全部">🎯</button>
-            <button id="rwDeleteBtn" onclick="deleteRoadworkData()" style="padding:5px 8px; background:#eceff1; color:#c62828; border:none; border-radius:4px; cursor:pointer; font-size:11px; display:none;" title="清空資料">🗑️</button>
+            
         </div>
+        <div id="roadworkFileList" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px;"></div>
         <div id="roadworkList"></div>
         <details style="margin-top:8px;">
             <summary style="color:#FF5722; font-size:10px; cursor:pointer;">📖 JSONL 從哪裡來？</summary>
