@@ -228,23 +228,48 @@ async function deleteRoadworkData() {
 
 // ---------- 開關 ----------
 function toggleRoadworkLayer() {
-    const btn = document.getElementById('roadworkButton');
     const panel = document.getElementById('roadworkPanel');
-    roadworkVisible = !roadworkVisible;
+    const panelOpen = panel && panel.style.display !== 'none';
+
     if (roadworkVisible) {
-        if (btn) btn.classList.add('active');
-        if (panel) panel.style.display = 'block';
-        const up = document.getElementById('rwUploadBtn');
-        if (up) up.style.display = rwCanEdit() ? '' : 'none';
-        const del = document.getElementById('rwDeleteBtn');
-        if (del) del.style.display = rwCanEdit() ? '' : 'none';
-        if (roadworkData.length === 0) loadRoadworkData();
-        else displayRoadworkMarkers();
-    } else {
-        if (btn) btn.classList.remove('active');
-        if (panel) panel.style.display = 'none';
-        clearRoadworkMarkers();
+        // 圖層開著、面板也開 → 關掉整個圖層；面板收合中 → 只叫回面板
+        if (panelOpen) { hideRoadworkLayer(); }
+        else { openRoadworkPanel(); }
+        return;
     }
+
+    roadworkVisible = true;
+    const btn = document.getElementById('roadworkButton');
+    if (btn) btn.classList.add('active');
+    openRoadworkPanel();
+    if (roadworkData.length === 0) loadRoadworkData();
+    else displayRoadworkMarkers();
+}
+
+// 開啟面板（不影響圖層）
+function openRoadworkPanel() {
+    const panel = document.getElementById('roadworkPanel');
+    if (panel) panel.style.display = 'block';
+    const up = document.getElementById('rwUploadBtn');
+    if (up) up.style.display = rwCanEdit() ? '' : 'none';
+    const del = document.getElementById('rwDeleteBtn');
+    if (del) del.style.display = rwCanEdit() ? '' : 'none';
+}
+
+// 收合面板，地圖圖層保留
+function collapseRoadworkPanel() {
+    const panel = document.getElementById('roadworkPanel');
+    if (panel) panel.style.display = 'none';
+}
+
+// 真正關閉圖層
+function hideRoadworkLayer() {
+    roadworkVisible = false;
+    const btn = document.getElementById('roadworkButton');
+    if (btn) btn.classList.remove('active');
+    const panel = document.getElementById('roadworkPanel');
+    if (panel) panel.style.display = 'none';
+    clearRoadworkMarkers();
 }
 
 function onRoadworkFilterChange() {
@@ -254,6 +279,9 @@ function onRoadworkFilterChange() {
 }
 
 window.toggleRoadworkLayer = toggleRoadworkLayer;
+window.collapseRoadworkPanel = collapseRoadworkPanel;
+window.openRoadworkPanel = openRoadworkPanel;
+window.hideRoadworkLayer = hideRoadworkLayer;
 window.uploadRoadworkJsonl = uploadRoadworkJsonl;
 window.deleteRoadworkData = deleteRoadworkData;
 window.onRoadworkFilterChange = onRoadworkFilterChange;

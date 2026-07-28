@@ -76,7 +76,10 @@
     </div>
 
     <div id="roadworkPanel" class="roadwork-panel" style="right:64px; left:auto; max-height:70vh; overflow:auto; width:260px;">
-        <div style="font-weight:bold; margin-bottom:6px; color:#FF5722;">🚧 自來水挖掘許可（台中市）</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="font-weight:bold; color:#FF5722;">🚧 自來水挖掘許可（台中市）</span>
+            <span onclick="collapseRoadworkPanel()" title="收合面板（地圖保留）" style="cursor:pointer; color:#999; font-size:16px; padding:0 4px;">✕</span>
+        </div>
         <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; margin-bottom:6px; cursor:pointer;">
             <input type="checkbox" id="rwOnlyActive" onchange="onRoadworkFilterChange()"> 只顯示施工期間內
         </label>
@@ -104,7 +107,10 @@
 
     <!-- 公路局申挖路權（公路局 DGS）-->
     <div id="dgsPanel" class="roadwork-panel" style="bottom:30px; right:64px; left:auto; width:260px; max-height:70vh; overflow:auto;">
-        <div style="font-weight:bold; margin-bottom:6px; color:#0288D1;">💧 公路局申挖路權</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="font-weight:bold; color:#0288D1;">💧 公路局申挖路權</span>
+            <span onclick="collapseDgsPanel()" title="收合面板（地圖保留）" style="cursor:pointer; color:#999; font-size:16px; padding:0 4px;">✕</span>
+        </div>
         <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; margin-bottom:6px; cursor:pointer;">
             <input type="checkbox" id="dgsOnlyActive" checked onchange="onDgsFilterChange()"> 只顯示施工期間內
         </label>

@@ -322,22 +322,49 @@ async function deleteDgsUpload(city) {
 
 // ---------- 開關 ----------
 function toggleDgsLayer() {
-    const btn = document.getElementById('dgsButton');
     const panel = document.getElementById('dgsPanel');
-    dgsVisible = !dgsVisible;
+    const panelOpen = panel && panel.style.display !== 'none';
 
     if (dgsVisible) {
-        if (btn) btn.classList.add('active-blue');
-        if (panel) panel.style.display = 'block';
-        const up = document.getElementById('dgsUploadBtn');
-        if (up) up.style.display = dgsCanEdit() ? '' : 'none';   // 訪客看不到上傳
-        if (dgsCases.length === 0 && dgsUploads.length === 0) loadDgsPermits();
-        else renderDgsPermits();
-    } else {
-        if (btn) btn.classList.remove('active-blue');
-        if (panel) panel.style.display = 'none';
-        clearDgsLayers();
+        // 圖層開著、面板也開著 → 關掉整個圖層
+        // 圖層開著、面板收合中 → 只是把面板叫回來（圖層不動）
+        if (panelOpen) { hideDgsLayer(); }
+        else { openDgsPanel(); }
+        return;
     }
+
+    // 圖層原本關著：開啟圖層 + 面板
+    dgsVisible = true;
+    const btn = document.getElementById('dgsButton');
+    if (btn) btn.classList.add('active-blue');
+    openDgsPanel();
+    if (dgsCases.length === 0 && dgsUploads.length === 0) loadDgsPermits();
+    else renderDgsPermits();
+}
+
+// 開啟面板（不影響圖層）
+function openDgsPanel() {
+    const panel = document.getElementById('dgsPanel');
+    if (panel) panel.style.display = 'block';
+    const up = document.getElementById('dgsUploadBtn');
+    if (up) up.style.display = dgsCanEdit() ? '' : 'none';
+}
+
+// 收合面板，但地圖圖層保留
+function collapseDgsPanel() {
+    const panel = document.getElementById('dgsPanel');
+    if (panel) panel.style.display = 'none';
+    // 圖層仍在，工具鈕維持 active 提示使用者「還開著」
+}
+
+// 真正關閉圖層（長按工具鈕，或關閉鈕另設；預設保留給程式呼叫）
+function hideDgsLayer() {
+    dgsVisible = false;
+    const btn = document.getElementById('dgsButton');
+    if (btn) btn.classList.remove('active-blue');
+    const panel = document.getElementById('dgsPanel');
+    if (panel) panel.style.display = 'none';
+    clearDgsLayers();
 }
 
 function onDgsFilterChange() {
@@ -347,6 +374,9 @@ function onDgsFilterChange() {
 }
 
 window.toggleDgsLayer = toggleDgsLayer;
+window.collapseDgsPanel = collapseDgsPanel;
+window.openDgsPanel = openDgsPanel;
+window.hideDgsLayer = hideDgsLayer;
 window.onDgsFilterChange = onDgsFilterChange;
 window.zoomToDgsCase = zoomToDgsCase;
 window.fitDgsBounds = fitDgsBounds;
