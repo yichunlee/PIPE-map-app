@@ -103,23 +103,69 @@ function getPositionAtDistanceFromCoords(coords, targetDist) {
 }
 
 async function fetchElevationsBatch(samples, win) {
-    const BATCH_SIZE = 50;
+    // 主來源：Open-Meteo Elevation（CORS 開放、穩定、批次上限 100、免 key）
+    // 備援：open-elevation（主來源整批失敗時才用）
+    const BATCH_SIZE = 100;
     const elevations = new Array(samples.length).fill(null);
+
+    const setStatus = (done) => {
+        if (win && !win.closed) {
+            const el = win.document.getElementById('status');
+            if (el) el.textContent = `⏳ 查詢高程中... ${Math.min(done, samples.length)}/${samples.length}`;
+        }
+    };
+
+    // 帶重試的 fetch（暫時性失敗是「抓不到」的主因，重試幾乎都能救回來）
+    async function fetchJson(url, opts, tries) {
+        tries = tries || 3;
+        for (let attempt = 1; attempt <= tries; attempt++) {
+            try {
+                const resp = await fetch(url, opts);
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                return await resp.json();
+            } catch (e) {
+                if (attempt === tries) throw e;
+                await new Promise(r => setTimeout(r, 500 * attempt));  // 遞增退避
+            }
+        }
+    }
+
     for (let i = 0; i < samples.length; i += BATCH_SIZE) {
         const batch = samples.slice(i, i + BATCH_SIZE);
-        if (win && !win.closed) {
-            const statusEl = win.document.getElementById('status');
-            if (statusEl) statusEl.textContent = `⏳ 查詢高程中... ${Math.min(i+BATCH_SIZE, samples.length)}/${samples.length}`;
-        }
+        setStatus(i + BATCH_SIZE);
+
+        let filled = false;
+
+        // 1) 主來源 Open-Meteo
         try {
-            const resp = await fetch('https://api.open-elevation.com/api/v1/lookup', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ locations: batch.map(s => ({ latitude: s.lat, longitude: s.lng })) })
-            });
-            const data = await resp.json();
-            data.results.forEach((r, j) => { elevations[i+j] = r.elevation; });
-        } catch(e) { console.warn('高程查詢失敗:', i, e); }
-        if (i + BATCH_SIZE < samples.length) await new Promise(r => setTimeout(r, 300));
+            const lats = batch.map(s => s.lat).join(',');
+            const lngs = batch.map(s => s.lng).join(',');
+            const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lats + '&longitude=' + lngs;
+            const data = await fetchJson(url, {}, 3);
+            if (data && Array.isArray(data.elevation) && data.elevation.length === batch.length) {
+                data.elevation.forEach((e, j) => { elevations[i + j] = (typeof e === 'number' ? e : null); });
+                filled = true;
+            }
+        } catch (e) {
+            console.warn('Open-Meteo 高程查詢失敗，改用備援:', i, e);
+        }
+
+        // 2) 備援 open-elevation（只在主來源整批掛掉時）
+        if (!filled) {
+            try {
+                const data = await fetchJson('https://api.open-elevation.com/api/v1/lookup', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ locations: batch.map(s => ({ latitude: s.lat, longitude: s.lng })) })
+                }, 2);
+                if (data && Array.isArray(data.results)) {
+                    data.results.forEach((r, j) => { elevations[i + j] = r.elevation; });
+                }
+            } catch (e) {
+                console.warn('備援高程也失敗:', i, e);
+            }
+        }
+
+        if (i + BATCH_SIZE < samples.length) await new Promise(r => setTimeout(r, 200));
     }
     return elevations;
 }
