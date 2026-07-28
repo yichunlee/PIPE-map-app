@@ -89,7 +89,7 @@
             &nbsp;&nbsp;
             <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#BDBDBD;vertical-align:middle;"></span> 非期間/未核發
         </div>
-        <input type="file" id="rwFileInput" accept=".jsonl,.json,.txt" style="display:none;" onchange="uploadRoadworkJsonl(this)">
+        <input type="file" id="rwFileInput" accept=".jsonl,.json,.txt" multiple style="display:none;" onchange="uploadRoadworkJsonl(this)">
         <div style="display:flex; gap:4px; margin-bottom:6px;">
             <button id="rwUploadBtn" onclick="document.getElementById('rwFileInput').click()" style="flex:1; padding:5px 8px; background:#FF5722; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">📂 上傳 JSONL</button>
             <button onclick="fitRoadworkBounds()" style="padding:5px 8px; background:#eceff1; color:#333; border:none; border-radius:4px; cursor:pointer; font-size:11px;" title="縮放到全部">🎯</button>
@@ -100,7 +100,7 @@
             <summary style="color:#FF5722; font-size:10px; cursor:pointer;">📖 JSONL 從哪裡來？</summary>
             <div style="color:#888; font-size:10px; margin-top:4px; line-height:1.6;">
                 從台中市道路挖掘管理系統 GIS 匯出的 JSONL（每行一筆，含 attributes / geometry / license）。
-                上傳後所有人都看得到，重新上傳會整批取代。
+                可一次選多個檔案上傳，會依申請書編號合併（同編號以新檔為準）。要整批換掉請先按 🗑️ 清空。
             </div>
         </details>
     </div>

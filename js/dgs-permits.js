@@ -144,7 +144,13 @@ function renderDgsPermits() {
     dgsPolyLayer = L.layerGroup();
     dgsPointLayer = L.layerGroup();
 
-    dgsFilteredCases().forEach(c => {
+    // 先畫「其他管線」(灰)，再畫「自來水」(藍)，後加入者在上層 →
+    // 重疊時自來水不會被灰色蓋住。
+    const shownCases = dgsFilteredCases();
+    const orderedCases = shownCases.filter(c => !dgsIsWater(c))
+                                   .concat(shownCases.filter(dgsIsWater));
+
+    orderedCases.forEach(c => {
         const active = dgsIsActive(c);
         const color = dgsIsWater(c) ? DGS_COLOR : DGS_COLOR_OTHER;
 

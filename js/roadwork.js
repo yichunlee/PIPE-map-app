@@ -106,7 +106,12 @@ function displayRoadworkMarkers() {
     roadworkPolyLayer = L.layerGroup();
     roadworkPointLayer = L.layerGroup();
 
-    rwFiltered().forEach(c => {
+    // 先畫「非期間／未核發」(灰)，再畫「施工期間內」(橘)，
+    // 後加入的圖層會蓋在上層 → 重疊時橘色不會被灰色蓋住。
+    const shown = rwFiltered();
+    const ordered = shown.filter(c => !rwIsActive(c)).concat(shown.filter(rwIsActive));
+
+    ordered.forEach(c => {
         const active = rwIsActive(c);
         const color = active ? RW_COLOR : RW_COLOR_OUT;
         const popup = rwPopup(c);
@@ -191,28 +196,39 @@ function fitRoadworkBounds() {
     map.fitBounds(L.latLngBounds(pts).pad(0.1));
 }
 
-// ---------- 上傳 ----------
+// ---------- 上傳（可一次多檔；同 appNo 會以新檔為準合併）----------
 async function uploadRoadworkJsonl(input) {
-    const file = input.files && input.files[0];
+    const files = input.files ? Array.from(input.files) : [];
     input.value = '';
-    if (!file) return;
+    if (files.length === 0) return;
     if (!rwCanEdit()) { showToast('需登入且具編輯權限才能上傳', 'error'); return; }
 
     const btn = document.getElementById('rwUploadBtn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ 解析中…'; }
-    try {
-        const text = await file.text();
-        const res = await apiCall('uploadTaichungDig', {}, {
-            body: { data: text, fileName: file.name },
-            errorPrefix: '上傳失敗',
-        });
-        showToast('已解析 ' + res.count + ' 件許可、' + res.areaCount + ' 個挖掘面', 'success');
-        await loadRoadworkData();
-    } catch (e) {
-        console.error('上傳 JSONL 失敗:', e);
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '📂 上傳 JSONL'; }
+    if (btn) btn.disabled = true;
+
+    let ok = 0, fail = 0, total = 0;
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (btn) btn.textContent = '⏳ ' + (i + 1) + '/' + files.length + '…';
+        try {
+            const text = await file.text();
+            const res = await apiCall('uploadTaichungDig', {}, {
+                body: { data: text, fileName: file.name },
+                silent: true,
+            });
+            if (res && res.success) { ok++; total = res.totalCount || 0; }
+            else { fail++; console.warn(file.name, res && res.error); }
+        } catch (e) { fail++; console.error('上傳', file.name, '失敗:', e); }
     }
+
+    if (btn) { btn.disabled = false; btn.textContent = '📂 上傳 JSONL'; }
+    if (ok) {
+        showToast('已上傳 ' + ok + ' 個檔案，目前共 ' + total + ' 件許可' +
+                  (fail ? '（' + fail + ' 個失敗）' : ''), fail ? 'info' : 'success');
+    } else {
+        showToast('上傳失敗，請確認是台中市挖掘 JSONL 檔', 'error');
+    }
+    await loadRoadworkData();
 }
 
 async function deleteRoadworkData() {
