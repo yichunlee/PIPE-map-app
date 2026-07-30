@@ -154,7 +154,9 @@ function _loadMemoTab(content) {
             <div style="font-size:12px;color:#64748b;line-height:1.8;margin-bottom:12px;">
                 上傳中工處「工程執行進度月彙計表」，系統會抓取每個工程的
                 <b>目前施工情形（及遭遇困難）</b>，顯示在工程地圖右上角的統計面板裡。<br>
-                <span style="color:#94a3b8;">會自動用工程名稱／編號比對；對不上的可在下方手動指定。</span>
+                <span style="color:#94a3b8;">會自動用工程名稱／編號比對；對不上的可在下方手動指定。</span><br>
+                <span style="color:#b45309;">重新上傳只會更新「新檔案裡有的工程」；新檔沒有的工程會保留舊內容，
+                但畫面上會標示為舊資料。要完全重建請先「清空全部」。</span>
             </div>
             <input type="file" id="_memoFileInput" accept=".xlsx,.xls" style="display:none;"
                    onchange="uploadProgressMemoFile(this)">
@@ -162,6 +164,9 @@ function _loadMemoTab(content) {
                 <button onclick="document.getElementById('_memoFileInput').click()"
                         style="padding:8px 16px;background:#b45309;color:#fff;border:none;border-radius:6px;
                                cursor:pointer;font-size:13px;">📂 上傳月彙計表</button>
+                <button onclick="clearAllProgressMemos()"
+                        style="padding:8px 12px;background:#f1f5f9;color:#b91c1c;border:none;border-radius:6px;
+                               cursor:pointer;font-size:12px;">🗑️ 清空全部</button>
                 <span id="_memoStatus" style="font-size:12px;color:#64748b;"></span>
             </div>
             <div id="_memoResult" style="margin-top:12px;max-height:52vh;overflow-y:auto;"></div>

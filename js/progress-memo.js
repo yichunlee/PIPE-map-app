@@ -21,12 +21,21 @@ async function loadProgressMemo(pipelineId) {
     if (progressMemoCache[pipelineId] !== undefined) return progressMemoCache[pipelineId];
     try {
         const res = await apiCall('getProgressMemo', { pipelineId }, { silent: true });
-        progressMemoCache[pipelineId] = res.memo || null;
+        const m = res.memo || null;
+        if (m) { m._latestUpload = res.latestUpload; m._latestFile = res.latestFile; }
+        progressMemoCache[pipelineId] = m;
         return progressMemoCache[pipelineId];
     } catch (e) {
         console.warn('載入施工情形失敗:', e);
         return null;   // 這是附加資訊，載不到不阻斷主畫面
     }
+}
+
+// 是否為「舊資料」：這筆的匯入時間早於最後一次匯入
+// （代表最新的月報裡沒有這個工程，內容沒被更新）
+function isStaleMemo(memo) {
+    if (!memo || !memo.uploaded_at || !memo._latestUpload) return false;
+    return String(memo.uploaded_at) < String(memo._latestUpload);
 }
 
 // ---------- 產生要插進統計面板的 HTML ----------
@@ -48,11 +57,22 @@ function buildProgressMemoHtml(memo) {
             '　實際 ' + (memo.actual != null ? memo.actual : '-') + '%</div>';
     }
 
+    // 這筆資料比「最後一次匯入」還舊 → 代表最新月報沒有這個工程，
+    // 畫面上留的是上一份的內容，必須講清楚，否則會被當成現況。
+    if (isStaleMemo(memo)) {
+        head = '<div style="font-size:11px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;' +
+            'border-radius:4px;padding:5px 7px;margin-bottom:6px;line-height:1.6;">' +
+            '⚠️ 這是 <b>' + memoEsc(String(memo.uploaded_at || '').slice(0, 10)) + '</b> 匯入的舊資料<br>' +
+            '最新月報（' + memoEsc(String(memo._latestUpload || '').slice(0, 10)) + '）未包含此工程' +
+            '</div>' + head;
+    }
+
     return '' +
         '<details class="memo-details" style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;">' +
         '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:#b45309;outline:none;">' +
-        '📋 目前施工情形' +
-        (memo.uploaded_at ? '<span style="font-weight:400;color:#94a3b8;font-size:10px;">　' +
+        (isStaleMemo(memo) ? '⚠️ 目前施工情形（舊）' : '📋 目前施工情形') +
+        (memo.uploaded_at ? '<span style="font-weight:400;color:' +
+            (isStaleMemo(memo) ? '#b91c1c' : '#94a3b8') + ';font-size:10px;">　' +
             memoEsc(String(memo.uploaded_at).slice(0, 10)) + '</span>' : '') +
         '</summary>' +
         '<div class="memo-body" style="margin-top:6px;font-size:11px;color:#334155;line-height:1.65;' +
@@ -221,6 +241,23 @@ async function assignMemoManually(i) {
 window.loadProgressMemo = loadProgressMemo;
 window.attachProgressMemo = attachProgressMemo;
 window.buildProgressMemoHtml = buildProgressMemoHtml;
+window.isStaleMemo = isStaleMemo;
 window.uploadProgressMemoFile = uploadProgressMemoFile;
 window.assignMemoManually = assignMemoManually;
 // ========== 目前施工情形結束 ==========
+
+// 清空全部施工情形（要完全重建時用）
+async function clearAllProgressMemos() {
+    if (!memoCanEdit()) { showToast('沒有權限', 'error'); return; }
+    if (!confirm('確定清空所有工程的「目前施工情形」？\n（管線、進度等其他資料不受影響）')) return;
+    try {
+        await apiCall('deleteProgressMemos', {}, { errorPrefix: '清空失敗' });
+        progressMemoCache = {};
+        const box = document.getElementById('_memoResult');
+        const st = document.getElementById('_memoStatus');
+        if (box) box.innerHTML = '';
+        if (st) st.textContent = '已清空';
+        showToast('已清空所有施工情形', 'success');
+    } catch (e) { /* apiCall 已提示 */ }
+}
+window.clearAllProgressMemos = clearAllProgressMemos;
