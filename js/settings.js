@@ -43,6 +43,7 @@ window.openSettingsPanel = async function() {
         <div id="_stTabBar" style="display:flex;border-bottom:2px solid #e2e8f0;background:#f8fafc;flex-shrink:0;">
             <button class="_stTab active" onclick="switchSettingsTab('main')"   style="${_tabStyle(true)}">📋 工程設定</button>
             <button class="_stTab"        onclick="switchSettingsTab('budget')" style="${_tabStyle(false)}">📊 年度預算</button>
+            <button class="_stTab"        onclick="switchSettingsTab('memo')"   style="${_tabStyle(false)}">📋 施工情形</button>
         </div>
         <!-- Content area -->
         <div id="_stContent" style="flex:1;overflow:auto;padding:0;">
@@ -81,7 +82,7 @@ function _tabStyle(active) {
 window.switchSettingsTab = async function(tab) {
     window._stCurrentTab = tab;
     document.querySelectorAll('._stTab').forEach(function(btn, i) {
-        const tabs = ['main','budget'];
+        const tabs = ['main','budget','memo'];
         const isActive = tabs[i] === tab;
         btn.style.background = isActive ? '#fff' : 'transparent';
         btn.style.borderBottom = isActive ? '2px solid #1e6fdc' : '2px solid transparent';
@@ -138,11 +139,39 @@ async function _loadSettingsTab(tab) {
         return;
     }
 
+    if (tab === 'memo')   return _loadMemoTab(content);
     if (tab === 'main')   await _loadMainTab(pipelines, content);
     if (tab === 'budget') await _loadBudgetTab(content);
 }
 
 // ── Tab：工程設定（按計畫分組）────
+
+// ── 施工情形分頁：上傳中工處月彙計表 ──────────────────────
+function _loadMemoTab(content) {
+    content.innerHTML = `
+        <div style="padding:16px;">
+            <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px;">📋 目前施工情形</div>
+            <div style="font-size:12px;color:#64748b;line-height:1.8;margin-bottom:12px;">
+                上傳中工處「工程執行進度月彙計表」，系統會抓取每個工程的
+                <b>目前施工情形（及遭遇困難）</b>，顯示在工程地圖右上角的統計面板裡。<br>
+                <span style="color:#94a3b8;">會自動用工程名稱／編號比對；對不上的可在下方手動指定。</span>
+            </div>
+            <input type="file" id="_memoFileInput" accept=".xlsx,.xls" style="display:none;"
+                   onchange="uploadProgressMemoFile(this)">
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button onclick="document.getElementById('_memoFileInput').click()"
+                        style="padding:8px 16px;background:#b45309;color:#fff;border:none;border-radius:6px;
+                               cursor:pointer;font-size:13px;">📂 上傳月彙計表</button>
+                <span id="_memoStatus" style="font-size:12px;color:#64748b;"></span>
+            </div>
+            <div id="_memoResult" style="margin-top:12px;max-height:52vh;overflow-y:auto;"></div>
+        </div>`;
+    if (!memoCanEdit()) {
+        const btn = content.querySelector('button');
+        if (btn) { btn.disabled = true; btn.style.background = '#cbd5e1'; btn.textContent = '需編輯權限'; }
+    }
+}
+
 async function _loadMainTab(pipelines, content) {
     const curYear = new Date().getFullYear();
 

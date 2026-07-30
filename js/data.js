@@ -551,6 +551,11 @@ function showStatsPanel() {
     panel.className = 'stats-panel collapsed';
     panel.innerHTML = statsHTML;
     document.body.appendChild(panel);
+
+    // 接在管線埋設長度後面加上「目前施工情形」（非同步，載不到就不顯示）
+    if (typeof attachProgressMemo === 'function' && currentPipeline && currentPipeline.id) {
+        attachProgressMemo(currentPipeline.id);
+    }
 }
 
 // 統計面板收合功能
