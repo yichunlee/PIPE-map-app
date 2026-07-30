@@ -84,7 +84,7 @@ async function toggleProjectNotes(pipelines) {
                     projectPermitLabels.push(labelMarker);
                 });
             } catch (error) {
-                console.error('載入工程路權範圍失敗:', pipeline.name, error);
+                reportLoadFail('zone:' + pipeline.id, error, pipeline.name + ' 的路權範圍', { batch: true });
             }
         }));
     } else {
@@ -138,7 +138,7 @@ async function _loadProjectProgressBackground(pipelines) {
                 drawProjectValveMarkers(pipeline);
             }
         } catch (e) {
-            console.warn('載入進度失敗:', pipeline.name, e);
+            reportLoadFail('progress:' + pipeline.id, e, pipeline.name + ' 的進度', { batch: true });
         }
         // 只在計畫大地圖時才更新統計欄
         if (!currentPipeline) showProjectStatsPanel(pipelines);

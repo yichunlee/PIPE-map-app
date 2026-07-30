@@ -13,6 +13,63 @@ SMALL_CN = '一二三四五六七八九十'
 FIXED_TIER = {'CB': 1, 'CS': 2, 'UL': 3, 'DB': 4, 'SB': 5}
 
 
+# 全形 → 半形（項次代號用；使用者在 Excel 手打常會打成全形）
+_FULLWIDTH_MAP = {ord('＜'): '<', ord('＞'): '>', ord('［'): '[', ord('］'): ']',
+                  ord('（'): '(', ord('）'): ')', ord('　'): ' '}
+for _i in range(10):                      # ０-９ → 0-9
+    _FULLWIDTH_MAP[ord('０') + _i] = str(_i)
+for _i in range(26):                      # Ａ-Ｚ / ａ-ｚ
+    _FULLWIDTH_MAP[ord('Ａ') + _i] = chr(ord('A') + _i)
+    _FULLWIDTH_MAP[ord('ａ') + _i] = chr(ord('a') + _i)
+
+
+def _blank_to_none(v):
+    """把空字串／只有空白的儲存格正規化成 None，並去除字串前後空白。
+
+    在 Excel 手動編輯／另存過的檔案，被清空的儲存格常會留下 '' 而不是
+    真正的空值；複製貼上也常帶進前後空白。若不正規化：
+      - is_discard_rollup() 的 `is None` 判斷全部失效，小計列會被誤認成群組
+      - classify() 回 None，`kind, raw = cls` 直接 TypeError（/parse 回 400）
+      - 項次帶空白會讓階層比對失敗
+    """
+    if v is None:
+        return None
+    if isinstance(v, str):
+        v = v.strip()
+        if not v:
+            return None
+    return v
+
+
+def _norm_code(v):
+    """項次代號正規化：全形轉半形、去掉內部空白。
+
+    使用者手打 ＜Ａ＞＜１＞ 這種全形代號時，若不轉換，classify() 會判成
+    UNK，整份階層就散掉（不會報錯，但群組數會爆增 → 靜默錯誤）。
+    """
+    if not isinstance(v, str):
+        return v
+    return v.translate(_FULLWIDTH_MAP).replace(' ', '')
+
+
+def _to_number(v):
+    """把「看起來是數字的字串」轉成數值。
+
+    Excel 手改常把數量／單價存成文字（含千分位逗號）。解析時不轉的話，
+    載入不會報錯，但之後產生明細表時 round() 會 TypeError（延遲爆炸）。
+    非數字字串（例如費率型的 '--'）原樣保留。
+    """
+    if isinstance(v, str):
+        t = v.replace(',', '').replace('，', '').strip()
+        if t and t not in ('-', '--'):
+            try:
+                f = float(t)
+                return int(f) if f.is_integer() else f
+            except ValueError:
+                pass
+    return v
+
+
 def classify(a):
     """回傳 (kind, symbol_repr) 或 None(表示不是一個標準代號格式)"""
     if a is None:
@@ -47,15 +104,10 @@ def classify(a):
 def is_boilerplate(a, b, c, d, e, f, g):
     if all(v is None for v in (a, b, c, d, e, f, g)):
         return True
-    if a == '台灣自來水公司':
-        return True
-    if a == '詳細價目表[契約]':
-        return True
-    if a == '工程名稱':
-        return True
-    if a == '施工地點':
-        return True
-    if a == '項 次':
+    # 比對時去掉所有空白：表頭在不同檔案可能寫成「項 次」「項　次」「項次」，
+    # 且項次欄在讀取時已做過正規化（會去掉空白）。
+    key = a.replace(' ', '').replace('\u3000', '') if isinstance(a, str) else a
+    if key in ('台灣自來水公司', '詳細價目表[契約]', '工程名稱', '施工地點', '項次'):
         return True
     if isinstance(a, str) and '投標廠商' in a:
         return True
@@ -103,9 +155,62 @@ def seq_ord(kind, raw):
     return None
 
 
+def _pick_sheet(wb, sheet_name):
+    """挑出契約詳細表分頁，對使用者改過的檔名寬容一點。
+
+    依序嘗試：完全相同 → 去空白後相同 → 名稱包含關鍵字 → 只有一個分頁就用它。
+    都找不到才報錯，並在訊息裡列出實際分頁名，方便使用者對照。
+    """
+    if sheet_name in wb.sheetnames:
+        return wb[sheet_name]
+    target = sheet_name.replace(' ', '').replace('　', '')
+    for n in wb.sheetnames:
+        if n.replace(' ', '').replace('　', '') == target:
+            return wb[n]
+    for n in wb.sheetnames:
+        if '詳細' in n and ('契約' in n or '價目' in n):
+            return wb[n]
+    if len(wb.sheetnames) == 1:
+        return wb[wb.sheetnames[0]]
+    raise ValueError(
+        f'找不到「{sheet_name}」分頁，檔案中的分頁為：{"、".join(wb.sheetnames)}'
+    )
+
+
+def _check_uncalculated_formulas(path, ws):
+    """偵測「有公式但沒有快取值」的情況並明確報錯。
+
+    openpyxl 以 data_only=True 讀的是 Excel 存檔時算好的快取值。若檔案是由
+    程式產生／被不會計算公式的工具另存，快取值會是 None——這時解析不會報錯，
+    但金額全空、階層判斷全歪（靜默產生錯誤結果）。寧可擋下來也不要給錯數字。
+
+    判斷方式必須精確：同一個儲存格「有公式」且「快取值為 None」才算數，
+    不能只看金額欄是不是空的（費率型項目本來就可能沒有金額）。
+    """
+    fwb = openpyxl.load_workbook(path, data_only=False)
+    try:
+        fws = _pick_sheet(fwb, ws.title)
+    except ValueError:
+        return
+    bad = 0
+    for r in range(1, min(fws.max_row, ws.max_row) + 1):
+        for c in range(4, 7):                       # D 數量 / E 單價 / F 複價
+            fv = fws.cell(row=r, column=c).value
+            if isinstance(fv, str) and fv.startswith('='):
+                if ws.cell(row=r, column=c).value is None:
+                    bad += 1
+    if bad >= 5:
+        raise ValueError(
+            f'這份檔案有 {bad} 個金額公式沒有計算後的值，直接解析會得到錯誤的金額。'
+            '請用 Excel 開啟後直接「儲存」一次再上傳，'
+            '或將公式結果「選擇性貼上→值」後再上傳。'
+        )
+
+
 def parse_workbook(path, sheet_name='契約詳細表'):
     wb = openpyxl.load_workbook(path, data_only=True)
-    ws = wb[sheet_name]
+    ws = _pick_sheet(wb, sheet_name)
+    _check_uncalculated_formulas(path, ws)
 
     root_children = []
     stack = []  # list of Node currently open
@@ -130,13 +235,10 @@ def parse_workbook(path, sheet_name='契約詳細表'):
             root_children.append(leaf)
 
     for r in range(1, ws.max_row + 1):
-        a = ws.cell(row=r, column=1).value
-        b = ws.cell(row=r, column=2).value
-        c = ws.cell(row=r, column=3).value
-        d = ws.cell(row=r, column=4).value
-        e = ws.cell(row=r, column=5).value
-        f = ws.cell(row=r, column=6).value
-        g = ws.cell(row=r, column=7).value
+        a, b, c, d, e, f, g = (_blank_to_none(ws.cell(row=r, column=i).value)
+                               for i in range(1, 8))
+        a = _norm_code(a)                       # 項次：全形轉半形、去空白
+        d, e, f = _to_number(d), _to_number(e), _to_number(f)   # 數量/單價/複價
 
         if is_boilerplate(a, b, c, d, e, f, g):
             continue
@@ -259,7 +361,7 @@ def parse_workbook(path, sheet_name='契約詳細表'):
 
 def debug_trace(path, row_start, row_end, sheet_name='契約詳細表'):
     wb = openpyxl.load_workbook(path, data_only=True)
-    ws = wb[sheet_name]
+    ws = _pick_sheet(wb, sheet_name)
     root_children = []
     stack = []
 
@@ -280,13 +382,10 @@ def debug_trace(path, row_start, row_end, sheet_name='契約詳細表'):
             root_children.append(leaf)
 
     for r in range(1, row_end + 1):
-        a = ws.cell(row=r, column=1).value
-        b = ws.cell(row=r, column=2).value
-        c = ws.cell(row=r, column=3).value
-        d = ws.cell(row=r, column=4).value
-        e = ws.cell(row=r, column=5).value
-        f = ws.cell(row=r, column=6).value
-        g = ws.cell(row=r, column=7).value
+        a, b, c, d, e, f, g = (_blank_to_none(ws.cell(row=r, column=i).value)
+                               for i in range(1, 8))
+        a = _norm_code(a)                       # 項次：全形轉半形、去空白
+        d, e, f = _to_number(d), _to_number(e), _to_number(f)   # 數量/單價/複價
 
         if is_boilerplate(a, b, c, d, e, f, g):
             continue

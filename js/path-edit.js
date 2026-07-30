@@ -1333,7 +1333,10 @@ if (branchLengthsArr.length === 0) {
         });
         console.log('✅ 小段初始化完成，共', initResult.count, '個小段');
     } catch(e) {
+        // 路徑已存但小段沒建立 → 之後段落管理會是空的，必須讓使用者知道
         console.warn('⚠️ 小段初始化失敗:', e.message);
+        showToast('⚠️ 路徑已儲存，但小段初始化失敗：' + e.message +
+                  '\n請到段落管理手動重新初始化', 'error');
     }
 } else {
     console.log('✅ 路徑已更新，小段距離由 updateLinestring 重算（保留屬性）');

@@ -2564,14 +2564,24 @@ async function loadGanttData() {
         ganttData.forEach(item => {
             console.log(`項目: ${item.label}, 備註: ${item.notes || '(無)'}`, `單價: ${item.unitPrice||0}`);
         });
+        clearLoadFail('gantt');
         renderGanttChart();
-    } catch(e) { console.error('甘特圖載入失敗', e); }
+    } catch(e) {
+        // 不能只 log：ganttData 會維持空的，畫面顯示「尚無資料，請新增項目」，
+        // 使用者可能誤以為沒排程而重複新增。
+        reportLoadFail('gantt', e, '甘特圖');
+        renderGanttChart();
+    }
 }
 
 function renderGanttChart() {
     const body = document.getElementById('ganttPanelBody');
     if (ganttData.length === 0) {
-        body.innerHTML = '<div style="color:#aaa;text-align:center;padding:30px;">尚無資料，請新增項目</div>';
+        if (isLoadFailed('gantt')) {
+            renderLoadFailBox(body, '甘特圖', null, 'loadGanttData()');
+        } else {
+            body.innerHTML = '<div style="color:#aaa;text-align:center;padding:30px;">尚無資料，請新增項目</div>';
+        }
         return;
     }
     

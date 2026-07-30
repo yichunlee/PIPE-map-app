@@ -51,7 +51,9 @@ if (currentPipeline._progressLoaded && !currentPipeline.branches) {
                 currentPipeline._progressLoaded = true;
                 console.log('✅ Fallback 載入大段：', currentPipeline.segments.length, '個段落');
             } catch(e2) {
-                console.error('Fallback 也失敗:', e2);
+                // 兩種來源都失敗 → 畫面上會完全沒有施工進度，
+                // 使用者可能誤以為這個工程還沒開始施工。
+                reportLoadFail('segments:' + pipelineId, e2, (currentPipeline && currentPipeline.name || '') + ' 的施工進度');
             }
         } finally {
             showLoading(false);

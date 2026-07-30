@@ -211,7 +211,7 @@ async function loadPermitZones() {
             displayPermitZones();
         }
     } catch (error) {
-        console.error('載入挖掘許可範圍失敗:', error);
+        reportLoadFail('permitZones', error, '挖掘許可範圍');
     }
 }
 

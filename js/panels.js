@@ -29,7 +29,7 @@ async function loadPanels() {
             console.warn('⚠️ API 回應格式異常:', result);
         }
     } catch (error) {
-        console.error('❌ 載入配電盤標記失敗:', error);
+        reportLoadFail('panels', error, '配電盤標記');
     }
 }
 

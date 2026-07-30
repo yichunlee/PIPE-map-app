@@ -107,7 +107,12 @@ async function _loadSettingsTab(tab) {
                 window.allProjects = pr.projects;
                 projects = pr.projects;
             }
-        } catch(e) {}
+        } catch(e) {
+            // 載入失敗不能顯示「尚無計畫資料」——那會被誤解成真的沒有資料
+            reportLoadFail('settings:projects', e, '計畫清單', { silentToast: true });
+            renderLoadFailBox(content, '計畫清單', e, 'openSettingsPanel()');
+            return;
+        }
     }
     if (!projects.length) {
         content.innerHTML = '<div style="padding:40px;text-align:center;color:#94a3b8;">尚無計畫資料</div>';
@@ -123,7 +128,7 @@ async function _loadSettingsTab(tab) {
                 if (r.pipelines && r.pipelines.length) {
                     window.allPipelines = (window.allPipelines || []).concat(r.pipelines);
                 }
-            } catch(e) {}
+            } catch(e) { reportLoadFail('settings:pipelines:' + proj.name, e, proj.name + ' 的工程清單', { batch: true }); }
         }
     }));
 
@@ -144,7 +149,8 @@ async function _loadMainTab(pipelines, content) {
     // 批次取得所有資料
     const codesMap = {}, amtMap = {}, targetMap = {};
     await Promise.all(pipelines.map(async function(p) {
-        try { const r = await apiCall('getPipelineCodes', { pipelineId: p.id }); codesMap[p.id] = (r.codes||[]).join(', '); } catch(e) { codesMap[p.id] = p.codes ? p.codes.join(', ') : ''; }
+        try { const r = await apiCall('getPipelineCodes', { pipelineId: p.id }); codesMap[p.id] = (r.codes||[]).join(', '); clearLoadFail('codes:' + p.id); }
+        catch(e) { codesMap[p.id] = p.codes ? p.codes.join(', ') : ''; reportLoadFail('codes:' + p.id, e, p.name || p.id, { batch: true }); }
         try { const r = await apiCall('getContractAmount', { pipelineId: p.id }); amtMap[p.id] = r.amount != null ? r.amount : ''; } catch(e) { amtMap[p.id] = ''; }
         targetMap[p.id] = parseFloat(localStorage.getItem('_bcYearTarget_' + p.id + '_' + curYear)||'0')||0;
     }));
@@ -253,7 +259,13 @@ async function _loadCodesTab(pipelines, content) {
         try {
             const r = await apiCall('getPipelineCodes', { pipelineId: p.id });
             codesMap[p.id] = (r.codes || []).join(', ');
-        } catch(e) { codesMap[p.id] = ''; }
+            clearLoadFail('codes:' + p.id);
+        } catch(e) {
+            // 不能只是設成空字串：欄位變空白後若使用者按儲存，
+            // 會把原本正確的編號覆寫掉（setPipelineCodes 是先刪再插）。
+            codesMap[p.id] = '';
+            reportLoadFail('codes:' + p.id, e, p.name || p.id, { batch: true });
+        }
     }));
 
     let html = _tableHeader('工程名稱', '會計編號（多個以逗號分隔，例如：NT11504130001, NT11504130002）');
@@ -553,10 +565,17 @@ window.saveCurrentSettingsTab = async function() {
 
 async function _saveCodes() {
     const inputs = document.querySelectorAll('._stCodesInput');
+    // 載入失敗的工程一律跳過：它的欄位是空白（不是真的沒編號），
+    // 存下去會把原本的編號刪掉。
+    const skipped = [];
     await Promise.all(Array.from(inputs).map(async function(inp) {
+        if (isLoadFailed('codes:' + inp.dataset.id)) { skipped.push(inp.dataset.id); return; }
         const codes = inp.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
         await apiCall('setPipelineCodes', { pipelineId: inp.dataset.id, codes: JSON.stringify(codes) });
     }));
+    if (skipped.length) {
+        showToast('⚠️ 有 ' + skipped.length + ' 個工程因先前載入失敗而未儲存編號（避免覆寫原有資料），請重新整理後再試', 'error');
+    }
     // 更新 allPipelines.codes
     if (window.allPipelines) {
         document.querySelectorAll('._stCodesInput').forEach(function(inp) {

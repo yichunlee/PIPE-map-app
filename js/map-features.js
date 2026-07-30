@@ -534,7 +534,7 @@ async function loadMapNotes() {
             displayMapNotes();
         }
     } catch (error) {
-        console.error('載入地圖備註失敗:', error);
+        reportLoadFail('mapNotes', error, '地圖備註');
     }
 }
 
@@ -1123,7 +1123,7 @@ async function loadStickyNotes() {
         // 縮放時重繪（控制顯示/隱藏）
         map.off('zoomend', displayStickyNotes);
         map.on('zoomend', displayStickyNotes);
-    } catch(e) { console.error('載入便利貼失敗', e); }
+    } catch(e) { reportLoadFail('stickyNotes', e, '便利貼'); }
 }
 
 function displayStickyNotes() {
@@ -1241,7 +1241,7 @@ async function loadGanttItemsForLabels() {
             }
         });
     } catch (error) {
-        console.error('載入甘特圖項目失敗:', error);
+        reportLoadFail('ganttLabels', error, '甘特圖項目', { batch: true });
         ganttItemsCache = [];
     }
 }

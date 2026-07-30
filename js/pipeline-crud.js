@@ -444,7 +444,7 @@ if (result.success) {
 console.log('❌ API success=false');
 return [];
     } catch (error) {
-console.error('載入計畫列表失敗:', error);
+reportLoadFail('projects', error, '計畫列表');
 return [];
     }
 }
