@@ -1,0 +1,31 @@
+# 這個 repo 會發布成 GitHub Pages，任何檔案都能被公開下載
+# 絕對不要放機密
+*token*
+*secret*
+*credential*
+*.pem
+*.key
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Wrangler 誤跑產生
+.wrangler/
+wrangler.jsonc
+
+# Node
+node_modules/
+
+# 雜物
+desktop.ini
+Thumbs.db
+*.bak
+*.tmp
+
+# 上傳/匯出的資料檔
+*.jsonl
+DGS_*.kml
