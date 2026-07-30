@@ -13,8 +13,15 @@ let roadworkZoomBound = false;
 let roadworkLoading = false;
 
 const RW_ZOOM_THRESHOLD = 17;       // 這個層級以上顯示挖掘面，以下顯示圓點
-const RW_COLOR = '#FF5722';         // 施工期間內＝橘
-const RW_COLOR_OUT = '#BDBDBD';     // 非期間／未核發＝灰
+// 三種狀態：
+//   active  施工期間／待進場（已核發且今天 <= 迄日）＝ 綠
+//   ended   已結束（已核發但今天 > 迄日）           ＝ 灰
+//   pending 未核發（沒有核准施工起訖）              ＝ 紅
+const RW_COLOR_ACTIVE  = '#2E7D32';
+const RW_COLOR_ENDED   = '#BDBDBD';
+const RW_COLOR_PENDING = '#E53935';
+const RW_STATUS_LABEL = { active: '施工期間/待進場', ended: '已結束', pending: '未核發' };
+const RW_STATUS_COLOR = { active: RW_COLOR_ACTIVE, ended: RW_COLOR_ENDED, pending: RW_COLOR_PENDING };
 
 function rwCanEdit() {
     return typeof currentUser !== 'undefined' && currentUser &&
@@ -25,11 +32,14 @@ function rwToday() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-function rwIsActive(c) {
-    if (!c.startDate || !c.endDate) return false;   // 無核准期間 → 當非施工中
-    const t = rwToday();
-    return c.startDate <= t && t <= c.endDate;
+// 回傳 'active' | 'ended' | 'pending'
+// 只要今天還沒超過迄日就算 active（含尚未開工的「待進場」），
+// 因為那些路證已經拿到、工程還會進行，不該跟已結束的混在一起。
+function rwStatus(c) {
+    if (!c.endDate) return 'pending';               // 沒有核准施工起訖 → 還沒拿到路證
+    return rwToday() <= c.endDate ? 'active' : 'ended';
 }
+function rwIsActive(c) { return rwStatus(c) === 'active'; }
 function rwEsc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g,
         m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -42,11 +52,15 @@ function rwAllCases() {
     return out;
 }
 
+// 依三個狀態勾選過濾（元素不存在時視為顯示）
+function rwStatusShown(st) {
+    const el = document.getElementById(
+        st === 'active' ? 'rwShowActive' : st === 'ended' ? 'rwShowEnded' : 'rwShowPending');
+    return el ? el.checked : true;
+}
+
 function rwFiltered() {
-    const onlyActive = document.getElementById('rwOnlyActive');
-    const all = rwAllCases();
-    if (onlyActive && onlyActive.checked) return all.filter(rwIsActive);
-    return all;
+    return rwAllCases().filter(c => rwStatusShown(rwStatus(c)));
 }
 
 // ---------- 雲端檔案清單 ----------
@@ -154,31 +168,42 @@ function updateRoadworkCount() {
         el.innerHTML = '<span style="color:#999;">請勾選要顯示的檔案</span>';
         return;
     }
+    const all = rwAllCases();
+    const tally = { active: 0, ended: 0, pending: 0 };
+    all.forEach(c => { tally[rwStatus(c)]++; });
+
     const shown = rwFiltered();
     const areas = shown.reduce((s, c) => s + c.areas.length, 0);
-    const total = rwAllCases().length;
-    let h = '共 <b>' + shown.length + '</b> 件許可 / ' + areas + ' 個挖掘面';
-    if (shown.length !== total) {
-        h += '<br><span style="color:#999;">（已隱藏 ' + (total - shown.length) + ' 件非施工期間）</span>';
-    }
+
+    let h = '顯示 <b>' + shown.length + '</b> / ' + all.length + ' 件許可（' + areas + ' 個挖掘面）';
+    h += '<br><span style="font-size:10px;">';
+    h += '<span style="color:' + RW_COLOR_ACTIVE + ';">● 施工/待進場 ' + tally.active + '</span>　';
+    h += '<span style="color:' + RW_COLOR_PENDING + ';">● 未核發 ' + tally.pending + '</span>　';
+    h += '<span style="color:#999;">● 已結束 ' + tally.ended + '</span>';
+    h += '</span>';
     h += '<br><span style="color:#aaa;font-size:10px;">已選 ' + chosen.length + ' 個檔案</span>';
     el.innerHTML = h;
 }
 
 // ---------- 繪製 ----------
 function rwPopup(c) {
-    const active = rwIsActive(c);
+    const st = rwStatus(c);
     let h = '<div style="min-width:230px;max-width:320px;font-size:12px;">';
-    h += '<div style="font-weight:bold;color:' + (active ? RW_COLOR : RW_COLOR_OUT) + ';margin-bottom:6px;">🚧 自來水挖掘許可' +
-         (active ? '' : ' <span style="color:#999;font-weight:normal;">(非施工期間)</span>') + '</div>';
+    h += '<div style="font-weight:bold;color:' + RW_STATUS_COLOR[st] + ';margin-bottom:6px;">🚧 自來水挖掘許可' +
+         ' <span style="font-weight:normal;">(' + RW_STATUS_LABEL[st] + ')</span></div>';
     h += '<div style="margin:3px 0;"><b>工程名稱：</b>' + rwEsc(c.projectName) + '</div>';
     if (c.route) h += '<div style="margin:3px 0;"><b>地點：</b>' + rwEsc(c.route) + '</div>';
     if (c.district) h += '<div style="margin:3px 0;"><b>行政區：</b>' + rwEsc(c.district) + '</div>';
     if (c.customer) h += '<div style="margin:3px 0;"><b>用戶：</b>' + rwEsc(c.customer) + '</div>';
     if (c.applicant) h += '<div style="margin:3px 0;"><b>申請單位：</b>' + rwEsc(c.applicant) + '</div>';
-    h += '<div style="margin:3px 0;color:#666;"><b>核准施工：</b>' +
-         (c.startDate ? rwEsc(c.startDate) + ' ~ ' + rwEsc(c.endDate) : '（未核發）') +
-         (c.workTime ? '　' + rwEsc(c.workTime) : '') + '</div>';
+    if (st === 'pending') {
+        h += '<div style="margin:3px 0;color:' + RW_COLOR_PENDING + ';font-weight:bold;">' +
+             '<b>核准施工：</b>尚未取得路證</div>';
+    } else {
+        h += '<div style="margin:3px 0;color:#666;"><b>核准施工：</b>' +
+             rwEsc(c.startDate || '') + ' ~ ' + rwEsc(c.endDate) +
+             (c.workTime ? '　' + rwEsc(c.workTime) : '') + '</div>';
+    }
     if (c.permitNo) h += '<div style="margin:3px 0;color:#666;"><b>許可證號：</b>' + rwEsc(c.permitNo) + '</div>';
     if (c.issueDate) h += '<div style="margin:3px 0;color:#666;"><b>發證：</b>' + rwEsc(c.issueDate) + '（' + rwEsc(c.permitState) + '）</div>';
     h += '<div style="margin:3px 0;color:#999;font-size:11px;">申請書編號 ' + rwEsc(c.appNo) + '</div>';
@@ -192,28 +217,30 @@ function displayRoadworkMarkers() {
     roadworkPolyLayer = L.layerGroup();
     roadworkPointLayer = L.layerGroup();
 
-    // 先畫「非期間／未核發」(灰)，再畫「施工期間內」(橘)，
-    // 後加入的圖層在上層 → 重疊時橘色不會被灰色蓋住。
+    // 疊放順序：已結束(灰) → 施工/待進場(綠) → 未核發(紅)。
+    // 後加入者在上層，所以最需要被看到的「未核發」不會被蓋住。
     const shown = rwFiltered();
-    const ordered = shown.filter(c => !rwIsActive(c)).concat(shown.filter(rwIsActive));
+    const ordered = shown.filter(c => rwStatus(c) === 'ended')
+        .concat(shown.filter(c => rwStatus(c) === 'active'))
+        .concat(shown.filter(c => rwStatus(c) === 'pending'));
 
     ordered.forEach(c => {
-        const active = rwIsActive(c);
-        const color = active ? RW_COLOR : RW_COLOR_OUT;
+        const st = rwStatus(c);
+        const color = RW_STATUS_COLOR[st];
         const popup = rwPopup(c);
         c.areas.forEach(ar => {
             if (ar.coords.length >= 3) {
                 const poly = L.polygon(ar.coords, {
                     color: color, weight: 2, fillColor: color,
-                    fillOpacity: active ? 0.35 : 0.2,
-                    dashArray: active ? null : '4,3',
+                    fillOpacity: st === 'ended' ? 0.18 : 0.4,
+                    dashArray: st === 'pending' ? '5,4' : null,   // 未核發用虛線再加強辨識
                 });
                 poly.bindPopup(popup);
                 roadworkPolyLayer.addLayer(poly);
 
                 const marker = L.circleMarker(ar.coords[0], {
                     radius: 6, fillColor: color, color: '#fff', weight: 2,
-                    opacity: 1, fillOpacity: active ? 0.9 : 0.5,
+                    opacity: 1, fillOpacity: st === 'ended' ? 0.5 : 0.95,
                 });
                 marker.bindPopup(popup);
                 roadworkPointLayer.addLayer(marker);
@@ -251,13 +278,14 @@ function renderRoadworkList() {
     if (cases.length === 0) { el.innerHTML = ''; return; }
     const show = cases.slice(0, 200);   // 全部可能上千件，清單只列前 200
     el.innerHTML = show.map((c, i) => {
-        const active = rwIsActive(c);
+        const st = rwStatus(c);
         return '<div onclick="zoomToRoadwork(' + i + ')" style="padding:6px 8px;border-left:3px solid ' +
-            (active ? RW_COLOR : RW_COLOR_OUT) + ';background:#fafafa;margin-bottom:4px;border-radius:0 4px 4px 0;' +
-            'cursor:pointer;line-height:1.4;' + (active ? '' : 'opacity:0.7;') + '">' +
+            RW_STATUS_COLOR[st] + ';background:#fafafa;margin-bottom:4px;border-radius:0 4px 4px 0;' +
+            'cursor:pointer;line-height:1.4;' + (st === 'ended' ? 'opacity:0.65;' : '') + '">' +
             '<div style="font-weight:bold;font-size:12px;">' + rwEsc(String(c.projectName || c.appNo).slice(0, 24)) + '</div>' +
             '<div style="color:#777;font-size:11px;">' + rwEsc(c.district || c.route || '') + '｜' + c.areas.length + ' 面</div>' +
-            '<div style="color:#999;font-size:10px;">' + (c.startDate ? rwEsc(c.startDate) + ' ~ ' + rwEsc(c.endDate) : '未核發') + '</div>' +
+            '<div style="font-size:10px;color:' + (st === 'pending' ? RW_COLOR_PENDING : '#999') + ';">' +
+            (st === 'pending' ? '未核發' : rwEsc(c.startDate || '') + ' ~ ' + rwEsc(c.endDate)) + '</div>' +
             '</div>';
     }).join('') + (cases.length > 200 ? '<div style="color:#aaa;font-size:10px;text-align:center;padding:4px;">（僅列前 200 件，地圖顯示全部）</div>' : '');
 }

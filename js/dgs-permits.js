@@ -37,14 +37,12 @@ function dgsToday() {
         String(d.getDate()).padStart(2, '0');
 }
 
+// 只要今天還沒超過迄日就算「還有效」（含尚未開工的待進場）。
+// 原本要求今天 >= 起日，會把已核准但還沒開工的案件誤判成非施工期間。
 function dgsIsActive(c) {
-    const today = dgsToday();
-    const start = c.startDate || '';
     const end = c.extEndDate || c.endDate || '';
-    if (!start && !end) return true;
-    if (start && today < start) return false;
-    if (end && today > end) return false;
-    return true;
+    if (!end) return true;                 // 沒有迄日 → 無法判斷，當有效
+    return dgsToday() <= end;
 }
 
 function dgsEsc(s) {
