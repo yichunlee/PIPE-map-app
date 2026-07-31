@@ -1,5 +1,17 @@
 const API_URL = 'https://pipe-map-worker.cyclura-rhino.workers.dev';
 
+// Google Maps Embed API 金鑰（街景用，選填）
+//   留空  → 點街景會開新分頁到 Google 地圖（完全免費、免設定）
+//   有填  → 街景直接嵌在系統裡的面板
+//
+// 取得方式：Google Cloud Console → 啟用「Maps Embed API」→ 建立 API 金鑰。
+// Maps Embed API 官方載明「免費且無使用次數限制」，但仍需綁定帳單帳戶。
+// ⚠️ 建立金鑰後請在 Console 設定「HTTP 參照網址限制」，限定為
+//    https://yichunlee.github.io/*  ，避免金鑰被他人盜用。
+// ⚠️ 不要改用 Maps JavaScript API 的 Dynamic Street View 或
+//    Street View Static API——那兩個是按次計費的。
+const GOOGLE_MAPS_EMBED_KEY = 'AIzaSyB6OslLoTfFBOw_3xsnf_1xP1j6Qbens1k';
+
 let currentUser = null; // { email, name, picture, role }
 let userToken = null; // Google ID Token
 

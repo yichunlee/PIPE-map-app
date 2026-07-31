@@ -31,6 +31,7 @@
     <div id="leftDrawer" style="display:none;position:absolute;top:169px;right:10px;z-index:1000;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);overflow:hidden;min-width:44px;">
         <div id="ganttDrawerBtn" class="left-drawer-btn" title="甘特圖" onclick="toggleGanttPanel()" style="display:none;">📊</div>
         <div id="measureButton" class="left-drawer-btn" title="測量距離" style="display:none;">📏</div>
+        <div id="streetViewButton" class="left-drawer-btn" title="街景（點地圖任一點）" onclick="toggleStreetView()" style="display:none;">🧍</div>
         <div id="layerSwitchButton" class="left-drawer-btn" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
         <div id="elevationButton" class="left-drawer-btn" onclick="showElevationProfile()" title="高程剖面圖" style="display:none;">📈</div>
         <div id="roadworkButton" class="left-drawer-btn" title="台中市自來水挖掘許可" onclick="toggleRoadworkLayer()" style="display:none;">🚧</div>
@@ -324,17 +325,18 @@
     </div>
 
     <!-- JS -->
-    <script defer src="js/config.js?v=db445221"></script>
+    <script defer src="js/config.js?v=961598e9"></script>
     <script defer src="js/utils.js?v=7e6b3f74"></script>
     <script defer src="js/api.js?v=99ed34d9"></script>
     <script defer src="js/auth.js?v=199de482"></script>
-    <script defer src="js/data.js?v=0dc464b8"></script>
+    <script defer src="js/data.js?v=f1019228"></script>
     <script defer src="js/map.js?v=b1f28d75"></script>
     <script defer src="js/map-features.js?v=f88d5e63"></script>
     <script defer src="js/batch.js?v=860ee8a3"></script>
     <script defer src="js/panels.js?v=0bf5b261"></script>
     <script defer src="js/roadwork.js?v=2453221d"></script>
     <script defer src="js/progress-memo.js?v=25bed888"></script>
+    <script defer src="js/streetview.js?v=bf5fcf73"></script>
     <script defer src="js/dgs-permits.js?v=1c5b2add"></script>
     <script defer src="js/wgis.js?v=ab848a8e"></script>
     <script defer src="js/permits.js?v=6ebf94e9"></script>
