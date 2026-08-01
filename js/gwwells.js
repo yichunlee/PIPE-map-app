@@ -197,11 +197,40 @@ async function uploadGwWellsFile(input) {
         showToast('已解析 ' + res.totalCount + ' 口井，涵蓋 ' + (res.counties || []).length +
             ' 縣市（' + names + (res.counties.length > 5 ? '…' : '') + '）', 'success');
         await refreshGwFileList();
+        await showAllGwCounties();   // 全國井數不多（實測不到千口），上傳後直接全部顯示，不用一個個勾
     } catch (e) {
         console.error('上傳失敗:', e);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = '📂 上傳 CSV'; }
     }
+}
+
+// 一次載入並顯示所有已上傳的縣市（全國井數量級不大，不需要分縣市勾選）
+async function showAllGwCounties() {
+    const toLoad = gwCloudFiles.filter(f => {
+        const ds = gwDatasets.find(d => d.county === f.county);
+        return !ds || !ds.visible;
+    });
+    for (const f of toLoad) {
+        let ds = gwDatasets.find(d => d.county === f.county);
+        if (!ds) { ds = { county: f.county, wells: [], visible: false, loaded: false }; gwDatasets.push(ds); }
+        if (!ds.loaded) {
+            try {
+                const res = await apiCall('getGwWells', { county: f.county }, { silent: true });
+                ds.wells = res.wells || [];
+                ds.loaded = true;
+            } catch (e) { console.warn('載入', f.county, '失敗:', e); continue; }
+        }
+        ds.visible = true;
+    }
+    if (!gwVisible) {
+        gwVisible = true;
+        const btn = document.getElementById('gwButton');
+        if (btn) btn.classList.add('active');
+    }
+    renderGwFileList();
+    updateGwCount();
+    renderGwLayer();
 }
 
 async function deleteGwCounty(county) {
@@ -228,8 +257,13 @@ function toggleGwLayer() {
     const btn = document.getElementById('gwButton');
     if (btn) btn.classList.add('active');
     openGwPanel();
-    if (gwCloudFiles.length === 0) refreshGwFileList();
-    else renderGwLayer();
+    if (gwCloudFiles.length === 0) {
+        refreshGwFileList().then(showAllGwCounties);
+    } else if (gwDatasets.some(d => d.visible)) {
+        renderGwLayer();
+    } else {
+        showAllGwCounties();
+    }
 }
 
 function openGwPanel() {
@@ -263,6 +297,7 @@ window.collapseGwPanel = collapseGwPanel;
 window.openGwPanel = openGwPanel;
 window.hideGwLayer = hideGwLayer;
 window.toggleGwCounty = toggleGwCounty;
+window.showAllGwCounties = showAllGwCounties;
 window.uploadGwWellsFile = uploadGwWellsFile;
 window.deleteGwCounty = deleteGwCounty;
 window.onGwFilterChange = onGwFilterChange;

@@ -172,6 +172,7 @@
         <input type="file" id="gwFileInput" accept=".csv" style="display:none;" onchange="uploadGwWellsFile(this)">
         <div style="display:flex; gap:4px; margin-bottom:6px;">
             <button id="gwUploadBtn" onclick="document.getElementById('gwFileInput').click()" style="flex:1; padding:5px 8px; background:#0288D1; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">📂 上傳 CSV</button>
+            <button onclick="showAllGwCounties()" style="padding:5px 8px; background:#eceff1; color:#333; border:none; border-radius:4px; cursor:pointer; font-size:11px;" title="顯示全部縣市">☑️ 全選</button>
         </div>
         <div id="gwFileList" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px;"></div>
         <details style="margin-top:8px;">
@@ -370,7 +371,7 @@
     <script defer src="js/roadwork.js?v=2453221d"></script>
     <script defer src="js/progress-memo.js?v=25bed888"></script>
     <script defer src="js/streetview.js?v=bf5fcf73"></script>
-    <script defer src="js/gwwells.js?v=f2abf82e"></script>
+    <script defer src="js/gwwells.js?v=147546af"></script>
     <script defer src="js/dgs-permits.js?v=1c5b2add"></script>
     <script defer src="js/wgis.js?v=ab848a8e"></script>
     <script defer src="js/permits.js?v=6ebf94e9"></script>
