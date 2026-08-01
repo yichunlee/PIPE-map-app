@@ -81,6 +81,7 @@ function setMapContext(context, projectPipelines) {
         roadwork:  document.getElementById('roadworkButton'),
         dgs:       document.getElementById('dgsButton'),
         streetview:document.getElementById('streetViewButton'),
+        gw:        document.getElementById('gwButton'),
         eye:       document.getElementById('permitZoneButton'),
         measure:   document.getElementById('measureButton'),
         date:      document.getElementById('dateLabelButton'),
@@ -128,6 +129,7 @@ function setMapContext(context, projectPipelines) {
         if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; ids.roadwork.classList.remove('active'); }
         if (ids.dgs)       { ids.dgs.style.display = 'flex'; }
         if (ids.streetview){ ids.streetview.style.display = 'flex'; }
+        if (ids.gw)        { ids.gw.style.display = 'flex'; }
         if (ids.measure)   { ids.measure.style.display = 'flex'; }
         if (ids.date)      { ids.date.style.display = 'none'; ids.date.classList.remove('active'); }
         if (ids.elevation) { ids.elevation.style.display = 'none'; }
@@ -164,6 +166,7 @@ function setMapContext(context, projectPipelines) {
         if (ids.roadwork)  { ids.roadwork.style.display = 'flex'; }
         if (ids.dgs)       { ids.dgs.style.display = 'flex'; }
         if (ids.streetview){ ids.streetview.style.display = 'flex'; }
+        if (ids.gw)        { ids.gw.style.display = 'flex'; }
         if (ids.measure)   { ids.measure.style.display = 'none'; }  // 已移到右鍵選單
         if (ids.date)      { ids.date.style.display = 'flex'; }
         if (ids.elevation) { ids.elevation.style.display = 'flex'; }
