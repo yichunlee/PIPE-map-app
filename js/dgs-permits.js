@@ -131,6 +131,10 @@ function dgsPopupHtml(c, loc) {
         h += '<div style="margin-top:6px;"><a href="' + dgsEsc(loc.photo) + '" target="_blank">' +
             '<img src="' + dgsEsc(loc.photo) + '" style="width:100%;border-radius:4px;" loading="lazy"></a></div>';
     }
+    // 導航：用這個挖掘點的中心座標當目的地
+    if (loc && loc.center && typeof buildNavLink === 'function') {
+        h += buildNavLink(loc.center[0], loc.center[1]);
+    }
     h += '</div>';
     return h;
 }

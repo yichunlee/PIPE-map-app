@@ -59,6 +59,7 @@ function szPopup(z) {
     h += '<div style="font-weight:bold;color:#00838F;margin-bottom:6px;">💧 ' + szEsc(z.name) + '</div>';
     if (z.supplyArea) h += '<div style="margin:3px 0;white-space:pre-line;"><b>供水轄區：</b>' + szEsc(z.supplyArea) + '</div>';
     if (z.waterSource) h += '<div style="margin:3px 0;color:#666;"><b>原水來源：</b>' + szEsc(z.waterSource) + '</div>';
+    h += (typeof buildNavLink === 'function' ? buildNavLink(z.lat, z.lng) : '');
     h += '</div>';
     return h;
 }

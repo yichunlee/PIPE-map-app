@@ -207,6 +207,9 @@ function rwPopup(c) {
     if (c.permitNo) h += '<div style="margin:3px 0;color:#666;"><b>許可證號：</b>' + rwEsc(c.permitNo) + '</div>';
     if (c.issueDate) h += '<div style="margin:3px 0;color:#666;"><b>發證：</b>' + rwEsc(c.issueDate) + '（' + rwEsc(c.permitState) + '）</div>';
     h += '<div style="margin:3px 0;color:#999;font-size:11px;">申請書編號 ' + rwEsc(c.appNo) + '</div>';
+    // 導航：用第一個挖掘面的第一個座標當目的地
+    var _p0 = (c.areas && c.areas[0] && c.areas[0].coords && c.areas[0].coords[0]) || null;
+    if (_p0 && typeof buildNavLink === 'function') h += buildNavLink(_p0[0], _p0[1]);
     h += '</div>';
     return h;
 }

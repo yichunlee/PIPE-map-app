@@ -123,3 +123,22 @@ window.reportLoadFail = reportLoadFail;
 window.isLoadFailed = isLoadFailed;
 window.clearLoadFail = clearLoadFail;
 window.renderLoadFailBox = renderLoadFailBox;
+
+// ============================================================
+// 導航連結（給地圖 popup 用）
+// ------------------------------------------------------------
+// 用 Google Maps 通用網址格式，不需要 API key、不會產生任何費用。
+// 手機：直接喚起 Google Maps app 開始導航
+// 電腦：開網頁版路線規劃
+// 一律用「座標」當目的地而不是地名，避免同名地點導到錯的地方。
+// ============================================================
+function buildNavLink(lat, lng, label) {
+    if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) return '';
+    const url = 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng;
+    return '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;">' +
+        '<a href="' + url + '" target="_blank" rel="noopener" ' +
+        'style="display:block;text-align:center;background:#1a73e8;color:#fff;' +
+        'padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px;">' +
+        '🧭 ' + (label || '導航到這裡') + '</a></div>';
+}
+window.buildNavLink = buildNavLink;

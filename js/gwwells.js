@@ -157,6 +157,7 @@ function gwPopup(w) {
     if (w.address) h += '<div style="margin:3px 0;color:#666;font-size:11px;">' + gwEsc(w.address) + '</div>';
     if (w.establishDate) h += '<div style="margin:3px 0;color:#999;font-size:11px;">設站：' + gwFmtDate(w.establishDate) + '</div>';
     h += '<div style="margin-top:6px;color:#b91c1c;font-size:10px;">⚠️ 水位資料每年更新，非即時值，僅供參考</div>';
+    h += (typeof buildNavLink === 'function' ? buildNavLink(w.lat, w.lng) : '');
     h += '</div>';
     return h;
 }
