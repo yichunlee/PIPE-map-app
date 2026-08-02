@@ -552,9 +552,9 @@ function initMap() {
 function toggleLayerPanel(event) {
     if (event) event.stopPropagation();
     const panel = document.getElementById('layerPanel');
-    const btn   = document.getElementById('layerSwitchButton');
+    const btn   = document.getElementById('layerMenuButton');
     const isOpen = panel.classList.toggle('show');
-    btn.classList.toggle('active', isOpen);
+    if (btn) btn.classList.toggle('active', isOpen);
     if (isOpen) {
         // 每次打開時更新 WGIS 雲端清單 & 上傳按鈕顯示
         refreshWgisFileList();

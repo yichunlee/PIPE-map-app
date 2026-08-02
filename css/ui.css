@@ -211,6 +211,7 @@
 .layer-option:hover { background: #f5f5f5; }
 .layer-option.active { background: #e3f2fd; color: #1565c0; font-weight: 600; }
 .layer-radio { font-size: 15px; flex-shrink: 0; }
+.layer-checkbox { font-size: 15px; flex-shrink: 0; }
 .layer-divider { height: 1px; background: #eeeeee; margin: 4px 14px; flex-shrink: 0; }
 
 /* WGIS 在圖層面板內的樣式 */
@@ -891,3 +892,20 @@ kbd {
 }
 .photo-submenu-item:hover { background: #f0f7fa; }
 .photo-submenu-item + .photo-submenu-item { border-top: 1px solid #eee; }
+
+/* 通用抽屜子選單項目（🗺️ 圖層選單等共用，樣式同 photo-submenu-item）*/
+.drawer-submenu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.drawer-submenu-item:hover { background: #f0f7fa; }
+.drawer-submenu-item + .drawer-submenu-item { border-top: 1px solid #eee; }
+
+/* 工具抽屜內的分組分隔線 */
+.left-drawer-group-divider { height: 1px; background: #eee; margin: 2px 6px; }

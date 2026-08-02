@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- defer：下載不阻塞 HTML 解析，執行仍保證依原順序（Leaflet 先於 map.js） -->
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="css/ui.css?v=e60a9c5a">
+    <link rel="stylesheet" href="css/ui.css?v=9c22b055">
     <link rel="stylesheet" href="css/layout.css?v=315375e4">
     <link rel="stylesheet" href="css/login.css?v=c1bb3c9d">
     <link rel="stylesheet" href="css/theme.css?v=b79eaff2">
@@ -29,19 +29,39 @@
     <!-- 左側工具抽屜 -->
     <div id="leftDrawerToggle" style="display:none;position:absolute;top:125px;right:10px;z-index:1001;background:white;padding:8px;border-radius:4px;box-shadow:0 1px 5px rgba(0,0,0,0.4);cursor:pointer;font-size:18px;width:34px;height:34px;display:none;align-items:center;justify-content:center;" onclick="toggleLeftDrawer()" title="工具">🔧</div>
     <div id="leftDrawer" style="display:none;position:absolute;top:169px;right:10px;z-index:1000;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);overflow:hidden;min-width:44px;">
-        <div id="ganttDrawerBtn" class="left-drawer-btn" title="甘特圖" onclick="toggleGanttPanel()" style="display:none;">📊</div>
+        <!-- 圖層群組：底圖/WGIS/公路局申挖/台中挖掘許可/地下水位/供水轄區，合併成一個按鈕+選單 -->
+        <div id="layerMenuButton" class="left-drawer-btn" title="圖層" onclick="toggleLayerMenu(event)" style="display:none;">🗺️</div>
+        <div class="left-drawer-group-divider"></div>
+        <!-- 檢視工具群組 -->
         <div id="measureButton" class="left-drawer-btn" title="測量距離" style="display:none;">📏</div>
         <div id="streetViewButton" class="left-drawer-btn" title="街景（點地圖任一點）" onclick="toggleStreetView()" style="display:none;">🧍</div>
-        <div id="gwButton" class="left-drawer-btn" title="地下水水位觀測井" onclick="toggleGwLayer()" style="display:none;">🕳️</div>
-        <div id="layerSwitchButton" class="left-drawer-btn" onclick="toggleLayerPanel(event)" title="圖層設定" style="display:none;">🗺️</div>
         <div id="elevationButton" class="left-drawer-btn" onclick="showElevationProfile()" title="高程剖面圖" style="display:none;">📈</div>
-        <div id="roadworkButton" class="left-drawer-btn" title="台中市自來水挖掘許可" onclick="toggleRoadworkLayer()" style="display:none;">🚧</div>
-        <div id="dgsButton" class="left-drawer-btn" title="公路局申挖路權" onclick="toggleDgsLayer()" style="display:none;">⛏️</div>
         <div id="permitZoneButton" class="left-drawer-btn" title="隱藏所有標記" onclick="toggleAllMarkers()" style="display:none;">👁️</div>
         <div id="dateLabelButton" class="left-drawer-btn" title="顯示/隱藏預定施工日期" onclick="toggleDateLabels()" style="display:none;">📅</div>
         <div id="photoMenuButton" class="left-drawer-btn" title="照片" onclick="togglePhotoMenu(event)" style="display:none;">📷</div>
+        <div class="left-drawer-group-divider"></div>
+        <!-- 圖表群組 -->
+        <div id="ganttDrawerBtn" class="left-drawer-btn" title="甘特圖" onclick="toggleGanttPanel()" style="display:none;">📊</div>
         <div id="projectSCurveBtn" class="left-drawer-btn" title="計畫S曲線" onclick="showProjectSCurve()" style="display:none;background:#f3e5f5;">〽️</div>
+        <div class="left-drawer-group-divider"></div>
+        <!-- 外部工具 -->
         <div id="changeDesignButton" class="left-drawer-btn" title="變更設計工具（免登入）" onclick="window.open('change-design.html','_blank')" style="display:none;background:#e0f2f1;">🛠️</div>
+    </div>
+
+    <!-- 🗺️ 圖層選單（由 layerMenuButton 展開，比照 📷 照片子選單的模式）-->
+    <div id="layerSubmenu" style="display:none;position:absolute;z-index:1002;background:white;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.25);overflow:hidden;">
+        <div class="drawer-submenu-item" onclick="toggleLayerPanel(event);closeLayerMenu();">
+            <span style="font-size:16px;">🗺️</span><span>底圖 / WGIS 管線底圖 / 供水轄區</span>
+        </div>
+        <div class="drawer-submenu-item" onclick="toggleDgsLayer();closeLayerMenu();">
+            <span style="font-size:16px;">⛏️</span><span>公路局申挖路權</span>
+        </div>
+        <div class="drawer-submenu-item" onclick="toggleRoadworkLayer();closeLayerMenu();">
+            <span style="font-size:16px;">🚧</span><span>台中市自來水挖掘許可</span>
+        </div>
+        <div class="drawer-submenu-item" onclick="toggleGwLayer();closeLayerMenu();">
+            <span style="font-size:16px;">🕳️</span><span>地下水水位觀測井</span>
+        </div>
     </div>
 
     <!-- 照片子選單（由 📷 展開）-->
@@ -73,6 +93,19 @@
                 <button class="wgis-upload-btn" id="wgisUploadBtn" onclick="document.getElementById('wgisFileInput').click()">📂 上傳 WGIS CSV</button>
                 <div class="wgis-file-list" id="wgisFileList"></div>
                 <div class="wgis-info" id="wgisInfo">支援台水 WGIS 匯出的 CSV 格式</div>
+            </div>
+            <div class="layer-divider"></div>
+            <div class="layer-panel-section">供水轄區</div>
+            <div onclick="toggleSupplyZoneLayer()" class="layer-option" id="layer-supplyzone">
+                <span class="layer-checkbox">☐</span> 淨水場/供水轄區
+            </div>
+            <div class="wgis-in-panel">
+                <input type="file" id="szFileInput" accept=".csv" style="display:none;" onchange="uploadSupplyZoneFile(this)">
+                <div style="display:flex; gap:4px;">
+                    <button id="szUploadBtn" onclick="document.getElementById('szFileInput').click()" style="flex:1; padding:5px 8px; background:#00838F; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">📂 上傳 CSV</button>
+                    <button onclick="deleteSupplyZones()" style="padding:5px 8px; background:#eceff1; color:#c62828; border:none; border-radius:4px; cursor:pointer; font-size:11px;" title="刪除">🗑️</button>
+                </div>
+                <div id="szMeta" style="font-size:10px; color:#999; margin-top:4px;">尚未載入</div>
             </div>
         </div>
     </div>
@@ -363,7 +396,7 @@
     <script defer src="js/utils.js?v=7e6b3f74"></script>
     <script defer src="js/api.js?v=99ed34d9"></script>
     <script defer src="js/auth.js?v=199de482"></script>
-    <script defer src="js/data.js?v=aca88cbc"></script>
+    <script defer src="js/data.js?v=dfe2eba2"></script>
     <script defer src="js/map.js?v=b1f28d75"></script>
     <script defer src="js/map-features.js?v=f88d5e63"></script>
     <script defer src="js/batch.js?v=860ee8a3"></script>
@@ -372,13 +405,14 @@
     <script defer src="js/progress-memo.js?v=25bed888"></script>
     <script defer src="js/streetview.js?v=bf5fcf73"></script>
     <script defer src="js/gwwells.js?v=147546af"></script>
+    <script defer src="js/supplyzones.js?v=772aa9e7"></script>
     <script defer src="js/dgs-permits.js?v=1c5b2add"></script>
     <script defer src="js/wgis.js?v=ab848a8e"></script>
     <script defer src="js/permits.js?v=6ebf94e9"></script>
     <script defer src="js/gantt.js?v=30c49ebf"></script>
     <script defer src="js/scurve.js?v=67b627a8"></script>
     <script defer src="js/settings.js?v=882a3b85"></script>
-    <script defer src="js/plan-overview.js?v=da9dcfef"></script>
+    <script defer src="js/plan-overview.js?v=ec082bc1"></script>
     <script defer src="js/path-edit.js?v=2ecbcb5d"></script>
     <script defer src="js/segments.js?v=0957739d"></script>
     <script defer src="js/branch-edit.js?v=f649696f"></script>
@@ -387,7 +421,7 @@
     <script defer src="js/elevation.js?v=bb2eeee2"></script>
     <script defer src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script defer src="js/photos.js?v=ffacbae1"></script>
+    <script defer src="js/photos.js?v=6cab4164"></script>
     <script defer src="js/user-mgmt.js?v=160f72db"></script>
     <script defer src="js/accounting.js?v=3cbb77e4"></script>
 </body>

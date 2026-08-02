@@ -290,6 +290,31 @@ window.closePhotoMenu = function() {
     if (menu) menu.style.display = 'none';
 };
 
+// 🗺️ 圖層選單（合併底圖/WGIS/供水轄區/公路局申挖/台中挖掘許可/地下水，
+// 邏輯與 📷 照片子選單完全相同，只是清單項目不同）
+window.toggleLayerMenu = function(ev) {
+    if (ev) ev.stopPropagation();
+    const menu = document.getElementById('layerSubmenu');
+    const btn = document.getElementById('layerMenuButton');
+    if (!menu || !btn) return;
+    if (menu.style.display === 'block') { menu.style.display = 'none'; return; }
+
+    const r = btn.getBoundingClientRect();
+    menu.style.top = r.top + 'px';
+    menu.style.left = 'auto';
+    menu.style.right = (window.innerWidth - r.left + 6) + 'px';
+    menu.style.display = 'block';
+
+    setTimeout(() => {
+        document.addEventListener('click', window.closeLayerMenu, { once: true });
+    }, 0);
+};
+
+window.closeLayerMenu = function() {
+    const menu = document.getElementById('layerSubmenu');
+    if (menu) menu.style.display = 'none';
+};
+
 // ============================================================
 // 照片圖層 — 在地圖上顯示有照片的小段 📷 標記
 // ============================================================
