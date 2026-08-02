@@ -37,7 +37,13 @@ function renderWgisFileList() {
         </div>`;
     }).join('');
 
-    document.getElementById('layerSwitchButton').classList.toggle('active', wgisDatasets.some(d=>d.visible) || document.getElementById('layerPanel').classList.contains('show'));
+    // 抽屜整理後按鈕改名為 layerMenuButton；加上 null 檢查避免元素不存在時整個函式中斷
+    const _lmBtn = document.getElementById('layerMenuButton');
+    const _lPanel = document.getElementById('layerPanel');
+    if (_lmBtn) {
+        _lmBtn.classList.toggle('active',
+            wgisDatasets.some(d => d.visible) || (_lPanel && _lPanel.classList.contains('show')));
+    }
 }
 
 // escapeHtml() 已定義於上方（第 1655 行）

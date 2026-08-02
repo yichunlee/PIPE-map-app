@@ -290,7 +290,7 @@ window.submitEditPipeline = async function(oldPipelineId) {
 // 點擊地圖其他地方時關閉圖層面板
 document.addEventListener('click', function(e) {
     const panel = document.getElementById('layerPanel');
-    const btn   = document.getElementById('layerSwitchButton');
+    const btn   = document.getElementById('layerMenuButton');
     if (panel && btn &&
         panel.classList.contains('show') &&
         !panel.contains(e.target) &&

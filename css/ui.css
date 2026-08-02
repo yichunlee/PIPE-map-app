@@ -185,6 +185,9 @@
     color: #1565c0;
     border-bottom: 1px solid #e0e0e0;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 .layer-panel-section {
     padding: 8px 14px 4px;

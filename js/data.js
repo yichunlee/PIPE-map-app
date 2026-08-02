@@ -509,9 +509,9 @@ function showStatsPanel() {
     const overallPercent = totalLength > 0 ? Math.round((completedLength / totalLength) * 100) : 0;
     
     let statsHTML = `
-        <div class="stats-panel-header" onclick="toggleStatsPanel(event)" style="background:linear-gradient(135deg,#1a5fb4,#1e6fdc);padding:10px 14px;border-radius:10px 10px 0 0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
-            <div style="color:white;font-weight:700;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${currentPipeline.name}</div>
-            <span class="stats-toggle-btn" style="color:rgba(255,255,255,0.8);font-size:12px;margin-left:8px;">▼</span>
+        <div class="stats-panel-header" onclick="toggleStatsPanel(event)" style="background:#fff;padding:10px 14px;border-radius:10px 10px 0 0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;user-select:none;">
+            <div style="color:#1e293b;font-weight:700;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${currentPipeline.name}</div>
+            <span class="stats-toggle-btn" style="color:#94a3b8;font-size:12px;margin-left:8px;">▼</span>
         </div>
         <div class="stats-content" style="padding:10px 12px 8px;">
             <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px;">

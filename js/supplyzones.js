@@ -8,6 +8,7 @@ let supplyZones = [];
 let supplyZoneLayer = null;
 let supplyZoneVisible = false;
 let supplyZoneLoaded = false;
+let _szLastMeta = null;      // 保留最後一次的中繼資料，供快取情況下重繪按鈕權限用
 
 function szCanEdit() {
     return typeof currentUser !== 'undefined' && currentUser &&
@@ -20,11 +21,14 @@ function szEsc(s) {
 }
 
 async function loadSupplyZones() {
-    if (supplyZoneLoaded) return;
+    // 就算資料已快取，也要重跑一次 renderSzMeta 來套用按鈕權限
+    // （面板每次打開都會呼叫這裡，登入狀態可能已改變）
+    if (supplyZoneLoaded) { renderSzMeta(_szLastMeta); return; }
     try {
         const res = await apiCall('getSupplyZones', {}, { silent: true });
         supplyZones = res.zones || [];
         supplyZoneLoaded = true;
+        _szLastMeta = res;
         renderSzMeta(res);
     } catch (e) {
         console.warn('載入供水轄區失敗:', e);
@@ -32,6 +36,13 @@ async function loadSupplyZones() {
 }
 
 function renderSzMeta(res) {
+    // 依權限決定上傳/刪除鈕是否顯示（訪客只能看，不能改動別人上傳的資料）
+    const canEdit = szCanEdit();
+    const upBtn = document.getElementById('szUploadBtn');
+    const delBtn = document.getElementById('szDeleteBtn');
+    if (upBtn) upBtn.style.display = canEdit ? '' : 'none';
+    if (delBtn) delBtn.style.display = canEdit ? '' : 'none';
+
     const el = document.getElementById('szMeta');
     if (!el) return;
     if (!res || res.empty || !res.count) {
@@ -64,16 +75,25 @@ function renderSupplyZoneLayer() {
         marker.bindPopup(szPopup(z));
         supplyZoneLayer.addLayer(marker);
 
-        // 站名標籤：黑字黑框，只在放大到倒數第六層以後才顯示
-        // （顯示/隱藏邏輯統一交給 plan-overview.js 的 updateNodeLabelVisibility，
-        //  這裡只負責掛上 zoom-supplyzone-label 這個 class）
+        // 站名標籤：依類型分兩種門檻與顏色
+        //   淨水場/淨水廠/淡化廠/取水站 → 紅字紅框，倒數第八層（maxZoom-7）顯示
+        //   井類                        → 黑字黑框，倒數第六層（maxZoom-5）才顯示
+        //
+        // 井的判定要小心：不能只看有沒有「井」字，因為「龍井」是地名
+        // （龍井山頂區淨水場實際是淨水場）。所以限定「以井結尾」或
+        // 「N號井 / N井 / N號更新井」這種明確的編號井格式。
+        // 反之「沙鹿12號井淨水場」雖然叫淨水場，實際是井，會被正確歸到井類。
+        const isWell = /井$/.test(z.name) || /\d+\s*(號)?(更新)?井/.test(z.name);
+        const isPlant = !isWell && /淨水場|淨水廠|淡化廠|取水站/.test(z.name);
+        const cls = isPlant ? 'zoom-supplyplant-label' : 'zoom-supplyzone-label';
+        const color = isPlant ? '#c62828' : '#000';
         const label = L.marker([z.lat, z.lng], {
             icon: L.divIcon({
-                className: 'zoom-supplyzone-label',
+                className: cls,
                 html: '<div style="position:relative;">' +
                     '<div style="position:absolute;left:8px;top:-9px;white-space:nowrap;' +
-                    'font-size:11px;font-weight:bold;color:#000;background:#fff;' +
-                    'padding:2px 6px;border-radius:3px;border:1.5px solid #000;' +
+                    'font-size:11px;font-weight:bold;color:' + color + ';background:#fff;' +
+                    'padding:2px 6px;border-radius:3px;border:1.5px solid ' + color + ';' +
                     'box-shadow:0 1px 3px rgba(0,0,0,0.25);pointer-events:none;">' +
                     szEsc(z.name) + '</div></div>',
                 iconSize: [1, 1],
@@ -136,7 +156,7 @@ async function deleteSupplyZones() {
     if (!confirm('確定刪除全部供水轄區資料？')) return;
     try {
         await apiCall('deleteSupplyZones', {}, { errorPrefix: '刪除失敗' });
-        supplyZones = []; supplyZoneLoaded = false;
+        supplyZones = []; supplyZoneLoaded = false; _szLastMeta = null;
         if (supplyZoneLayer) { map.removeLayer(supplyZoneLayer); supplyZoneLayer = null; }
         showToast('已刪除', 'success');
         renderSzMeta(null);

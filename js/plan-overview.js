@@ -448,9 +448,13 @@ function initMap() {
         document.querySelectorAll('.zoom-node-label').forEach(function(el) {
             el.style.display = showNode ? 'block' : 'none';
         });
-        // 供水轄區站名：倒數第六層（maxZoom-5）以後顯示。
-        // 這個圖層是全國性的參考資料，縮小到城市尺度以下時全國近500個站名
-        // 疊在一起會完全看不清楚，所以門檻比管線本身的標籤更嚴格（更晚出現）。
+        // 供水轄區站名：分兩種門檻，避免全國近500個站名同時湧現蓋住重點。
+        //   淨水場/淡化廠：倒數第八層（maxZoom-7）——數量少、是主要設施，較早顯示
+        //   其他（多為 XX井）：倒數第六層（maxZoom-5）——數量多，放大到夠近才顯示
+        var showPlant = z >= mz - 7;
+        document.querySelectorAll('.zoom-supplyplant-label').forEach(function(el) {
+            el.style.display = showPlant ? 'block' : 'none';
+        });
         var showSupplyZone = z >= mz - 5;
         document.querySelectorAll('.zoom-supplyzone-label').forEach(function(el) {
             el.style.display = showSupplyZone ? 'block' : 'none';
@@ -568,8 +572,19 @@ function toggleLayerPanel(event) {
         const isSup = currentUser && (currentUser.role === 'supervisor' || currentUser.role === 'admin');
         const uploadBtn = document.getElementById('wgisUploadBtn');
         if (uploadBtn) uploadBtn.style.display = isSup ? 'block' : 'none';
+        // 供水轄區：載入狀態並依權限顯示上傳/刪除鈕
+        if (typeof loadSupplyZones === 'function') loadSupplyZones();
     }
 }
+
+// 關閉圖層設定面板（面板標題列的 ✕ 用）
+function closeLayerPanel() {
+    const panel = document.getElementById('layerPanel');
+    if (panel) panel.classList.remove('show');
+    const btn = document.getElementById('layerMenuButton');
+    if (btn) btn.classList.remove('active');
+}
+window.closeLayerPanel = closeLayerPanel;
 
 // 切換底圖
 function switchBaseLayer(layerType) {
@@ -620,7 +635,8 @@ function switchBaseLayer(layerType) {
     
     // 關閉面板
     document.getElementById('layerPanel').classList.remove('show');
-    document.getElementById('layerSwitchButton').classList.remove('active');
+    var _lmb = document.getElementById('layerMenuButton');
+    if (_lmb) _lmb.classList.remove('active');
 }
 
 function toggleMeasureMode() {

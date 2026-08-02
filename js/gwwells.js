@@ -269,8 +269,25 @@ function toggleGwLayer() {
 function openGwPanel() {
     const panel = document.getElementById('gwPanel');
     if (panel) panel.style.display = 'block';
+    // 依權限顯示上傳/刪除鈕（訪客只能看）
+    const canEdit = gwCanEdit();
     const up = document.getElementById('gwUploadBtn');
-    if (up) up.style.display = gwCanEdit() ? '' : 'none';
+    if (up) up.style.display = canEdit ? '' : 'none';
+    const del = document.getElementById('gwDeleteBtn');
+    if (del) del.style.display = canEdit ? '' : 'none';
+}
+
+// 清空全部縣市的觀測井資料
+async function deleteAllGwWells() {
+    if (!gwCanEdit()) { showToast('沒有刪除權限', 'error'); return; }
+    if (!confirm('確定清空所有縣市的地下水觀測井資料？')) return;
+    try {
+        await apiCall('deleteGwWells', {}, { errorPrefix: '清空失敗' });
+        gwDatasets = [];
+        showToast('已清空', 'success');
+        await refreshGwFileList();
+        if (gwLayer) { map.removeLayer(gwLayer); gwLayer = null; }
+    } catch (e) { /* apiCall 已提示 */ }
 }
 
 function collapseGwPanel() {
@@ -298,6 +315,7 @@ window.openGwPanel = openGwPanel;
 window.hideGwLayer = hideGwLayer;
 window.toggleGwCounty = toggleGwCounty;
 window.showAllGwCounties = showAllGwCounties;
+window.deleteAllGwWells = deleteAllGwWells;
 window.uploadGwWellsFile = uploadGwWellsFile;
 window.deleteGwCounty = deleteGwCounty;
 window.onGwFilterChange = onGwFilterChange;
