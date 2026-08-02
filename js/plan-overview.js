@@ -448,6 +448,13 @@ function initMap() {
         document.querySelectorAll('.zoom-node-label').forEach(function(el) {
             el.style.display = showNode ? 'block' : 'none';
         });
+        // 供水轄區站名：倒數第六層（maxZoom-5）以後顯示。
+        // 這個圖層是全國性的參考資料，縮小到城市尺度以下時全國近500個站名
+        // 疊在一起會完全看不清楚，所以門檻比管線本身的標籤更嚴格（更晚出現）。
+        var showSupplyZone = z >= mz - 5;
+        document.querySelectorAll('.zoom-supplyzone-label').forEach(function(el) {
+            el.style.display = showSupplyZone ? 'block' : 'none';
+        });
         // 縮放後標籤間距改變（或段落標籤剛顯示出來），重跑一次防碰撞排列
         if (typeof scheduleLabelCollisions === 'function') scheduleLabelCollisions();
     }

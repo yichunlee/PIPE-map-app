@@ -63,8 +63,31 @@ function renderSupplyZoneLayer() {
         });
         marker.bindPopup(szPopup(z));
         supplyZoneLayer.addLayer(marker);
+
+        // 站名標籤：黑字黑框，只在放大到倒數第六層以後才顯示
+        // （顯示/隱藏邏輯統一交給 plan-overview.js 的 updateNodeLabelVisibility，
+        //  這裡只負責掛上 zoom-supplyzone-label 這個 class）
+        const label = L.marker([z.lat, z.lng], {
+            icon: L.divIcon({
+                className: 'zoom-supplyzone-label',
+                html: '<div style="position:relative;">' +
+                    '<div style="position:absolute;left:8px;top:-9px;white-space:nowrap;' +
+                    'font-size:11px;font-weight:bold;color:#000;background:#fff;' +
+                    'padding:2px 6px;border-radius:3px;border:1.5px solid #000;' +
+                    'box-shadow:0 1px 3px rgba(0,0,0,0.25);pointer-events:none;">' +
+                    szEsc(z.name) + '</div></div>',
+                iconSize: [1, 1],
+                iconAnchor: [0, 0],
+            }),
+            interactive: false,   // 標籤本身不接收點擊，點擊落在下面的圓點觸發 popup
+        });
+        supplyZoneLayer.addLayer(label);
     });
     supplyZoneLayer.addTo(map);
+
+    // 新建立的標籤要立刻套用目前縮放層級該有的顯示狀態，
+    // 不然會先全部顯示一瞬間才被隱藏（或反過來），畫面會閃一下。
+    if (typeof window.updateNodeLabelVisibility === 'function') window.updateNodeLabelVisibility();
 }
 
 async function toggleSupplyZoneLayer() {
