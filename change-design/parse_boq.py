@@ -77,7 +77,10 @@ def classify(a):
     a = str(a).strip()
     if not a:
         return None
-    m = re.fullmatch(r'<([^<>])>', a)
+    # 注意這裡是 [^<>]+（一個以上），不是 [^<>]。
+    # 原本漏了 + 導致 <10> <11> <16> 這種兩位數編號比對不到，
+    # 會被歸成 UNK 而不是 DB，階層就會一路往下疊（<A><9><10><11>...）。
+    m = re.fullmatch(r'<([^<>]+)>', a)
     if m:
         ch = m.group(1)
         if ch in BIG_CN:

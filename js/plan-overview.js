@@ -609,6 +609,9 @@ function switchBaseLayer(layerType) {
         newLayer.addTo(map);
         window.currentBaseLayer = newLayer;
     }
+
+    // 新底圖會蓋在疊加層之上，把公有土地地籍圖重新拉回上層
+    if (typeof refreshPublicLandOrder === 'function') refreshPublicLandOrder();
     
     // 切換底圖後把 WGIS 管線重新加回（底圖切換不應清除 WGIS）
     if (window.wgisDatasets) {
