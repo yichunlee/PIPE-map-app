@@ -385,6 +385,15 @@
             </div>
 
             
+            <div id="dxfToolItem" class="tool-item" onclick="exportDXF(); toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; display:none;">
+                <span>📐</span>
+                <span>匯出 CAD (DXF)</span>
+            </div>
+            <div id="svgToolItem" class="tool-item" onclick="exportSVG(); toggleToolsDrawer();" style="display:none;">
+                <span>🖼️</span>
+                <span>匯出圖檔 (SVG)</span>
+            </div>
+
             <div id="settingsToolItem" class="tool-item" onclick="openSettingsPanel(); toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; display:none;">
                 <span>⚙️</span>
                 <span>工程總設定</span>
@@ -457,7 +466,7 @@
     <script defer src="js/segments.js?v=0957739d"></script>
     <script defer src="js/branch-edit.js?v=f649696f"></script>
     <script defer src="js/pipeline-crud.js?v=b6cb1b20"></script>
-    <script defer src="js/dxf-export.js?v=84aeb1e7"></script>
+    <script defer src="js/dxf-export.js?v=d93b87ed"></script>
     <script defer src="js/elevation.js?v=bb2eeee2"></script>
     <script defer src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>

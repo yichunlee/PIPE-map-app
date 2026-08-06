@@ -223,7 +223,7 @@ function lineAngle(p1, p2) { return Math.atan2(p2[1]-p1[1], p2[0]-p1[0]) * 180 /
 
 async function exportDXF() {
     if (!currentPipeline) { showToast('請先選擇一個工程', 'error'); return; }
-    const btn = document.getElementById('dxfExportBtn');
+    const btn = document.getElementById('dxfToolItem');
     if (btn) { btn.textContent = '⏳ 載入中...'; btn.disabled = true; }
 
     try {
@@ -450,7 +450,7 @@ if(bi===0){ const midI=Math.floor(b.coords2d.length/2); const [lx,ly]=b.coords2d
         console.error('DXF 匯出失敗:', err);
         showToast('匯出失敗：'+err.message, 'error', 6000);
     } finally {
-        if(btn){btn.textContent='📐 匯出DXF';btn.disabled=false;}
+        if(btn){btn.innerHTML='<span>📐</span><span>匯出 CAD (DXF)</span>';btn.disabled=false;}
     }
 }
 
@@ -633,3 +633,9 @@ ${svgContent}
         if (btn) btn.style.opacity = '1';
     }
 }
+
+// 明確掛到 window，供 HTML 的 onclick 使用
+// （頂層 function 宣告本來就是全域，這裡是為了與其他模組寫法一致、
+//   也避免日後改成 module 載入時失效）
+window.exportDXF = exportDXF;
+window.exportSVG = exportSVG;
