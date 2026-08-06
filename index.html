@@ -98,6 +98,23 @@
                 <div class="wgis-info" id="wgisInfo">支援台水 WGIS 匯出的 CSV 格式</div>
             </div>
             <div class="layer-divider"></div>
+            <div class="layer-panel-section">歷史衛星影像</div>
+            <div onclick="toggleWaybackLayer()" class="layer-option" id="layer-wayback">
+                <span class="layer-checkbox">☐</span> 時間軸（2014 至今）
+            </div>
+            <div class="wgis-in-panel" id="waybackControls" style="display:none;">
+                <div style="display:flex;gap:4px;align-items:center;">
+                    <button onclick="stepWaybackVersion(-1)" title="較新" style="padding:4px 8px;background:#eceff1;border:none;border-radius:4px;cursor:pointer;font-size:12px;">◀</button>
+                    <select id="waybackSelect" onchange="applyWaybackVersion()" style="flex:1;font-size:11px;padding:3px;"></select>
+                    <button onclick="stepWaybackVersion(1)" title="較舊" style="padding:4px 8px;background:#eceff1;border:none;border-radius:4px;cursor:pointer;font-size:12px;">▶</button>
+                </div>
+                <div id="waybackInfo" style="font-size:10px;color:#999;margin-top:4px;"></div>
+                <div style="font-size:10px;color:#999;line-height:1.5;margin-top:2px;">
+                    可用於施工前後對照、路面損壞佐證。<br>
+                    ⚠️ 台灣不是每個版本都有新影像，相鄰版本可能相同。
+                </div>
+            </div>
+            <div class="layer-divider"></div>
             <div class="layer-panel-section">公有土地地籍圖</div>
             <div onclick="togglePublicLandLayer()" class="layer-option" id="layer-publicland">
                 <span class="layer-checkbox">☐</span> 公有土地（紅色＝公有）
@@ -428,6 +445,7 @@
     <script defer src="js/gwwells.js?v=2905cbe1"></script>
     <script defer src="js/supplyzones.js?v=d66101d5"></script>
     <script defer src="js/publicland.js?v=ea9d772d"></script>
+    <script defer src="js/wayback.js?v=89342995"></script>
     <script defer src="js/dgs-permits.js?v=18841dd3"></script>
     <script defer src="js/wgis.js?v=a69294ca"></script>
     <script defer src="js/permits.js?v=6ebf94e9"></script>
