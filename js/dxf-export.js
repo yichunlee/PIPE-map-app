@@ -26,18 +26,30 @@ function wgs84ToTWD97(lat, lng) {
 
 async function fetchOsmData(bounds) {
     const { south, west, north, east } = bounds;
-    const query = `[out:json][timeout:45];
+    const bbox = `${south},${west},${north},${east}`;
+    // 除了原本的道路/鐵路/水系/建物，額外抓：
+    //   amenity/shop/office/tourism → 郵局、加油站、學校、銀行、超商等設施名稱
+    //   addr:housenumber           → 門牌號碼（node 與 way 都要抓，台灣兩種都有）
+    // 這些是設計繪圖時定位用的關鍵參考物。
+    const query = `[out:json][timeout:60];
 (
-  way["highway"](${south},${west},${north},${east});
-  way["railway"](${south},${west},${north},${east});
-  way["waterway"](${south},${west},${north},${east});
-  way["natural"="water"](${south},${west},${north},${east});
-  way["landuse"="residential"](${south},${west},${north},${east});
-  way["landuse"="industrial"](${south},${west},${north},${east});
-  way["landuse"="farmland"](${south},${west},${north},${east});
-  way["building"](${south},${west},${north},${east});
-  node["name"](${south},${west},${north},${east});
-  node["place"](${south},${west},${north},${east});
+  way["highway"](${bbox});
+  way["railway"](${bbox});
+  way["waterway"](${bbox});
+  way["natural"="water"](${bbox});
+  way["landuse"="residential"](${bbox});
+  way["landuse"="industrial"](${bbox});
+  way["landuse"="farmland"](${bbox});
+  way["building"](${bbox});
+  node["name"](${bbox});
+  node["place"](${bbox});
+  node["amenity"](${bbox});
+  node["shop"](${bbox});
+  node["office"](${bbox});
+  node["tourism"](${bbox});
+  node["addr:housenumber"](${bbox});
+  way["amenity"](${bbox});
+  way["addr:housenumber"](${bbox});
 );
 out body;>;out skel qt;`;
     const servers = [
@@ -65,16 +77,64 @@ function parseOsmResult(data) {
     const nodes = {};
     data.elements.forEach(el => { if (el.type === 'node') nodes[el.id] = { lat: el.lat, lng: el.lon, tags: el.tags || {} }; });
     const roads = [], railways = [], waterways = [], buildings = [], places = [];
+    const pois = [], addresses = [];
+
+    // 設施類型 → 中文標示（DXF 上只寫名稱時看不出是什麼，補一個類別）
+    const AMENITY_ZH = {
+        post_office: '郵局', fuel: '加油站', school: '學校', kindergarten: '幼兒園',
+        hospital: '醫院', clinic: '診所', pharmacy: '藥局', bank: '銀行', atm: 'ATM',
+        police: '警察局', fire_station: '消防隊', townhall: '區公所', place_of_worship: '廟/教堂',
+        restaurant: '餐廳', cafe: '咖啡', fast_food: '速食', convenience: '超商',
+        parking: '停車場', toilets: '公廁', library: '圖書館', university: '大學',
+        college: '學院', bus_station: '車站', marketplace: '市場', community_centre: '活動中心',
+    };
+
+    // 取設施類別（amenity/shop/office/tourism 依序）
+    const poiKind = (t) => {
+        const k = t.amenity || t.shop || t.office || t.tourism || '';
+        return AMENITY_ZH[k] || k;
+    };
+
     data.elements.forEach(el => {
         if (el.type === 'node' && el.tags) {
-            const name = el.tags.name || '';
-            if (name && el.lat) places.push({ lat: el.lat, lng: el.lon, name, type: el.tags.place || el.tags.amenity || 'name' });
+            const t = el.tags;
+            const name = t.name || '';
+            // 地名（原本就有）
+            if (name && el.lat) places.push({ lat: el.lat, lng: el.lon, name, type: t.place || t.amenity || 'name' });
+            // 設施 POI：有名稱且有類別的才收，避免收進一堆無名的路燈、垃圾桶
+            if (name && el.lat && (t.amenity || t.shop || t.office || t.tourism)) {
+                pois.push({ lat: el.lat, lng: el.lon, name, kind: poiKind(t) });
+            }
+            // 門牌
+            if (t['addr:housenumber'] && el.lat) {
+                addresses.push({
+                    lat: el.lat, lng: el.lon,
+                    num: t['addr:housenumber'],
+                    street: t['addr:street'] || '',
+                });
+            }
             return;
         }
         if (el.type !== 'way' || !el.nodes) return;
         const coords = el.nodes.map(nid => nodes[nid]).filter(Boolean);
         if (coords.length < 2) return;
         const tags = el.tags || {};
+
+        // way 上的門牌／設施：用多邊形的重心當標示位置
+        const centroid = () => {
+            let sx = 0, sy = 0;
+            coords.forEach(c => { sx += c.lat; sy += c.lng; });
+            return { lat: sx / coords.length, lng: sy / coords.length };
+        };
+        if (tags['addr:housenumber']) {
+            const c = centroid();
+            addresses.push({ lat: c.lat, lng: c.lng, num: tags['addr:housenumber'], street: tags['addr:street'] || '' });
+        }
+        if (tags.name && (tags.amenity || tags.shop || tags.office || tags.tourism)) {
+            const c = centroid();
+            pois.push({ lat: c.lat, lng: c.lng, name: tags.name, kind: poiKind(tags) });
+        }
+
         if (tags.highway) {
             const rank = { motorway:1, trunk:1, primary:2, secondary:3, tertiary:4, residential:5, service:6, footway:7, path:7, cycleway:7 };
             roads.push({ coords, name: tags.name || '', type: tags.highway, rank: rank[tags.highway] || 5 });
@@ -83,12 +143,13 @@ function parseOsmResult(data) {
         } else if (tags.waterway || tags.natural === 'water') {
             waterways.push({ coords, name: tags.name || '', type: tags.waterway || 'water', closed: tags.natural === 'water' });
         } else if (tags.building) {
-            if (coords.length >= 3) buildings.push({ coords, type: tags.building });
+            // 建物帶上名稱，讓 DXF 上看得到「XX大樓」而不只是一個框
+            if (coords.length >= 3) buildings.push({ coords, type: tags.building, name: tags.name || '' });
         } else if (tags.landuse) {
-            if (coords.length >= 3) buildings.push({ coords, type: 'landuse_' + tags.landuse });
+            if (coords.length >= 3) buildings.push({ coords, type: 'landuse_' + tags.landuse, name: tags.name || '' });
         }
     });
-    return { roads, railways, waterways, buildings, places };
+    return { roads, railways, waterways, buildings, places, pois, addresses };
 }
 
 function toAcadUnicode(str) {
@@ -119,6 +180,10 @@ function dxfLayers() {
         { name:'BUILDING',       color:251, ltype:'CONTINUOUS' },
         { name:'LANDUSE',        color:253, ltype:'DASHED'     },
         { name:'PLACE_NAME',     color:3,   ltype:'CONTINUOUS' },
+        { name:'POI',            color:30,  ltype:'CONTINUOUS' },
+        { name:'POI_TXT',        color:30,  ltype:'CONTINUOUS' },
+        { name:'ADDR_TXT',       color:253, ltype:'CONTINUOUS' },
+        { name:'BUILDING_TXT',   color:252, ltype:'CONTINUOUS' },
         { name:'BOUNDARY',       color:6,   ltype:'DASHED'     },
         { name:'TITLE',          color:2,   ltype:'CONTINUOUS' },
     ];
@@ -176,12 +241,13 @@ async function exportDXF() {
         let minY=Math.min(...allXY.map(p=>p[1])), maxY=Math.max(...allXY.map(p=>p[1]));
 
         if (btn) btn.textContent = '⏳ 下載地圖資料...';
-        let osmRoads=[], osmRail=[], osmWater=[], osmBldg=[], osmPlaces=[];
+        let osmRoads=[], osmRail=[], osmWater=[], osmBldg=[], osmPlaces=[], osmPois=[], osmAddrs=[];
         try {
             const osmData = await fetchOsmData(osmB);
             const p = parseOsmResult(osmData);
             osmRoads=p.roads; osmRail=p.railways; osmWater=p.waterways; osmBldg=p.buildings; osmPlaces=p.places;
-            console.log(`OSM: ${osmRoads.length}道路 ${osmRail.length}鐵路 ${osmWater.length}水系 ${osmBldg.length}建物 ${osmPlaces.length}地名`);
+            osmPois=p.pois||[]; osmAddrs=p.addresses||[];
+            console.log(`OSM: ${osmRoads.length}道路 ${osmRail.length}鐵路 ${osmWater.length}水系 ${osmBldg.length}建物 ${osmPlaces.length}地名 ${osmPois.length}設施 ${osmAddrs.length}門牌`);
         } catch(e) { showToast('⚠️ 地圖底圖載入失敗，將只輸出管線', 'warning', 4000); }
 
         function toTWD(coords) { return coords.map(c=>{ const {x,y}=wgs84ToTWD97(c.lat,c.lng); return [x,y]; }); }
@@ -191,6 +257,8 @@ async function exportDXF() {
         const waTWD = osmWater.map(w=>({...w, coords2d:toTWD(w.coords)}));
         const blTWD = osmBldg.map(b=>({...b, coords2d:toTWD(b.coords)}));
         const plTWD = osmPlaces.map(p=>{ const {x,y}=wgs84ToTWD97(p.lat,p.lng); return {...p,x,y}; });
+        const poiTWD = (osmPois||[]).map(p=>{ const {x,y}=wgs84ToTWD97(p.lat,p.lng); return {...p,x,y}; });
+        const addrTWD = (osmAddrs||[]).map(a=>{ const {x,y}=wgs84ToTWD97(a.lat,a.lng); return {...a,x,y}; });
 
         [...rdTWD,...raTWD,...waTWD,...blTWD].forEach(item => {
             item.coords2d.forEach(([x,y]) => { if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; });
@@ -201,8 +269,16 @@ async function exportDXF() {
         const tH=Math.max(rX/300,1.5), bigH=tH*1.8, sH=tH*0.7, nR=tH*0.4;
         let ent = '';
 
-        // 建築/土地利用
-        blTWD.forEach(b => { if(b.coords2d.length<3) return; ent += dxfPolyline(b.type&&b.type.startsWith('landuse')?'LANDUSE':'BUILDING', b.coords2d, true, 0); });
+        // 建築/土地利用（有名稱的建物加上名稱標示，例如「XX大樓」）
+        blTWD.forEach(b => {
+            if(b.coords2d.length<3) return;
+            ent += dxfPolyline(b.type&&b.type.startsWith('landuse')?'LANDUSE':'BUILDING', b.coords2d, true, 0);
+            if (b.name) {
+                let sx=0, sy=0;
+                b.coords2d.forEach(([x,y])=>{ sx+=x; sy+=y; });
+                ent += dxfText('BUILDING_TXT', sx/b.coords2d.length, sy/b.coords2d.length, sH*0.85, b.name);
+            }
+        });
         // 水系
         waTWD.forEach(w => { if(w.coords2d.length<2) return; ent += dxfPolyline('WATER',w.coords2d,w.closed,30); if(w.name){const [mx,my]=midOf(w.coords2d);ent+=dxfText('WATER_TXT',mx,my,sH,w.name);} });
         // 鐵路
@@ -217,6 +293,18 @@ async function exportDXF() {
         });
         // 地名
         plTWD.filter(p => ['village','town','city','suburb','hamlet','neighbourhood'].includes(p.type)).forEach(p => { const isV=['city','town','village'].includes(p.type); ent+=dxfText('PLACE_NAME',p.x,p.y,isV?tH:sH,p.name); });
+
+        // 設施 POI（郵局、加油站、學校、超商…）：小圓圈 + 名稱，設計時定位參考用
+        poiTWD.forEach(p => {
+            ent += dxfCircle('POI', p.x, p.y, nR * 0.8);
+            const label = p.kind ? (p.name + '(' + p.kind + ')') : p.name;
+            ent += dxfText('POI_TXT', p.x + nR * 1.5, p.y, sH * 0.85, label);
+        });
+
+        // 門牌號碼：只寫號碼（路名已由道路圖層標示），字體較小避免蓋住圖面
+        addrTWD.forEach(a => {
+            ent += dxfText('ADDR_TXT', a.x, a.y, sH * 0.6, a.num);
+        });
 
         // 管線
         brTWD.forEach((b,bi) => {
