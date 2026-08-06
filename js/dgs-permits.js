@@ -6,6 +6,7 @@
 // 與 roadwork.js（台中市市區道路）是兩套不同系統，可同時開啟。
 
 let dgsCases = [];            // 合併後的全部案件（每筆多帶一個 _city）
+window.dgsCases = dgsCases;   // 供 DXF 匯出取用
 let dgsUploads = [];          // 各縣市上傳狀態
 let dgsVisible = false;
 let dgsPolyLayer = null;      // 真實挖掘面（放大時顯示）
@@ -75,6 +76,7 @@ async function loadDgsPermits() {
             (res.cases || []).forEach(c => { c._city = u.city; merged.push(c); });
         }
         dgsCases = merged;
+        window.dgsCases = dgsCases;
 
         renderDgsUploadList();
         updateDgsCount();

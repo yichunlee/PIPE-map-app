@@ -184,6 +184,11 @@ function dxfLayers() {
         { name:'POI_TXT',        color:30,  ltype:'CONTINUOUS' },
         { name:'ADDR_TXT',       color:253, ltype:'CONTINUOUS' },
         { name:'BUILDING_TXT',   color:252, ltype:'CONTINUOUS' },
+        { name:'WGIS_EXIST',     color:8,   ltype:'DASHED'     },
+        { name:'WGIS_TXT',       color:8,   ltype:'CONTINUOUS' },
+        { name:'PERMIT_DGS',     color:3,   ltype:'CONTINUOUS' },
+        { name:'PERMIT_TC',      color:30,  ltype:'CONTINUOUS' },
+        { name:'PERMIT_TXT',     color:3,   ltype:'CONTINUOUS' },
         { name:'BOUNDARY',       color:6,   ltype:'DASHED'     },
         { name:'TITLE',          color:2,   ltype:'CONTINUOUS' },
     ];
@@ -305,6 +310,63 @@ async function exportDXF() {
         addrTWD.forEach(a => {
             ent += dxfText('ADDR_TXT', a.x, a.y, sH * 0.6, a.num);
         });
+
+        // ── 系統內部資料（CAD 底圖沒有、但設計時最需要知道的）──────────
+        // 這些是本系統獨有的資訊，帶進 DXF 才能在設計階段就避開衝突。
+
+        // 現有管線（WGIS）：虛線 + 管徑管材標註，避免新設管線與既有管線衝突
+        try {
+            (window.wgisDatasets || []).forEach(ds => {
+                if (!ds.visible || !ds.lines) return;
+                ds.lines.forEach(seg => {
+                    if (!seg.coords || seg.coords.length < 2) return;
+                    const c2d = seg.coords.map(c => {
+                        const { x, y } = wgs84ToTWD97(c[0], c[1]);
+                        return [x, y];
+                    });
+                    ent += dxfPolyline('WGIS_EXIST', c2d, false, 20);
+                    const lbl = [seg.d ? seg.d + 'mm' : '', seg.m || ''].filter(Boolean).join(' ');
+                    if (lbl) { const [mx, my] = midOf(c2d); ent += dxfText('WGIS_TXT', mx, my, sH * 0.7, lbl); }
+                });
+            });
+        } catch (e) { console.warn('WGIS 匯出略過:', e); }
+
+        // 公路局申挖路權（他人已核准的挖掘範圍）
+        try {
+            (window.dgsCases || []).forEach(c => {
+                (c.locations || []).forEach(loc => {
+                    if (!loc.coords || loc.coords.length < 3) return;
+                    const c2d = loc.coords.map(p => {
+                        const { x, y } = wgs84ToTWD97(p[0], p[1]);
+                        return [x, y];
+                    });
+                    ent += dxfPolyline('PERMIT_DGS', c2d, true, 0);
+                });
+                const f = c.locations && c.locations[0] && c.locations[0].center;
+                if (f) {
+                    const { x, y } = wgs84ToTWD97(f[0], f[1]);
+                    ent += dxfText('PERMIT_TXT', x, y, sH * 0.7,
+                        (c.caseNo || '') + ' ' + (c.pipeType || ''));
+                }
+            });
+        } catch (e) { console.warn('申挖路權匯出略過:', e); }
+
+        // 台中市自來水挖掘許可
+        try {
+            (window.rwDatasets || []).forEach(ds => {
+                if (!ds.visible || !ds.cases) return;
+                ds.cases.forEach(c => {
+                    (c.areas || []).forEach(ar => {
+                        if (!ar.coords || ar.coords.length < 3) return;
+                        const c2d = ar.coords.map(p => {
+                            const { x, y } = wgs84ToTWD97(p[0], p[1]);
+                            return [x, y];
+                        });
+                        ent += dxfPolyline('PERMIT_TC', c2d, true, 0);
+                    });
+                });
+            });
+        } catch (e) { console.warn('挖掘許可匯出略過:', e); }
 
         // 管線
         brTWD.forEach((b,bi) => {
