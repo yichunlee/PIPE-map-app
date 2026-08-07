@@ -4,13 +4,13 @@ let projectPermitZones = [];
 let projectPermitLabels = [];
 
 async function toggleProjectNotes(pipelines) {
+    // 註：這是舊的「工程路權申請狀況」功能，原本掛在 permitZoneButton (👁️) 上。
+    // 該按鈕已改為「完成狀況檢視」(🚦)，所以這裡不再操作那顆按鈕，
+    // 以免把圖示與 onclick 蓋回舊的。函式保留，待日後接到別的入口。
     projectPermitVisible = !projectPermitVisible;
-    const btn = document.getElementById('permitZoneButton');
-    
+
     if (projectPermitVisible) {
         // 顯示所有工程的路權範圍
-        btn.textContent = '🙈';
-        btn.title = '隱藏所有工程路權申請狀況';
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -89,8 +89,6 @@ async function toggleProjectNotes(pipelines) {
         }));
     } else {
         // 隱藏所有路權範圍
-        btn.textContent = '👁️';
-        btn.title = '顯示所有工程路權申請狀況';
         projectPermitZones.forEach(z => map.removeLayer(z));
         projectPermitZones = [];
         projectPermitLabels.forEach(l => map.removeLayer(l));

@@ -128,13 +128,13 @@ function setMapContext(context, projectPipelines) {
         if (ids.date)      { ids.date.style.display = 'none'; ids.date.classList.remove('active'); }
         if (ids.elevation) { ids.elevation.style.display = 'none'; }
         if (ids.photo)     { ids.photo.style.display = 'none'; }
-        // 👁️ 改成「看路權」功能
+        // 🚦 完成狀況檢視（綠=已完成 紅=未完成）
         if (ids.eye) {
             ids.eye.style.display = 'flex';
-            ids.eye.classList.remove('hidden', 'hidden-markers');
-            ids.eye.textContent = '👁️';
-            ids.eye.title = '顯示所有工程路權申請狀況';
-            ids.eye.onclick = () => toggleProjectNotes(projectPipelines);
+            ids.eye.classList.remove('hidden', 'hidden-markers', 'active');
+            ids.eye.textContent = '🚦';
+            ids.eye.title = '完成狀況（綠=已完成 紅=未完成）';
+            ids.eye.onclick = toggleCompletionView;
         }
         return;
     }
@@ -162,10 +162,11 @@ function setMapContext(context, projectPipelines) {
         if (ids.date)      { ids.date.style.display = 'flex'; }
         if (ids.elevation) { ids.elevation.style.display = 'flex'; }
         if (ids.photo)     { ids.photo.style.display = 'flex'; }
-        // 👁️ 改成「看標記」功能
+        // 子工程地圖：這顆維持原本的「隱藏所有標記」用途
+        // （完成狀況檢視是給計畫總覽用的，子工程本來就逐段顯示施工狀態）
         if (ids.eye) {
             ids.eye.style.display = 'flex';
-            ids.eye.classList.remove('hidden', 'hidden-markers');
+            ids.eye.classList.remove('hidden', 'hidden-markers', 'active');
             ids.eye.textContent = '👁️';
             ids.eye.title = '隱藏所有標記（備註/配電盤/挖掘範圍）';
             ids.eye.onclick = toggleAllMarkers;
