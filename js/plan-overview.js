@@ -145,6 +145,8 @@ async function _loadProjectProgressBackground(pipelines) {
     }
     
     console.log('✅ 所有工程進度載入完成');
+    // 若使用者正在檢視「完成狀況」，資料到齊後重畫一次
+    if (typeof refreshCompletionViewIfOn === 'function') refreshCompletionViewIfOn();
 }
 
 // 🆕 在計畫總覽（大地圖）上畫出單一工程的制水閥標記
@@ -737,6 +739,9 @@ function clearMeasure() {
 function clearMap(resetMarkerVisibility = false) {
     allPolylines.forEach(p => map.removeLayer(p));
     allPolylines = [];
+
+    // 清除完成狀況檢視的圖層（切換到子工程或別的計畫時不該殘留）
+    if (typeof clearCompletionView === 'function') clearCompletionView();
     
     // 🚀 效能優化：清除小段追蹤系統
     smallSegmentPolylines = {};
