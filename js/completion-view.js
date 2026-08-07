@@ -53,8 +53,12 @@ function renderCompletionView() {
     if (!map) return;
 
     // 取得目前計畫的工程清單（總覽頁面）
-    const pipelines = (window.allPipelines || []).filter(p =>
-        currentProject && p.projectName === currentProject.name);
+    // 注意：allPipelines / currentProject 在 config.js 是用 let 宣告，
+    // 這種變數不會成為 window 的屬性，所以要直接用裸變數存取，
+    // 寫成 window.allPipelines 會永遠拿到 undefined。
+    const all = (typeof allPipelines !== 'undefined' && allPipelines) ? allPipelines : [];
+    const proj = (typeof currentProject !== 'undefined') ? currentProject : null;
+    const pipelines = all.filter(p => proj && p.projectName === proj.name);
 
     if (pipelines.length === 0) {
         showToast('沒有可顯示的工程', 'info');
