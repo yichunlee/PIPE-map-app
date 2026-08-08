@@ -15,28 +15,29 @@ function toggleToolsDrawer() {
         return;
     }
     
-    // 檢查是否登入
-    if (!currentUser) {
-        // 未登入，只顯示登入選項
+    // 檢查是否登入（訪客在示範計畫內視同已登入，可完整試用）
+    const guestOK = (typeof isGuestEditable === 'function') && isGuestEditable();
+    if (!currentUser && !guestOK) {
+        // 未登入且不在示範計畫，只顯示登入選項
         loginItem.style.display = 'flex';
         toolsContainer.style.display = 'none';
         drawer.classList.add('active');
         return;
     }
-    
-    // 已登入，隱藏登入選項，顯示工具
-    loginItem.style.display = 'none';
+
+    // 顯示工具
+    loginItem.style.display = currentUser ? 'none' : 'flex';   // 訪客仍保留登入入口
     toolsContainer.style.display = 'block';
-    
-    // 檢查監造單位以上權限
-    if (getRoleLevel(currentUser.role) < 2) {
+
+    // 檢查監造單位以上權限（訪客在示範計畫內跳過此檢查）
+    if (currentUser && getRoleLevel(currentUser.role) < 2) {
         showToast('此功能需要「監造單位」以上權限（目前：' + currentUser.role + '）', 'warning');
         return;
     }
     
     // 管理員才顯示成員管理按鈕
     const mgmtBtn = document.getElementById('userMgmtToolItem');
-    if (mgmtBtn) mgmtBtn.style.display = currentUser.role === 'admin' ? 'flex' : 'none';
+    if (mgmtBtn) mgmtBtn.style.display = (currentUser && currentUser.role === 'admin') ? 'flex' : 'none';
 
     // 管理員權限驗證通過，展開抽屜
     drawer.classList.add('active');

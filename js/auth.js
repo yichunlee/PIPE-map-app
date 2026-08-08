@@ -39,7 +39,23 @@ function showUserInfo() {
 // admin：所有功能 + 工具抽屜 + 使用者管理
 
 // 角色等級數值（用於比較）
+// 訪客可自由編輯的示範計畫（需與 worker 的 GUEST_PROJECT 一致）
+const GUEST_PROJECT = '測試用';
+
+// 目前是否處於「訪客可編輯」情境：未登入 + 正在示範計畫內
+// worker 端會再驗一次操作對象，前端這裡只是讓編輯 UI 顯示出來。
+function isGuestEditable() {
+    if (typeof currentUser !== 'undefined' && currentUser) return false;  // 已登入不算訪客
+    const proj = (typeof currentProject !== 'undefined' && currentProject) ? currentProject.name : null;
+    return proj === GUEST_PROJECT;
+}
+window.isGuestEditable = isGuestEditable;
+
 function getRoleLevel(role) {
+    // 訪客在示範計畫內給予「施工單位」等級，才能試用新增/編輯功能。
+    // 真正的權限由 worker 依「操作對象屬於哪個計畫」把關，
+    // 前端放寬不會造成其他計畫的資料風險。
+    if (!role && isGuestEditable()) return 2;
     switch(role) {
         case 'admin':      return 4;
         case 'supervisor': return 3;
@@ -64,6 +80,8 @@ function getRoleLabel(role) {
 // ── 權限檢查函數 ────────────────────────────────────────────
 // contractor(2) 以上：標記完工、上傳照片
 function requireLogin() {
+    // 訪客在示範計畫內可完整試用（worker 端會再驗操作對象是否屬於該計畫）
+    if (!currentUser && isGuestEditable()) return true;
     if (!currentUser) {
         showToast('此功能需要登入後才能使用', 'warning');
         return false;
@@ -77,6 +95,8 @@ function requireLogin() {
 
 // supervisor(3) 以上：甘特圖、里程碑、段落管理
 function requireSupervisor() {
+    // 同上：示範計畫開放訪客試用甘特圖、段落管理等功能
+    if (!currentUser && isGuestEditable()) return true;
     if (!currentUser) {
         showToast('此功能需要登入後才能使用', 'warning');
         return false;
