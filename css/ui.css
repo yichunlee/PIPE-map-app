@@ -928,3 +928,90 @@ kbd {
 
 /* 工具抽屜內的分組分隔線 */
 .left-drawer-group-divider { height: 1px; background: #eee; margin: 2px 6px; }
+
+/* ============================================================
+   手機版面板：底部抽屜（bottom sheet）
+   ------------------------------------------------------------
+   問題：桌機版面板寬 260px + 右側工具列 64px = 324px，
+   在 390px 寬的手機上只剩 66px 能看地圖，面板一開等於看不到圖。
+
+   解法：手機上把面板改成「從底部滑出、貼齊左右」，
+   預設只佔螢幕下半部，地圖上半部保持可見可操作。
+   面板標題列可點擊收合成一條，需要時再展開。
+   ============================================================ */
+@media (max-width: 768px) {
+
+    .roadwork-panel,
+    .layer-panel {
+        /* 貼齊左右，不再被右側工具列擠壓 */
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: none !important;
+
+        /* 從底部長出來，最多佔一半螢幕，地圖上半部保持可見 */
+        top: auto !important;
+        bottom: 8px !important;
+        max-height: 50vh !important;
+        overflow-y: auto;
+        overscroll-behavior: contain;   /* 面板捲到底不要帶動地圖一起捲 */
+
+        /* 底部抽屜的視覺：上緣圓角、加強陰影表示浮在最上層 */
+        border-radius: var(--r-lg) var(--r-lg) var(--r-md) var(--r-md);
+        box-shadow: var(--shadow-lg);
+    }
+
+    /* 工程統計面板：手機上移到頂部，避免與底部面板打架 */
+    .stats-panel {
+        left: 8px !important;
+        right: 8px !important;
+        max-width: none !important;
+        top: 8px !important;
+        max-height: 45vh !important;
+    }
+
+    /* 收合狀態：只留標題列一條，最大化地圖可視範圍 */
+    .roadwork-panel.sheet-collapsed,
+    .layer-panel.sheet-collapsed {
+        max-height: 44px !important;
+        overflow: hidden !important;
+    }
+
+    /* 標題列在手機上加大點擊區域，並提示可收合 */
+    .panel-title,
+    .layer-panel-header {
+        padding: var(--gap-sm) var(--gap-md);
+        font-size: var(--fs-lg);
+        cursor: pointer;
+        position: sticky;
+        top: 0;
+        background: var(--c-surface);
+        z-index: 2;
+    }
+
+    /* 觸控目標放大到 48px（iOS/Android 建議值，戴手套也點得到） */
+    .left-drawer-btn {
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 20px !important;
+    }
+
+    /* 面板內的按鈕加大，避免誤觸 */
+    .roadwork-panel button,
+    .layer-panel button {
+        min-height: 36px;
+        font-size: var(--fs-base) !important;
+    }
+
+    /* 勾選框加大，手指才好點 */
+    .roadwork-panel input[type="checkbox"],
+    .layer-panel input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* 手機上最小字級拉到 12px，戶外陽光下才看得清 */
+    .roadwork-panel,
+    .layer-panel,
+    .stats-panel { font-size: var(--fs-md); }
+}
