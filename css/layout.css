@@ -117,10 +117,12 @@ body { font-family: Arial, "Microsoft JhengHei", sans-serif; height: 100vh; disp
 .back-button:hover { background: #f8f9ff; }
 
 .stats-panel {
-    position: absolute; top: 20px; right: 64px; background: white;
+    /* 底色/圓角/陰影/邊框由 ui.css 的浮動面板共用規則統一提供，
+       這裡只寫這個面板專屬的位置與尺寸 */
+    position: absolute; top: 20px; right: 64px;
     /* right:64px 是為了讓開工具抽屜（right:10px、寬約44px），
        否則面板展開變高時會蓋住抽屜的圖示。 */
-    padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    padding: var(--gap-md);
     z-index: 1000; max-width: 300px; transition: all 0.3s ease;
     /* 展開施工情形後可能很長，限制高度並自行捲動，不要頂出畫面 */
     max-height: calc(100vh - 40px); overflow-y: auto; overscroll-behavior: contain;

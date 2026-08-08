@@ -45,6 +45,33 @@
   --gap-md: 14px;
   --gap-lg: 20px;
   --gap-xl: 28px;
+
+  /* ── 字級階層 ─────────────────────────────────
+     原本全站散落 18 種字級（8~64px），是畫面顯得雜亂的主因之一。
+     收斂成 6 階：輔助說明→標題，每階差距明確，才有層次感。
+     用途：
+       xs  10px  角落註記、時間戳
+       sm  11px  次要資訊、標籤
+       md  12px  一般內文（面板內容）
+       base 13px 主要內文、按鈕
+       lg  15px  區塊標題
+       xl  18px  面板主標題
+  */
+  --fs-xs:   10px;
+  --fs-sm:   11px;
+  --fs-md:   12px;
+  --fs-base: 13px;
+  --fs-lg:   15px;
+  --fs-xl:   18px;
+
+  /* 字重：只用 3 階，避免 500/600/700 混用 */
+  --fw-normal: 400;
+  --fw-medium: 600;
+  --fw-bold:   700;
+
+  /* 行高 */
+  --lh-tight: 1.35;
+  --lh-base:  1.6;
 }
 
 /* ── 全域字體 ────────────────────────────────── */
@@ -622,13 +649,12 @@ body { font-family: var(--font); }
 }
 
 /* 統計面板 */
+/* 視覺規格（底色/圓角/陰影/邊框/字體）已統一在 ui.css 的
+   .roadwork-panel, .layer-panel, .stats-panel 共用規則裡，
+   這裡只保留這個面板獨有的行為，不再用 !important 覆寫，
+   否則會跟其他面板產生 8/10/12px 三種圓角的不一致。 */
 .stats-panel {
-    background: #fff !important;
-    border-radius: 12px !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06) !important;
-    border: 1px solid #e2e8f0 !important;
-    overflow: hidden !important;
-    font-family: 'Microsoft JhengHei', Arial, sans-serif !important;
+    overflow: hidden;
 }
 .stats-panel.collapsed .stats-content { display: none; }
 .stats-panel-header { padding: 0 !important; }

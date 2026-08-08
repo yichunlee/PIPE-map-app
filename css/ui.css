@@ -168,9 +168,6 @@
     right: 64px;
     left: auto;
     z-index: 1000;
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
     width: 240px;
     max-height: calc(100vh - 140px);
     display: none;
@@ -178,17 +175,22 @@
     overflow: hidden;
 }
 .layer-panel.show { display: flex; }
+/* 面板標題列共用規格。
+   各圖層的標題「顏色」刻意保留差異（那是圖層識別色，有功能意義），
+   但字級、字重、間距、分隔線統一，避免看起來像不同人做的。 */
+.panel-title,
 .layer-panel-header {
-    padding: 10px 14px 6px;
-    font-weight: bold;
-    font-size: 13px;
-    color: #1565c0;
-    border-bottom: 1px solid #e0e0e0;
+    padding: var(--gap-sm) var(--gap-md) var(--gap-xs);
+    font-weight: var(--fw-bold);
+    font-size: var(--fs-base);
+    border-bottom: 1px solid var(--c-border);
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    line-height: var(--lh-tight);
 }
+.layer-panel-header { color: var(--c-brand); }
 .layer-panel-section {
     padding: 8px 14px 4px;
     font-size: 11px;
@@ -752,16 +754,30 @@
 .roadwork-button.active { background: #FF5722; color: white; }
 
 /* 台中挖掘許可面板 */
+/* ── 浮動面板共用視覺規格 ────────────────────────────
+   申挖路權 / 挖掘許可 / 地下水 / 圖層設定 / 工程統計 都是「浮在地圖上的
+   資訊面板」，原本各自寫了不同的圓角(8/10/12px)與陰影，眼睛看得出差異
+   卻說不出哪裡怪 —— 這是畫面顯得不專業的主因。
+   這裡統一視覺層，位置與尺寸仍由各自的規則決定（那是功能差異）。
+*/
+.roadwork-panel,
+.layer-panel,
+.stats-panel {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-md);
+    font-family: var(--font);
+    color: var(--c-text);
+}
+
 .roadwork-panel {
     position: absolute;
     bottom: 30px;
     left: 10px;
     z-index: 1000;
-    background: white;
-    padding: 10px 14px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    font-size: 12px;
+    padding: var(--gap-sm) var(--gap-md);
+    font-size: var(--fs-md);
     display: none;
 }
     
