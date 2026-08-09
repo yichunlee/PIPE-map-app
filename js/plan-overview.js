@@ -780,7 +780,8 @@ function clearMap(resetMarkerVisibility = false) {
         ganttPanelOpen = false;
         ganttData = [];
         // 隱藏工程列表切換按鈕
-        document.getElementById('pipelineListToggle').style.display = 'none';
+        const _plt2 = document.getElementById('pipelineListToggle');
+        if (_plt2) _plt2.style.display = 'none';
         // 清除日期標籤（按鈕顯示由 setMapContext 管理）
         document.getElementById('dateLabelButton').classList.remove('active');
         clearDateLabels();

@@ -764,3 +764,5 @@ loadPipelineData(currentPipeline.id);
     console.log('❌ 退出分支編輯模式');
 }
 
+// 每月施工統計已移到工具抽屜，明確掛到 window 供 onclick 使用
+window.toggleStatsReport = toggleStatsReport;

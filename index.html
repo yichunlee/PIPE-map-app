@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- defer：下載不阻塞 HTML 解析，執行仍保證依原順序（Leaflet 先於 map.js） -->
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="css/ui.css?v=b3f77e20">
+    <link rel="stylesheet" href="css/ui.css?v=edbb17fe">
     <link rel="stylesheet" href="css/layout.css?v=4250788c">
     <link rel="stylesheet" href="css/login.css?v=c1bb3c9d">
     <link rel="stylesheet" href="css/theme.css?v=69dca021">
@@ -24,7 +24,6 @@
     <div id="map"></div>
     
     <!-- 工程列表切換按鈕 -->
-    <div id="pipelineListToggle" class="pipeline-list-toggle" onclick="togglePipelineList()">📋 工程列表</div>
     
     <!-- 左側工具抽屜 -->
     <div id="leftDrawerToggle" style="display:none;position:absolute;top:125px;right:10px;z-index:1001;background:white;padding:8px;border-radius:4px;box-shadow:0 1px 5px rgba(0,0,0,0.4);cursor:pointer;font-size:18px;width:34px;height:34px;display:none;align-items:center;justify-content:center;" onclick="toggleLeftDrawer()" title="工具">🔧</div>
@@ -370,22 +369,37 @@
         </div>
         
         <div id="toolsContainer">
+<!-- 依性質分組，加上小標題，取代原本 4 條沒有說明的分隔線 -->
+            <div class="tool-group-label">編輯</div>
             <div class="tool-item edit" onclick="selectTool('edit')">
                 <span>✏️</span>
                 <span>編輯路徑</span>
             </div>
+            <div class="tool-item" onclick="selectTool('editPipeline')">
+                <span>🏗️</span>
+                <span>編輯工程資料</span>
+            </div>
+            <div id="settingsToolItem" class="tool-item" onclick="openSettingsPanel(); toggleToolsDrawer();" style="display:none;">
+                <span>⚙️</span>
+                <span>工程總設定</span>
+            </div>
+
+            <div class="tool-group-label">進度與統計</div>
             <div class="tool-item gantt" onclick="selectTool('gantt')">
                 <span>📊</span>
                 <span>甘特圖</span>
             </div>
-
-            <div class="tool-item" onclick="selectTool('editPipeline')" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px;">
-                <span>✏️</span>
-                <span>編輯工程</span>
+            <div id="statsReportToolItem" class="tool-item" onclick="toggleStatsReport(); toggleToolsDrawer();" style="display:none;">
+                <span>📈</span>
+                <span>每月施工統計</span>
+            </div>
+            <div id="accountingToolItem" class="tool-item" onclick="openAccountingPanel(); toggleToolsDrawer();" style="display:none;">
+                <span>💰</span>
+                <span>執行數查詢</span>
             </div>
 
-            
-            <div id="dxfToolItem" class="tool-item" onclick="exportDXF(); toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; display:none;">
+            <div class="tool-group-label">匯出</div>
+            <div id="dxfToolItem" class="tool-item" onclick="exportDXF(); toggleToolsDrawer();" style="display:none;">
                 <span>📐</span>
                 <span>匯出 CAD (DXF)</span>
             </div>
@@ -394,21 +408,12 @@
                 <span>匯出圖檔 (SVG)</span>
             </div>
 
-            <div id="settingsToolItem" class="tool-item" onclick="openSettingsPanel(); toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; display:none;">
-                <span>⚙️</span>
-                <span>工程總設定</span>
-            </div>
-            <div id="accountingToolItem" class="tool-item" onclick="openAccountingPanel(); toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; display:none;">
-                <span>💰</span>
-                <span>執行數查詢</span>
-            </div>
-
-
-            <div id="userMgmtToolItem" class="tool-item" onclick="openUserMgmt(); toggleToolsDrawer();" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; display:none;">
+            <div class="tool-group-label">帳號</div>
+            <div id="userMgmtToolItem" class="tool-item" onclick="openUserMgmt(); toggleToolsDrawer();" style="display:none;">
                 <span>👥</span>
                 <span>成員管理</span>
             </div>
-            <div class="tool-item" onclick="handleSignOut()" style="border-top: 2px solid #e0e0e0; margin-top: 4px; padding-top: 12px; background: #fff3f3; color: #e74c3c;">
+            <div class="tool-item" onclick="handleSignOut()" style="background: #fff3f3; color: #e74c3c;">
                 <span>🚪</span>
                 <span>登出</span>
             </div>
@@ -443,8 +448,8 @@
     <script defer src="js/utils.js?v=66ff43ed"></script>
     <script defer src="js/api.js?v=99ed34d9"></script>
     <script defer src="js/auth.js?v=5a68cb93"></script>
-    <script defer src="js/data.js?v=65d7d75e"></script>
-    <script defer src="js/map.js?v=b1f28d75"></script>
+    <script defer src="js/data.js?v=44ed384a"></script>
+    <script defer src="js/map.js?v=c96c0d7f"></script>
     <script defer src="js/map-features.js?v=f88d5e63"></script>
     <script defer src="js/batch.js?v=860ee8a3"></script>
     <script defer src="js/panels.js?v=0bf5b261"></script>
@@ -463,10 +468,10 @@
     <script defer src="js/gantt.js?v=30c49ebf"></script>
     <script defer src="js/scurve.js?v=67b627a8"></script>
     <script defer src="js/settings.js?v=882a3b85"></script>
-    <script defer src="js/plan-overview.js?v=169eca69"></script>
+    <script defer src="js/plan-overview.js?v=d88cf1c4"></script>
     <script defer src="js/path-edit.js?v=2ecbcb5d"></script>
     <script defer src="js/segments.js?v=0957739d"></script>
-    <script defer src="js/branch-edit.js?v=f649696f"></script>
+    <script defer src="js/branch-edit.js?v=d1363663"></script>
     <script defer src="js/pipeline-crud.js?v=053063ce"></script>
     <script defer src="js/dxf-export.js?v=d93b87ed"></script>
     <script defer src="js/elevation.js?v=bb2eeee2"></script>

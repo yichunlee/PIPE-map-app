@@ -110,6 +110,9 @@ function setMapContext(context, projectPipelines) {
         if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
         var accountingBtn1 = document.getElementById('accountingToolItem');
         if (accountingBtn1) accountingBtn1.style.display = 'none';
+        // 每月施工統計是「整個計畫」層級的報表，只在計畫總覽顯示
+        var statsBtn1 = document.getElementById('statsReportToolItem');
+        if (statsBtn1) statsBtn1.style.display = 'flex';
         var settingsBtn1 = document.getElementById('settingsToolItem');
         if (settingsBtn1) settingsBtn1.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn1 = document.getElementById('dxfToolItem');
@@ -144,6 +147,8 @@ function setMapContext(context, projectPipelines) {
         if (leftDrawerToggle) leftDrawerToggle.style.display = 'flex';
         var accountingBtn = document.getElementById('accountingToolItem');
         if (accountingBtn) accountingBtn.style.display = 'flex';
+        var statsBtn2 = document.getElementById('statsReportToolItem');
+        if (statsBtn2) statsBtn2.style.display = 'none';
         var settingsBtn2 = document.getElementById('settingsToolItem');
         if (settingsBtn2) settingsBtn2.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn2 = document.getElementById('dxfToolItem');
@@ -378,11 +383,6 @@ function showPipelineList(pipelines) {
     listDiv.innerHTML = `
         <div style="padding:14px 14px 10px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1a5fb4,#1e6fdc);border-radius:0;">
             <div style="color:white;font-weight:700;font-size:14px;margin-bottom:10px;letter-spacing:0.3px;">📋 工程列表</div>
-            <div style="display:flex;gap:8px;">
-                <div style="flex:1;background:rgba(255,255,255,0.18);color:white;padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:600;text-align:center;font-size:12px;border:1px solid rgba(255,255,255,0.3);transition:all 0.15s;" onclick="toggleStatsReport()" onmouseover="this.style.background='rgba(255,255,255,0.28)'" onmouseout="this.style.background='rgba(255,255,255,0.18)'">
-                    📊 每月施工統計
-                </div>
-            </div>
         </div>
         <div style="padding:8px 10px 4px;font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">工程選擇</div>
     `;
@@ -439,10 +439,10 @@ function togglePipelineList() {
         const isOpen = list.classList.contains('open');
         if (isOpen) {
             list.classList.remove('open');
-            toggle.textContent = '📋 工程列表';
+            if (toggle) toggle.textContent = '📋 工程列表';
         } else {
             list.classList.add('open');
-            toggle.textContent = '✕ 關閉';
+            if (toggle) toggle.textContent = '✕ 關閉';
         }
     }
 }

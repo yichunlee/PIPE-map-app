@@ -1015,3 +1015,17 @@ kbd {
     .layer-panel,
     .stats-panel { font-size: var(--fs-md); }
 }
+
+/* 工具抽屜的分組標題。
+   原本用 4 條沒有說明的分隔線區隔功能，看不出為什麼這樣分；
+   改成有文字的小標題，一眼看得出每組的用途。 */
+.tool-group-label {
+    padding: var(--gap-sm) var(--gap-md) var(--gap-xs);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    color: var(--c-text-3, #94a3b8);
+    letter-spacing: 0.06em;
+    background: var(--c-surface-2, #f8fafc);
+    border-top: 1px solid var(--c-border);
+}
+.tool-group-label:first-child { border-top: none; }

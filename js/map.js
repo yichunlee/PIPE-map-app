@@ -317,7 +317,9 @@ if (seg.nodeName && seg.nodeName.trim()) {
     
     const existingList = document.querySelector('.pipeline-list');
     if (existingList) existingList.remove();
-    document.getElementById('pipelineListToggle').style.display = 'none';
+    // 工程列表按鈕已移除（直接點地圖選工程即可），保留 null 檢查以防呼叫
+    const _plt = document.getElementById('pipelineListToggle');
+    if (_plt) _plt.style.display = 'none';
 }
 
 // ========== 新架構：繪製分支標籤 ==========
