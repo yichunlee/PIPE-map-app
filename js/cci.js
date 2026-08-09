@@ -255,8 +255,10 @@ async function downloadPermitReport() {
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
         const bs = res.bySource || {};
+        const km = ((res.totalLength || 0) / 1000).toFixed(2);
         showToast('已下載 ' + res.count + ' 筆（台中市 ' + (bs['台中市'] || 0) +
-                  '、公路局 ' + (bs['公路局'] || 0) + '）', 'success');
+                  '、公路局 ' + (bs['公路局'] || 0) + '）　總開挖長度約 ' + km + ' km',
+                  'success', 6000);
     } catch (e) {
         showToast('產生報表失敗：' + e.message, 'error');
     }
