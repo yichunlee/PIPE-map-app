@@ -190,8 +190,15 @@ async function downloadCciMerged() {
         a.href = url; a.download = 'CCI_合併_' + today + '.csv';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast('已下載：' + res.groupCount + ' 組 / ' + res.colCount + ' 欄 / ' +
-                  res.rowCount + ' 個月（' + res.ymRange + '）', 'success');
+        // 同名欄位在不同組合本應數值相同；若不同代表資料源有異動，要讓使用者知道
+        if (res.conflictCount > 0) {
+            console.warn('CCI 合併時發現數值不一致：', res.conflicts);
+            showToast('⚠️ 已下載，但有 ' + res.conflictCount +
+                      ' 處同名欄位數值不一致（詳見 F12 主控台），建議人工核對', 'error', 8000);
+        } else {
+            showToast('已下載：' + res.groupCount + ' 組 / ' + res.colCount + ' 欄 / ' +
+                      res.rowCount + ' 個月（' + res.ymRange + '）', 'success');
+        }
     } catch (e) {
         showToast('下載失敗：' + e.message, 'error');
     }
