@@ -116,6 +116,9 @@ function setMapContext(context, projectPipelines) {
         // CCI 是全國性資料，與哪個計畫無關，兩種情境都顯示
         var cciBtn1 = document.getElementById('cciToolItem');
         if (cciBtn1) cciBtn1.style.display = 'flex';
+        // 挖掘許可報表是全域資料（不分計畫），兩種情境都顯示
+        var prBtn1 = document.getElementById('permitReportToolItem');
+        if (prBtn1) prBtn1.style.display = 'flex';
         var settingsBtn1 = document.getElementById('settingsToolItem');
         if (settingsBtn1) settingsBtn1.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn1 = document.getElementById('dxfToolItem');
@@ -154,6 +157,8 @@ function setMapContext(context, projectPipelines) {
         if (statsBtn2) statsBtn2.style.display = 'flex';
         var cciBtn2 = document.getElementById('cciToolItem');
         if (cciBtn2) cciBtn2.style.display = 'flex';
+        var prBtn2 = document.getElementById('permitReportToolItem');
+        if (prBtn2) prBtn2.style.display = 'flex';
         var settingsBtn2 = document.getElementById('settingsToolItem');
         if (settingsBtn2) settingsBtn2.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn2 = document.getElementById('dxfToolItem');

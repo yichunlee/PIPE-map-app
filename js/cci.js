@@ -233,3 +233,32 @@ window.downloadCciMerged = downloadCciMerged;
 window.runCciFetchAll = runCciFetchAll;
 window.renderCciList = renderCciList;
 // ========== CCI 查詢結束 ==========
+
+// ========== 挖掘許可彙總報表 ==========
+// 把台中市挖掘許可 + 公路局申挖路權兩個來源，篩出中區工程處的案件匯出成 CSV。
+// 兩個來源對單位的寫法不同（有無「股份有限」、工務所寫法），
+// 比對邏輯在 worker 端做正規化處理。
+async function downloadPermitReport() {
+    showToast('產生報表中…', 'info');
+    try {
+        const res = await apiCall('exportPermitReport', {}, { silent: true });
+        if (!res.csv) { showToast(res.error || '沒有資料', 'error'); return; }
+        if (res.count === 0) {
+            showToast('找不到「' + res.keyword + '」的挖掘許可，請確認資料已上傳', 'info');
+            return;
+        }
+        const blob = new Blob(['\uFEFF' + res.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        a.href = url; a.download = '挖掘許可報表_' + today + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        const bs = res.bySource || {};
+        showToast('已下載 ' + res.count + ' 筆（台中市 ' + (bs['台中市'] || 0) +
+                  '、公路局 ' + (bs['公路局'] || 0) + '）', 'success');
+    } catch (e) {
+        showToast('產生報表失敗：' + e.message, 'error');
+    }
+}
+window.downloadPermitReport = downloadPermitReport;
