@@ -84,11 +84,13 @@ function renderCciList() {
         '<br><span style="color:#999;">每月 8 日自動更新，資料來源：行政院主計總處</span>' +
         '</div>';
 
-    if (cciCanFetch()) {
-        h += '<div style="padding:0 6px 8px;">' +
-            '<button id="cciFetchBtn" onclick="runCciFetchAll()" style="padding:5px 12px;background:#00695C;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🔄 立即重新抓取</button>' +
-            '</div>';
-    }
+    // 合併下載：把所有組合依年月對齊成一份 CSV（多數人實際使用的形式）
+    h += '<div style="padding:0 6px 8px;display:flex;gap:6px;flex-wrap:wrap;">' +
+        '<button onclick="downloadCciMerged()" style="padding:5px 12px;background:#0288D1;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">⬇ 下載合併 CSV（全部 ' + cciItems.length + ' 組）</button>' +
+        (cciCanFetch()
+            ? '<button id="cciFetchBtn" onclick="runCciFetchAll()" style="padding:5px 12px;background:#00695C;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🔄 立即重新抓取</button>'
+            : '') +
+        '</div>';
 
     // 表格：每組一列，可展開看資料、可下載 CSV
     h += '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
@@ -174,6 +176,27 @@ async function downloadCci(code) {
     }
 }
 
+
+// 下載合併後的 CSV（所有組合依年月對齊成一張表）
+async function downloadCciMerged() {
+    showToast('產生合併檔中…', 'info');
+    try {
+        const res = await apiCall('exportCciMerged', {}, { silent: true });
+        if (!res.csv) { showToast(res.error || '沒有資料可下載', 'error'); return; }
+        const blob = new Blob(['\uFEFF' + res.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        a.href = url; a.download = 'CCI_合併_' + today + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('已下載：' + res.groupCount + ' 組 / ' + res.colCount + ' 欄 / ' +
+                  res.rowCount + ' 個月（' + res.ymRange + '）', 'success');
+    } catch (e) {
+        showToast('下載失敗：' + e.message, 'error');
+    }
+}
+
 // 手動重新抓取（分兩批，與排程一致）
 async function runCciFetchAll() {
     if (!cciCanFetch()) { showToast('需要監工以上權限', 'error'); return; }
@@ -199,6 +222,7 @@ window.openCciPanel = openCciPanel;
 window.closeCciPanel = closeCciPanel;
 window.viewCci = viewCci;
 window.downloadCci = downloadCci;
+window.downloadCciMerged = downloadCciMerged;
 window.runCciFetchAll = runCciFetchAll;
 window.renderCciList = renderCciList;
 // ========== CCI 查詢結束 ==========
