@@ -113,6 +113,9 @@ function setMapContext(context, projectPipelines) {
         // 每月施工統計是「整個計畫」層級的報表，只在計畫總覽顯示
         var statsBtn1 = document.getElementById('statsReportToolItem');
         if (statsBtn1) statsBtn1.style.display = 'flex';
+        // CCI 是全國性資料，與哪個計畫無關，兩種情境都顯示
+        var cciBtn1 = document.getElementById('cciToolItem');
+        if (cciBtn1) cciBtn1.style.display = 'flex';
         var settingsBtn1 = document.getElementById('settingsToolItem');
         if (settingsBtn1) settingsBtn1.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn1 = document.getElementById('dxfToolItem');
@@ -149,6 +152,8 @@ function setMapContext(context, projectPipelines) {
         if (accountingBtn) accountingBtn.style.display = 'flex';
         var statsBtn2 = document.getElementById('statsReportToolItem');
         if (statsBtn2) statsBtn2.style.display = 'flex';
+        var cciBtn2 = document.getElementById('cciToolItem');
+        if (cciBtn2) cciBtn2.style.display = 'flex';
         var settingsBtn2 = document.getElementById('settingsToolItem');
         if (settingsBtn2) settingsBtn2.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn2 = document.getElementById('dxfToolItem');
