@@ -148,7 +148,7 @@ function setMapContext(context, projectPipelines) {
         var accountingBtn = document.getElementById('accountingToolItem');
         if (accountingBtn) accountingBtn.style.display = 'flex';
         var statsBtn2 = document.getElementById('statsReportToolItem');
-        if (statsBtn2) statsBtn2.style.display = 'none';
+        if (statsBtn2) statsBtn2.style.display = 'flex';
         var settingsBtn2 = document.getElementById('settingsToolItem');
         if (settingsBtn2) settingsBtn2.style.display = currentUser ? 'flex' : 'none';
         var dxfBtn2 = document.getElementById('dxfToolItem');
