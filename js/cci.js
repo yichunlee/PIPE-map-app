@@ -99,11 +99,16 @@ function renderCciList() {
         '<th style="text-align:center;padding:4px 6px;">操作</th></tr>';
 
     cciItems.forEach(it => {
-        const param = (it.categories_id ? 'C:' + it.categories_id : '') +
-            (it.category_ids ? (it.categories_id ? ' / ' : '') + 'I:' + it.category_ids : '');
+        // CCI_TOTAL 來自另一個 API（主計總處統計資料庫），是未扣除任何項目的
+        // 原始總指數，與 80 組裡的「不含X之總指數」口徑不同，特別標示避免混淆
+        const isTotal = it.code === 'CCI_TOTAL';
+        const param = isTotal
+            ? '<span style="color:#00695C;font-weight:600;">營造工程總指數（原始）</span>'
+            : ((it.categories_id ? 'C:' + it.categories_id : '') +
+               (it.category_ids ? (it.categories_id ? ' / ' : '') + 'I:' + it.category_ids : ''));
         h += '<tr style="border-top:1px solid #eee;">' +
             '<td style="padding:4px 6px;font-weight:600;">' + cciEsc(it.code) + '</td>' +
-            '<td style="padding:4px 6px;color:#666;">' + cciEsc(param || '(全部)') + '</td>' +
+            '<td style="padding:4px 6px;color:#666;">' + (isTotal ? param : cciEsc(param || '(全部)')) + '</td>' +
             '<td style="padding:4px 6px;text-align:right;">' +
             (it.error
                 ? '<span style="color:#c62828;" title="' + cciEsc(it.error) + '">失敗</span>'
