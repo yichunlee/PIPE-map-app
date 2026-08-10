@@ -13,7 +13,11 @@
 // opts.silent = true → 失敗時不顯示 toast（由呼叫者自行處理）
 
 // 必須與 worker 的 WRITE_PREFIXES 完全一致，否則會出現「後端要 token、前端沒帶」的情況
-const WRITE_PREFIXES = ['save', 'update', 'delete', 'add', 'clear', 'upload', 'set', 'import', 'init', 'batch'];
+const WRITE_PREFIXES = ['save', 'update', 'delete', 'add', 'clear', 'upload', 'set', 'import', 'init', 'batch', 'assign'];
+
+// 這些是 get 開頭、但後端要求管理員權限的動作，一樣必須帶 token。
+// 必須與 worker 的 ADMIN_READ_ACTIONS 一致。
+const AUTH_READ_ACTIONS = ['getUsers'];
 
 function _isWriteAction(actionName) {
     if (!actionName) return false;
@@ -21,12 +25,17 @@ function _isWriteAction(actionName) {
     return WRITE_PREFIXES.some(p => lower.startsWith(p));
 }
 
+// 需要附帶 userToken 的動作 = 寫入動作 + 需要權限的讀取動作
+function _needsToken(actionName) {
+    return _isWriteAction(actionName) || AUTH_READ_ACTIONS.indexOf(actionName) >= 0;
+}
+
 async function apiCall(action, params, opts) {
     params = params || {};
     opts = opts || {};
 
     // --- 發送前先檢查 token 是否已過期（在組 URL/body 之前，避免帶入舊 token）---
-    if (_isWriteAction(action) && userToken && typeof parseJwt === 'function') {
+    if (_needsToken(action) && userToken && typeof parseJwt === 'function') {
         try {
             const _jwtPayload = parseJwt(userToken);
             if (_jwtPayload && _jwtPayload.exp && _jwtPayload.exp < Math.floor(Date.now() / 1000)) {
@@ -59,7 +68,7 @@ async function apiCall(action, params, opts) {
     // 寫入動作若沒有 body，一律轉成 POST form body：
     // token 不再出現在 URL query（URL 會進 Cloudflare / 代理的 access log，
     // ID Token 外洩等於可冒用身分）
-    if (!opts.body && _isWriteAction(action)) {
+    if (!opts.body && _needsToken(action)) {
         opts.body = new URLSearchParams();
         qp.forEach(function(v, k) { if (k !== 'action') opts.body.set(k, v); });
         // URL 只保留 action（方便 log 判讀），其餘參數全部改走 body
@@ -77,7 +86,7 @@ async function apiCall(action, params, opts) {
         if (opts.body instanceof URLSearchParams) {
             // URLSearchParams — token 加在 body
             opts.body.set('action', action);
-            if (userToken && _isWriteAction(action)) {
+            if (userToken && _needsToken(action)) {
                 opts.body.set('userToken', userToken);
             }
             fetchOpts.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
@@ -85,7 +94,7 @@ async function apiCall(action, params, opts) {
         } else if (typeof opts.body === 'object') {
             // JSON body — token 加在 body
             var bodyObj = Object.assign({}, opts.body);
-            if (userToken && _isWriteAction(action)) {
+            if (userToken && _needsToken(action)) {
                 bodyObj.userToken = userToken;
             }
             fetchOpts.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
