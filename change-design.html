@@ -553,8 +553,23 @@ function setRate(code, kind, v) {
   render();
 }
 function deleteNewItem(ii) { newItems.splice(ii, 1); render(); }
+// 存回 newItems 前的正規化：捨棄空白列，係數統一轉成數字（或省略），
+// 避免使用者輸入的字串（如 "3.55 "）直接進 JSON 與 Python 端。
+function upaOut(rows) {
+  return (rows || []).filter(r => r.desc || r.qty || r.price).map(r => {
+    const o = { desc: r.desc, unit: r.unit, qty: r.qty, price: r.price, remark: r.remark };
+    const c = parseNum(r.coef);
+    if (c) o.coef = c;
+    return o;
+  });
+}
 function sumUpa(rows) {
-  return Math.round((rows || []).reduce((s, r) => s + (parseFloat(r.qty) || 0) * (parseFloat(r.price) || 0), 0) * 100) / 100;
+  // 逐列先四捨五入到「分」再加總，必須與畫面每列顯示的複價（fmtAmt，2 位）同一基準。
+  // 否則會出現「把顯示的複價一列列加起來 ≠ 小計」而被核對者退件。
+  // 例：0.3×7791.42=2337.426 顯示 2337.43、1.93×2696.9=5205.017 顯示 5205.02，
+  //     兩列各進位 0.004/0.003，先加後捨會少 0.01。
+  // 註：這與 Python 端 UPARow.total（已是 round(qty*price,2)）一致。
+  return Math.round((rows || []).reduce((s, r) => s + rowAmt(r), 0) * 100) / 100;
 }
 
 // ---------- 新增項目 modal（強化版單價分析：雙區搬移 / Ctrl+V 貼上 / 即時物調權重）----------
@@ -568,8 +583,8 @@ function openNewItemModal(gi, ii) {
   const it = _editing.ii !== null ? newItems[_editing.ii]
     : { code: '', desc: '', unit: '', qty: 0, upa_orig: [], upa_new: [] };
   _upaState = {
-    orig: (it.upa_orig || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
-    new: (it.upa_new || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
+    orig: (it.upa_orig || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '', coef: r.coef || '' })),
+    new: (it.upa_new || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '', coef: r.coef || '' })),
   };
 
   const bg = document.createElement('div');
@@ -615,9 +630,14 @@ function matDatalist() {
 function upaHeader() {
   return '<tr><th style="width:42px;">項次</th><th>工料說明</th><th style="width:60px;">單位</th><th style="width:78px;">數量</th>' +
          '<th style="width:82px;">單價</th><th style="width:92px;">複價</th><th style="width:110px;">備註(物調類別)</th>' +
+         '<th style="width:74px;" title="物調係數(%)：需同時填「備註(物調類別)」才會計入">係數(%)</th>' +
          '<th style="width:30px;" title="搬到另一區">搬</th><th style="width:28px;"></th></tr>';
 }
-function rowAmt(r) { return parseNum(r.qty) * parseNum(r.price); }
+// 複價：四捨五入到「分」。畫面顯示、小計、物調權重分子分母全部用這個值，
+// 確保「顯示的數字」與「算出來的合計」永遠對得起來。
+function rowAmt(r) { return Math.round(parseNum(r.qty) * parseNum(r.price) * 100) / 100; }
+// 物調係數：使用者輸入 3.55 代表 3.55%。空白/0 = 不計算。
+function rowCoef(r) { return parseNum(r.coef); }
 function fmtAmt(v) { return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function renderUpaTable(section) {
   const rows = _upaState[section];
@@ -632,6 +652,9 @@ function renderUpaTable(section) {
     `<td class="n"><input type="text" inputmode="decimal" value="${r.price}" oninput="updateCell('${section}',${i},'price',this.value)"></td>` +
     `<td class="amt" id="upaAmt_${section}_${i}">${fmtAmt(rowAmt(r))}</td>` +
     `<td><input list="matTypesList" value="${esc(r.remark)}" oninput="updateCell('${section}',${i},'remark',this.value)"></td>` +
+    `<td class="n"><input type="text" inputmode="decimal" value="${r.coef || ''}" placeholder="－" ` +
+      `title="物調係數，填 3.55 代表 3.55%；需同時選物調類別才會計算" ` +
+      `oninput="updateCell('${section}',${i},'coef',this.value)"></td>` +
     `<td class="mv" title="${arrow}" onclick="moveUpaRow('${section}',${i})">⇄</td>` +
     `<td class="rm" onclick="removeUpaRow('${section}',${i})">✕</td>` +
     `</tr>`
@@ -644,13 +667,16 @@ function updateCell(section, idx, field, value) {
     r[field] = parseNum(value);
     const amtCell = document.getElementById('upaAmt_' + section + '_' + idx);
     if (amtCell) amtCell.textContent = fmtAmt(rowAmt(r));
+  } else if (field === 'coef') {
+    // 保留使用者輸入的原字串（允許暫時空白），計算時才 parseNum
+    r.coef = value;
   } else {
     r[field] = value;
   }
   updateSumsAndWeights();
 }
 function addUpaRow(section) {
-  _upaState[section].push({ desc: '', unit: '', qty: 0, price: 0, remark: '' });
+  _upaState[section].push({ desc: '', unit: '', qty: 0, price: 0, remark: '', coef: '' });
   renderUpaTable(section);
   updateSumsAndWeights();
 }
@@ -684,6 +710,7 @@ function attachPasteHandler(section) {
         qty: parseNum(cols[2]),
         price: parseNum(cols[3]),
         remark: (cols[4] || '').trim(),
+        coef: (cols[5] || '').trim(),   // 第 6 欄若有，視為物調係數(%)
       });
     });
     renderUpaTable(section);
@@ -691,31 +718,53 @@ function attachPasteHandler(section) {
     toast('已貼上 ' + lines.length + ' 列');
   });
 }
+// 物調權重。
+// 分母 = 該區小計（與 sumUpa 同一基準：逐列捨入後加總）。
+// 係數是「逐列」填的，所以同一材料若各列係數不同，會拆成多行顯示；
+// 常見情況（同材料同係數）就會合併成一行，等同原本的呈現方式。
+// 只有「有填係數」且「有選物調類別」的列才會帶出係數計算，其餘維持原本只顯示權重。
 function calcWeights(rows) {
-  const subtotal = rows.reduce((s, r) => s + (parseNum(r.qty) * parseNum(r.price)), 0);
-  const byMat = {};
-  rows.forEach(r => {
+  const subtotal = sumUpa(rows);
+  const groups = {};   // key: 材料 \u0000 係數 -> { mat, coef, amt }
+  (rows || []).forEach(r => {
     if (!r.remark) return;
-    byMat[r.remark] = (byMat[r.remark] || 0) + parseNum(r.qty) * parseNum(r.price);
+    const coef = rowCoef(r);
+    const key = r.remark + '\u0000' + coef;
+    if (!groups[key]) groups[key] = { mat: r.remark, coef: coef, amt: 0 };
+    groups[key].amt += rowAmt(r);
   });
-  return MATERIAL_TYPES.filter(m => byMat[m]).map(m => ({
-    mat: m, amt: byMat[m], subtotal: subtotal,
-    pct: subtotal ? byMat[m] / subtotal : 0,
-  }));
+  const out = [];
+  MATERIAL_TYPES.forEach(m => {
+    Object.keys(groups).forEach(k => {
+      const g = groups[k];
+      if (g.mat !== m || !g.amt) return;
+      const amt = Math.round(g.amt * 100) / 100;
+      const pct = subtotal ? amt / subtotal : 0;
+      out.push({
+        mat: g.mat, amt: amt, subtotal: subtotal, coef: g.coef, pct: pct,
+        // 權重(%) × 係數(%) → 仍是百分比。例：8.0014% × 3.55% = 0.2841%
+        adjusted: g.coef ? pct * g.coef : null,
+      });
+    });
+  });
+  return out;
 }
 function updateSumsAndWeights() {
   ['orig', 'new'].forEach(section => {
     const rows = _upaState[section];
     const sub = sumUpa(rows);
-    document.getElementById('upaSum_' + section).textContent = '小計：' + sub.toLocaleString();
+    document.getElementById('upaSum_' + section).textContent = '小計：' + fmtAmt(sub);
     const weights = calcWeights(rows);
-    document.getElementById('upaWeights_' + section).innerHTML = weights.map(w =>
-      `物調權重：${esc(w.mat)}（${w.amt.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}/${w.subtotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}）＝${(w.pct * 100).toFixed(4)}%`
-    ).join('<br>');
+    document.getElementById('upaWeights_' + section).innerHTML = weights.map(w => {
+      const base = `物調權重：${esc(w.mat)}（${fmtAmt(w.amt)}/${fmtAmt(w.subtotal)}）`;
+      return w.adjusted === null
+        ? `${base}＝${(w.pct * 100).toFixed(4)}%`
+        : `${base}＝${(w.pct * 100).toFixed(4)}% ×${w.coef}%＝${w.adjusted.toFixed(4)}%`;
+    }).join('<br>');
   });
   const total = sumUpa(_upaState.orig) + sumUpa(_upaState.new);
   const gt = document.getElementById('upaGrandTotal');
-  if (gt) gt.textContent = '每單位單價合計：' + total.toLocaleString();
+  if (gt) gt.textContent = '每單位單價合計：' + fmtAmt(Math.round(total * 100) / 100);
 }
 function closeNiModal() { const m = document.getElementById('niModal'); if (m) m.remove(); _editing = null; }
 // 「萬用」新增項目編號（完整移植單機版 _suggest_new_code 演算法）：
@@ -757,8 +806,8 @@ function saveNewItem() {
     desc: desc,
     unit: document.getElementById('niUnit').value.trim(),
     qty: parseFloat(document.getElementById('niQty').value) || 0,
-    upa_orig: _upaState.orig.filter(r => r.desc || r.qty || r.price),
-    upa_new: _upaState.new.filter(r => r.desc || r.qty || r.price),
+    upa_orig: upaOut(_upaState.orig),
+    upa_new: upaOut(_upaState.new),
   };
   if (_editing.ii !== null) newItems[_editing.ii] = item;
   else newItems.push(item);
@@ -828,8 +877,8 @@ function selectOvItem(idx) {
   _ovSelIndex = idx;
   const it = newItems[idx];
   _upaState = {
-    orig: (it.upa_orig || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
-    new: (it.upa_new || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '' })),
+    orig: (it.upa_orig || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '', coef: r.coef || '' })),
+    new: (it.upa_new || []).map(r => ({ desc: r.desc || '', unit: r.unit || '', qty: r.qty || 0, price: r.price || 0, remark: r.remark || '', coef: r.coef || '' })),
   };
   const detail = document.getElementById('ovDetail');
   detail.innerHTML = `
@@ -878,8 +927,8 @@ function commitOvCurrent() {
   it.desc = dEl.value.trim() || it.desc;
   it.unit = document.getElementById('niUnit').value.trim();
   it.qty = parseNum(document.getElementById('niQty').value);
-  it.upa_orig = _upaState.orig.filter(r => r.desc || r.qty || r.price);
-  it.upa_new = _upaState.new.filter(r => r.desc || r.qty || r.price);
+  it.upa_orig = upaOut(_upaState.orig);
+  it.upa_new = upaOut(_upaState.new);
 }
 function closeUpaOverview() {
   commitOvCurrent();

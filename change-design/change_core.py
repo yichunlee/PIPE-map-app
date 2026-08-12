@@ -98,22 +98,31 @@ MATERIAL_TYPES = ['預拌混凝土', '鋼筋', '鋼板', '型鋼', '瀝青混凝
 
 class UPARow:
     """單價分析的一列工料。"""
-    __slots__ = ('desc', 'unit', 'qty', 'price', 'remark')
+    __slots__ = ('desc', 'unit', 'qty', 'price', 'remark', 'coef')
 
-    def __init__(self, desc='', unit='', qty=0.0, price=0.0, remark=''):
+    def __init__(self, desc='', unit='', qty=0.0, price=0.0, remark='', coef=0.0):
         self.desc = _clean(desc)
         self.unit = _clean(unit)
         self.qty = qty
         self.price = price
         self.remark = _clean(remark)   # 材料類別(物調)，空字串=不適用
+        # 物調係數，單位為百分比：3.55 代表 3.55%。0/空 = 不計算。
+        # 只有同時有 remark（物調類別）時才有意義。
+        try:
+            self.coef = float(str(coef).replace(',', '').strip() or 0)
+        except (TypeError, ValueError):
+            self.coef = 0.0
 
     @property
     def total(self):
         return round((self.qty or 0) * (self.price or 0), 2)
 
     def to_dict(self):
-        return {'desc': self.desc, 'unit': self.unit, 'qty': self.qty,
-                'price': self.price, 'remark': self.remark}
+        d = {'desc': self.desc, 'unit': self.unit, 'qty': self.qty,
+             'price': self.price, 'remark': self.remark}
+        if self.coef:
+            d['coef'] = self.coef
+        return d
 
 
 class NewItem:
@@ -148,8 +157,11 @@ class NewItem:
     def from_dict(d):
         it = NewItem(d['group_code'], d['code'], d['desc'], d['unit'], d['qty'])
         it.reason = _clean(d.get('reason', ''))
-        it.upa_orig = [UPARow(**r) for r in d.get('upa_orig', [])]
-        it.upa_new = [UPARow(**r) for r in d.get('upa_new', [])]
+        # 只取認得的鍵：舊版存檔沒有 coef、未來若再加欄位也不會讓舊/新檔互相載不進來
+        def _mk(r):
+            return UPARow(**{k: v for k, v in r.items() if k in UPARow.__slots__})
+        it.upa_orig = [_mk(r) for r in d.get('upa_orig', [])]
+        it.upa_new = [_mk(r) for r in d.get('upa_new', [])]
         return it
 
 
@@ -960,8 +972,9 @@ def _add_upa_sheet(wb, model):
     title_fill = PatternFill('solid', fgColor='FCE4D6')
 
     ws = wb.create_sheet('單價分析表')
-    cols = ['項次', '工料項目及說明', '單位', '數量', '單價', '複價', '備註']
-    widths = [8, 44, 8, 10, 12, 14, 16]
+    cols = ['項次', '工料項目及說明', '單位', '數量', '單價', '複價', '備註', '係數(%)']
+    widths = [8, 44, 8, 10, 12, 14, 16, 10]
+    NCOL = len(cols)          # 目前 8 欄；改欄數只要動這裡
     for ci, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(ci)].width = w
 
@@ -977,11 +990,11 @@ def _add_upa_sheet(wb, model):
     r = 1
     for it in news:
         # 項目標題
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=7)
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=NCOL)
         c = ws.cell(row=r, column=1,
                     value=f'{it.code}　{it.desc}　（單位：{it.unit}　數量：{it.qty}）')
         c.font = bold; c.fill = title_fill; c.alignment = left
-        for ci in range(1, 8):
+        for ci in range(1, NCOL + 1):
             ws.cell(row=r, column=ci).border = border
         r += 1
         # 欄位標題
@@ -995,10 +1008,10 @@ def _add_upa_sheet(wb, model):
 
         def emit_part(title, rows, mdict):
             nonlocal r
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=7)
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=NCOL)
             cc = ws.cell(row=r, column=1, value=title)
             cc.font = bold; cc.fill = sec_fill; cc.alignment = left
-            for ci in range(1, 8):
+            for ci in range(1, NCOL + 1):
                 ws.cell(row=r, column=ci).border = border
             r += 1
             first = r
@@ -1010,14 +1023,26 @@ def _add_upa_sheet(wb, model):
                 ws.cell(row=r, column=4, value=row.qty).font = normal
                 pcell = ws.cell(row=r, column=5, value=row.price); pcell.font = normal
                 pcell.number_format = '#,##0.00'
-                tcell = ws.cell(row=r, column=6, value=f'=D{r}*E{r}')
+                # 複價用 ROUND 到「分」：Excel 的 SUM 才會等於各列顯示值相加。
+                # 若寫成 =D*E，儲存格顯示是四捨五入後的樣子、實際值卻帶小數第三位以後，
+                # SUM 出來會與「把畫面數字一列列加起來」差幾分，核對時對不上。
+                tcell = ws.cell(row=r, column=6, value=f'=ROUND(D{r}*E{r},2)')
                 tcell.number_format = '#,##0.00'; tcell.font = normal
                 rk = ws.cell(row=r, column=7, value=(row.remark or None))
                 rk.font = red if row.remark else normal
                 dv.add(rk)   # 備註欄掛下拉
+                # 物調係數(%)：只有同時填了物調類別才有意義
+                cf = ws.cell(row=r, column=8,
+                             value=(row.coef if (row.remark and row.coef) else None))
+                # 用 General 而非 '0.00'：顯示值就是計算值，不會出現
+                # 「儲存格顯示 3.56、實際用 3.555 在算」這種對不上的情況
+                cf.number_format = 'General'; cf.font = red if (row.remark and row.coef) else normal
+                cf.alignment = center
                 if row.remark:
-                    mdict.setdefault(row.remark, []).append(r)
-                for ci in range(1, 8):
+                    # 依「材料 + 係數」分組：同材料若各列係數不同要分開列示，
+                    # 係數相同（常態）則合併成一行，與網頁端呈現一致。
+                    mdict.setdefault((row.remark, row.coef), []).append(r)
+                for ci in range(1, NCOL + 1):
                     ws.cell(row=r, column=ci).border = border
                 r += 1
                 item_num += 1
@@ -1027,26 +1052,39 @@ def _add_upa_sheet(wb, model):
             sc = ws.cell(row=r, column=6,
                          value=(f'=SUM(F{first}:F{last})' if rows else 0))
             sc.number_format = '#,##0.00'; sc.font = bold
-            for ci in range(1, 8):
+            for ci in range(1, NCOL + 1):
                 ws.cell(row=r, column=ci).border = border
             sub_row = r
             r += 1
             # 物調權重（緊接在該區小計下方；分子=材料複價、分母=該區小計）
+            # 全部用活公式：使用者在 Excel 改數量/單價/係數，權重會自己重算。
             for mat in MATERIAL_TYPES:
-                if mat not in mdict:
-                    continue
-                num = '+'.join(f'F{i}' for i in mdict[mat])
-                # 標籤用活公式顯示完整算式：物調權重：鋼筋（170,765/222,298）＝
-                lbl = ws.cell(row=r, column=2,
-                              value=(f'="物調權重："&"{mat}"&"（"&TEXT({num},"#,##0.00")'
-                                     f'&"/"&TEXT(F{sub_row},"#,##0.00")&"）＝"'))
-                lbl.font = red_bold
-                wc = ws.cell(row=r, column=6,
-                             value=f'=IF(F{sub_row}=0,0,({num})/F{sub_row})')
-                wc.number_format = '0.0000%'; wc.font = red_bold
-                for ci in range(1, 8):
-                    ws.cell(row=r, column=ci).border = border
-                r += 1
+                # 同材料若各列係數不同要分開列示；係數相同（常態）合併成一行。
+                # 排序讓有係數的排前面、係數大的在前，輸出順序才穩定。
+                keys = sorted([k for k in mdict if k[0] == mat], key=lambda k: -k[1])
+                for key in keys:
+                    coef = key[1]
+                    rows_of = mdict[key]
+                    num = '+'.join(f'F{i}' for i in rows_of)
+                    base_lbl = (f'="物調權重："&"{mat}"&"（"&TEXT({num},"#,##0.00")'
+                                f'&"/"&TEXT(F{sub_row},"#,##0.00")&"）＝"')
+                    if coef:
+                        # 係數取該組第一列的儲存格，改那一格整行跟著動
+                        cf_ref = f'H{rows_of[0]}'
+                        lbl_val = (base_lbl
+                                   + f'&TEXT(IF(F{sub_row}=0,0,({num})/F{sub_row}),"0.0000%")'
+                                     f'&" ×"&TEXT({cf_ref},"General")&"%＝"')
+                        wc_val = f'=IF(F{sub_row}=0,0,({num})/F{sub_row}*{cf_ref}/100)'
+                    else:
+                        lbl_val = base_lbl
+                        wc_val = f'=IF(F{sub_row}=0,0,({num})/F{sub_row})'
+                    lbl = ws.cell(row=r, column=2, value=lbl_val)
+                    lbl.font = red_bold
+                    wc = ws.cell(row=r, column=6, value=wc_val)
+                    wc.number_format = '0.0000%'; wc.font = red_bold
+                    for ci in range(1, NCOL + 1):
+                        ws.cell(row=r, column=ci).border = border
+                    r += 1
             return sub_row
 
         o_sub = emit_part('一、原契約單價部份', it.upa_orig, mat_orig)
@@ -1055,7 +1093,7 @@ def _add_upa_sheet(wb, model):
         ws.cell(row=r, column=2, value='每單位單價合計').font = bold
         tc = ws.cell(row=r, column=6, value=f'=F{o_sub}+F{n_sub}')
         tc.number_format = '#,##0.00'; tc.font = bold
-        for ci in range(1, 8):
+        for ci in range(1, NCOL + 1):
             ws.cell(row=r, column=ci).border = border
             ws.cell(row=r, column=ci).fill = title_fill
         r += 2  # 空一列
