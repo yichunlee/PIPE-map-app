@@ -170,8 +170,11 @@ let rateAmounts = {};      // code -> {inc, dec}
 let newItems = [];         // NewItem 陣列（schema 同桌面版）
 let reasons = {};          // code -> 數量增減原因分析（匯出到分析表）
 let leafByCode = {};        // code -> leaf 物件（快查表）
-// 費率型項目的「自動計算基準」：rate 明細 code -> [基準節點 code, ...]
-// 有設定的項目，增加/減少金額改由 computeAutoRates() 依基準節點的增減比例推算，
+// 費率型項目的自動計算規則：rate 明細 code -> { mode, basis:[節點 code...], rate }
+//   mode 'ratio'：比例分攤（<D> 包商利潤、<E> 承商管理這類）
+//        增減 = (基準增減 ÷ 基準原契約) × 本項原契約
+//   mode 'rate' ：稅率（<貳> 營業稅這類）
+//        增減 = 基準增減 × 稅率%，四捨五入到元
 // 算完仍寫回 rateAmounts，所以匯出（Python 端）完全不用改。
 let rateBasis = {};
 let rateAutoError = {};     // code -> 錯誤訊息（循環參照、分母為 0 等）
@@ -432,13 +435,14 @@ function leafUnder(leafCode, ancestorCode) {
   }
   return false;
 }
-// 彙總某節點底下的原契約金額與增減金額。
-// 邏輯與 calcTotals 相同，只是限縮在子樹範圍內，兩邊要一起維護。
-function subtreeAgg(code) {
+// 彙總符合條件的群組之原契約金額與增減金額。
+// 邏輯與 calcTotals 相同，只是可限縮範圍，兩邊要一起維護。
+function aggWhere(includeGroup, skipLeafCode) {
   let base = 0, inc = 0, dec = 0;
-  groupsUnder(code).forEach(gi => {
-    const g = groups[gi];
+  groups.forEach((g, gi) => {
+    if (!includeGroup(g, gi)) return;
     (g.leaves || []).forEach(lf => {
+      if (skipLeafCode && lf.code === skipLeafCode) return;   // 排除本項自己
       base += Number(lf.orig_total) || 0;
       if (lf.is_rate) {
         const ra = rateAmounts[lf.code];
@@ -458,14 +462,37 @@ function subtreeAgg(code) {
   });
   return { base: base, inc: inc, dec: dec };
 }
+function subtreeAgg(code) {
+  return aggWhere(g => g.code === code || (g.ancestors || []).some(a => a[0] === code));
+}
+// 基準清單的合計。ALL_BASIS 代表「全部（本項以外）」，給營業稅這種以總額為基礎的用。
+const ALL_BASIS = '__ALL__';
+function aggBasis(basis, selfCode) {
+  let base = 0, inc = 0, dec = 0;
+  (basis || []).forEach(b => {
+    const a = (b === ALL_BASIS) ? aggWhere(() => true, selfCode) : subtreeAgg(b);
+    base += a.base; inc += a.inc; dec += a.dec;
+  });
+  return { base: base, inc: inc, dec: dec };
+}
 // 把所有設定了基準的費率項目算出來，寫回 rateAmounts。
 // 依相依順序計算：若 <E> 的基準包含 <D>，會先算完 <D> 再算 <E>。
+function ruleOf(code) {
+  const r = rateBasis[code];
+  if (!r) return null;
+  // 相容舊格式：早期版本存的是純陣列（只有比例分攤模式）
+  if (Array.isArray(r)) return { mode: 'ratio', basis: r, rate: 0 };
+  if (!r.basis || !r.basis.length) return null;
+  return { mode: r.mode || 'ratio', basis: r.basis, rate: Number(r.rate) || 0 };
+}
 function computeAutoRates() {
   rateAutoError = {}; rateAutoDetail = {};
-  const pending = new Set(Object.keys(rateBasis).filter(c => (rateBasis[c] || []).length && leafByCode[c]));
+  const pending = new Set(Object.keys(rateBasis).filter(c => ruleOf(c) && leafByCode[c]));
   // 自我參照：基準涵蓋了自己，永遠算不出來，先挑掉並報錯
+  // （ALL_BASIS 例外：它在彙總時就已排除本項，不算自我參照）
   Array.from(pending).forEach(code => {
-    if ((rateBasis[code] || []).some(b => leafUnder(code, b))) {
+    const rule = ruleOf(code);
+    if (rule.basis.some(b => b !== ALL_BASIS && leafUnder(code, b))) {
       rateAutoError[code] = '基準包含本項自己，無法計算';
       pending.delete(code);
     }
@@ -474,25 +501,31 @@ function computeAutoRates() {
   while (pending.size && guard++ < 100) {
     let progressed = false;
     Array.from(pending).forEach(code => {
-      const basis = rateBasis[code];
-      // 若基準底下還有別的「尚未算完」的自動項目，先等它
+      const rule = ruleOf(code);
+      // 若基準範圍內還有別的「尚未算完」的自動項目，先等它
       const blocked = Array.from(pending).some(other =>
-        other !== code && basis.some(b => leafUnder(other, b)));
+        other !== code && rule.basis.some(b => b === ALL_BASIS ? true : leafUnder(other, b)));
       if (blocked) return;
       const lf = leafByCode[code];
       const origTotal = Number(lf.orig_total) || 0;
-      let base = 0, inc = 0, dec = 0;
-      basis.forEach(b => { const a = subtreeAgg(b); base += a.base; inc += a.inc; dec += a.dec; });
-      if (!base) {
+      const a = aggBasis(rule.basis, code);
+      if (rule.mode === 'rate') {
+        // 稅率模式：基準的增減金額 × 稅率，四捨五入到元
+        rateAmounts[code] = {
+          inc: Math.round(a.inc * rule.rate / 100),
+          dec: Math.round(a.dec * rule.rate / 100),
+        };
+      } else if (!a.base) {
         rateAutoError[code] = '基準的原契約金額為 0，無法計算比例';
         rateAmounts[code] = { inc: 0, dec: 0 };
       } else {
         rateAmounts[code] = {
-          inc: Math.round(inc / base * origTotal * 100) / 100,
-          dec: Math.round(dec / base * origTotal * 100) / 100,
+          inc: Math.round(a.inc / a.base * origTotal * 100) / 100,
+          dec: Math.round(a.dec / a.base * origTotal * 100) / 100,
         };
       }
-      rateAutoDetail[code] = { base: base, inc: inc, dec: dec, origTotal: origTotal };
+      rateAutoDetail[code] = { mode: rule.mode, rate: rule.rate, basis: rule.basis,
+                               base: a.base, inc: a.inc, dec: a.dec, origTotal: origTotal };
       pending.delete(code);
       progressed = true;
     });
@@ -590,16 +623,21 @@ function render() {
       const codeAttr = esc(lf.code);
       if (lf.is_rate) {
         const ra = rateAmounts[lf.code] || { inc: '', dec: '' };
-        const isAuto = !!(rateBasis[lf.code] && rateBasis[lf.code].length);
+        const rule = ruleOf(lf.code);
+        const isAuto = !!rule;
         const err = rateAutoError[lf.code];
         const det = rateAutoDetail[lf.code];
         const roAttr = isAuto ? ' readonly title="由基準自動計算，如需手動輸入請按「改手動」"' : '';
         const roCls = isAuto ? ' class="auto-val"' : '';
         let noteHtml = '';
         if (isAuto) {
-          const basisTxt = rateBasis[lf.code].join(' ＋ ');
+          const basisTxt = rule.basis.map(b => b === ALL_BASIS ? '全部（本項以外）' : b).join(' ＋ ');
           if (err) {
             noteHtml = `<div class="rate-note err">⚠ ${esc(err)}（基準：${esc(basisTxt)}）</div>`;
+          } else if (det && det.mode === 'rate') {
+            noteHtml = `<div class="rate-note" title="增加 = 基準的增加金額合計 × 稅率">` +
+              `基準：${esc(basisTxt)}　稅率 ${det.rate}%<br>` +
+              `增加 ${fmt(det.inc)} × ${det.rate}%　減少 ${fmt(det.dec)} × ${det.rate}%</div>`;
           } else if (det) {
             noteHtml = `<div class="rate-note" title="增加 = (基準增加合計 ÷ 基準原契約合計) × 本項原契約金額">` +
               `基準：${esc(basisTxt)}　原契約 ${fmt(det.base)}　本項原契約 ${fmt(det.origTotal)}<br>` +
@@ -668,8 +706,8 @@ function clearChange(code) {
 function openRateBasis(code) {
   const lf = leafByCode[code];
   if (!lf) return;
-  const cur = new Set(rateBasis[code] || []);
-  // 列出所有節點讓使用者勾（含自己的祖先鏈也一併列出，但會擋掉會造成循環的選項）
+  const rule = ruleOf(code) || { mode: 'ratio', basis: [], rate: 5 };
+  const cur = new Set(rule.basis);
   const root = buildTree();
   const opts = [];
   (function walk(node, depth) {
@@ -683,13 +721,28 @@ function openRateBasis(code) {
   const bg = document.createElement('div');
   bg.className = 'modal-bg'; bg.id = 'rbModal';
   bg.innerHTML = `<div class="modal">
-    <h3>⚙ 自動計算基準 — ${esc(shortCode(code))}　${esc(lf.desc)}</h3>
-    <div style="font-size:12px;color:#666;margin:-4px 0 10px;line-height:1.7;">
-      勾選要當作計算基準的項目，本項的增加/減少金額會自動算成：<br>
-      <b>（基準的增加金額合計 ÷ 基準的原契約金額合計）× 本項原契約金額 ${fmt(Number(lf.orig_total) || 0)}</b><br>
-      減少金額同理。基準內容有任何變動時會即時重算。
+    <h3>⚙ 自動計算 — ${esc(shortCode(code))}　${esc(lf.desc)}</h3>
+    <div style="margin:-4px 0 10px;">
+      <label style="display:block;padding:4px 0;cursor:pointer;">
+        <input type="radio" name="rbMode" value="ratio" ${rule.mode === 'ratio' ? 'checked' : ''} onchange="rbModeChanged('${esc(code)}')">
+        <b>比例分攤</b>　<span style="font-size:12px;color:#666;">(基準增減 ÷ 基準原契約) × 本項原契約
+        ${fmt(Number(lf.orig_total) || 0)}　— 包商利潤、承商管理費這類</span>
+      </label>
+      <label style="display:block;padding:4px 0;cursor:pointer;">
+        <input type="radio" name="rbMode" value="rate" ${rule.mode === 'rate' ? 'checked' : ''} onchange="rbModeChanged('${esc(code)}')">
+        <b>稅率</b>　<span style="font-size:12px;color:#666;">基準增減金額 × 稅率，四捨五入到元 — 營業稅這類</span>
+        <span id="rbRateWrap" style="margin-left:8px;">
+          <input id="rbRate" type="number" step="0.01" value="${rule.rate || 5}" style="width:70px;padding:3px;text-align:right;"
+                 oninput="previewRateBasis('${esc(code)}')"> %
+        </span>
+      </label>
     </div>
-    <div id="rbList" style="max-height:46vh;overflow:auto;border:1px solid #e3e3e3;border-radius:6px;padding:6px;">
+    <div style="font-size:12px;color:#666;margin-bottom:6px;">勾選要當作計算基準的項目（基準內容變動時會即時重算）：</div>
+    <div id="rbList" style="max-height:40vh;overflow:auto;border:1px solid #e3e3e3;border-radius:6px;padding:6px;">
+      <label style="display:block;padding:3px 0;cursor:pointer;background:#fffde7;border-radius:4px;">
+        <input type="checkbox" value="${ALL_BASIS}" ${cur.has(ALL_BASIS) ? 'checked' : ''} onchange="previewRateBasis('${esc(code)}')">
+        <b>全部（本項以外的所有項目）</b>
+      </label>
       ${opts.map(o => `<label style="display:block;padding:3px 0 3px ${o.depth * 18}px;${o.bad ? 'opacity:.4;' : 'cursor:pointer;'}">
         <input type="checkbox" value="${esc(o.code)}" ${cur.has(o.code) ? 'checked' : ''} ${o.bad ? 'disabled' : ''}
           onchange="previewRateBasis('${esc(code)}')">
@@ -705,6 +758,15 @@ function openRateBasis(code) {
   </div>`;
   document.body.appendChild(bg);
   bg.addEventListener('click', e => { if (e.target === bg) closeRateBasis(); });
+  rbModeChanged(code);
+}
+function rbMode() {
+  const el = document.querySelector('input[name="rbMode"]:checked');
+  return el ? el.value : 'ratio';
+}
+function rbModeChanged(code) {
+  const w = document.getElementById('rbRateWrap');
+  if (w) w.style.opacity = rbMode() === 'rate' ? '1' : '.35';
   previewRateBasis(code);
 }
 function rbChecked() {
@@ -718,24 +780,37 @@ function previewRateBasis(code) {
   if (!picked.length) { el.innerHTML = '<span style="color:#888;">未勾選任何基準 → 維持手動輸入</span>'; return; }
   const lf = leafByCode[code];
   const origTotal = Number(lf.orig_total) || 0;
-  let base = 0, inc = 0, dec = 0;
-  picked.forEach(b => { const a = subtreeAgg(b); base += a.base; inc += a.inc; dec += a.dec; });
-  if (!base) { el.innerHTML = '<span style="color:#c62828;">基準的原契約金額為 0，無法計算比例</span>'; return; }
-  const ri = Math.round(inc / base * origTotal * 100) / 100;
-  const rd = Math.round(dec / base * origTotal * 100) / 100;
-  el.innerHTML = `<div style="background:#f1f8e9;border-radius:6px;padding:8px;line-height:1.8;">
-    基準原契約金額合計：<b>${fmt(base)}</b><br>
-    增加：${fmt(inc)} ÷ ${fmt(base)} × ${fmt(origTotal)} ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>
-    減少：${fmt(dec)} ÷ ${fmt(base)} × ${fmt(origTotal)} ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>
-  </div>`;
+  const a = aggBasis(picked, code);
+  const mode = rbMode();
+  let ri, rd, expl;
+  if (mode === 'rate') {
+    const rate = parseFloat((document.getElementById('rbRate') || {}).value) || 0;
+    ri = Math.round(a.inc * rate / 100);
+    rd = Math.round(a.dec * rate / 100);
+    expl = `增加：${fmt(a.inc)} × ${rate}% ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
+           `減少：${fmt(a.dec)} × ${rate}% ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
+  } else {
+    if (!a.base) { el.innerHTML = '<span style="color:#c62828;">基準的原契約金額為 0，無法計算比例</span>'; return; }
+    ri = Math.round(a.inc / a.base * origTotal * 100) / 100;
+    rd = Math.round(a.dec / a.base * origTotal * 100) / 100;
+    expl = `基準原契約金額合計：<b>${fmt(a.base)}</b><br>` +
+           `增加：${fmt(a.inc)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
+           `減少：${fmt(a.dec)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
+  }
+  el.innerHTML = `<div style="background:#f1f8e9;border-radius:6px;padding:8px;line-height:1.8;">${expl}</div>`;
 }
 function saveRateBasis(code) {
   const picked = rbChecked();
-  if (picked.length) rateBasis[code] = picked;
-  else delete rateBasis[code];
+  if (!picked.length) { delete rateBasis[code]; }
+  else {
+    rateBasis[code] = { mode: rbMode(), basis: picked,
+                        rate: parseFloat((document.getElementById('rbRate') || {}).value) || 0 };
+  }
   closeRateBasis();
   render();
-  toast(picked.length ? '已設定自動計算基準：' + picked.join('、') : '已改回手動輸入');
+  toast(picked.length
+    ? '已設定自動計算：' + picked.map(b => b === ALL_BASIS ? '全部' : b).join('、')
+    : '已改回手動輸入');
 }
 function clearRateBasis(code) {
   delete rateBasis[code];
@@ -756,7 +831,7 @@ function setNewItemReason(ii, v) {
 function setRate(code, kind, v) {
   // 設了自動基準的項目不接受手動改；改了也會在下次 render 被覆蓋，
   // 與其讓使用者以為改成功了，不如當場擋下並說明。
-  if (rateBasis[code] && rateBasis[code].length) {
+  if (ruleOf(code)) {
     toast('此項為自動計算，請先按「改手動」再輸入');
     render();
     return;
@@ -1182,8 +1257,13 @@ function loadState(file) {
       // 舊版存檔沒有 rate_basis，維持全手動；有的話載入後 render 會自動重算
       rateBasis = {};
       Object.keys(d.rate_basis || {}).forEach(k => {
-        const arr = (d.rate_basis[k] || []).filter(c => typeof c === 'string');
-        if (arr.length) rateBasis[k] = arr;
+        const v = d.rate_basis[k];
+        // 相容早期版本存的純陣列格式
+        const basis = (Array.isArray(v) ? v : (v && v.basis) || []).filter(c => typeof c === 'string');
+        if (!basis.length) return;
+        rateBasis[k] = { mode: (!Array.isArray(v) && v.mode === 'rate') ? 'rate' : 'ratio',
+                         basis: basis,
+                         rate: (!Array.isArray(v) && Number(v.rate)) || 0 };
       });
       collapseLeafGroups();
       render();
