@@ -47,6 +47,12 @@
   .rate-inputs .ri-grp { display: inline-flex; align-items: center; gap: 4px; }
   .rate-inputs input { width: 84px; padding: 4px 6px; border: 1px solid #bbb; border-radius: 4px; text-align: right; font-size: 12px; }
   .rate-inputs label { font-size: 11px; color: #777; white-space: nowrap; }
+  .rate-inputs { flex-wrap: wrap; }
+  .rate-inputs input.auto-val { background: #eef6ee; border-color: #86b586; color: #1b5e20; font-weight: bold; cursor: default; }
+  .rate-auto-btns .mini { font-size: 11px; color: #1976d2; margin-left: 6px; cursor: pointer; white-space: nowrap; }
+  .rate-auto-btns .mini:hover { text-decoration: underline; }
+  .rate-note { flex-basis: 100%; font-size: 11px; color: #6b7c6b; line-height: 1.6; margin-top: 2px; }
+  .rate-note.err { color: #c62828; }
   /* 右鍵選單 */
   .ctx-menu { position: fixed; background: white; border: 1px solid #cfd8dc; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.22); z-index: 900; min-width: 168px; overflow: hidden; padding: 4px 0; }
   .ctx-menu button { display: block; width: 100%; text-align: left; border: none; background: white; padding: 8px 14px; font-size: 13px; cursor: pointer; color: #333; }
@@ -164,6 +170,12 @@ let rateAmounts = {};      // code -> {inc, dec}
 let newItems = [];         // NewItem 陣列（schema 同桌面版）
 let reasons = {};          // code -> 數量增減原因分析（匯出到分析表）
 let leafByCode = {};        // code -> leaf 物件（快查表）
+// 費率型項目的「自動計算基準」：rate 明細 code -> [基準節點 code, ...]
+// 有設定的項目，增加/減少金額改由 computeAutoRates() 依基準節點的增減比例推算，
+// 算完仍寫回 rateAmounts，所以匯出（Python 端）完全不用改。
+let rateBasis = {};
+let rateAutoError = {};     // code -> 錯誤訊息（循環參照、分母為 0 等）
+let rateAutoDetail = {};    // code -> {base, inc, dec, origTotal} 供畫面顯示算式（不存檔）
 let collapsedNodes = new Set(); // 已收合的節點 code
 
 function toast(msg) {
@@ -201,7 +213,7 @@ async function loadContract(file) {
     if (!res.ok) throw new Error((await res.json()).detail || res.status);
     const data = await res.json();
     groups = data.groups || [];
-    changes = {}; rateAmounts = {}; newItems = []; reasons = {};
+    changes = {}; rateAmounts = {}; newItems = []; reasons = {}; rateBasis = {}; rateAutoError = {};
     leafByCode = {};
     groups.forEach(g => g.leaves.forEach(lf => { leafByCode[lf.code] = lf; }));
     collapseLeafGroups();   // 預設：只收合「直接掛工項的那一組」，上層結構保持展開
@@ -391,10 +403,102 @@ function headerCtxMenu(evt, code) {
   ]);
 }
 function clearGroupChanges(g) {
-  g.leaves.forEach(lf => { delete changes[lf.code]; delete rateAmounts[lf.code]; delete reasons[lf.code]; });
+  g.leaves.forEach(lf => { delete changes[lf.code]; delete rateAmounts[lf.code]; delete reasons[lf.code]; delete rateBasis[lf.code]; });
   newItems = newItems.filter(it => it.group_code !== g.code);
   render();
   toast('已清除「' + g.desc + '」的所有變更');
+}
+
+// ---------- 費率型項目的自動計算 ----------
+// 例：<D> 包商利潤及什費 以 <A> 施工費 + <C> 污染防治費 為基準
+//     增加金額 = (基準各節點增加金額合計 ÷ 基準各節點原契約金額合計) × 本項原契約金額
+//     減少金額 同理。
+
+// 某節點底下的所有 group index（含該節點自己就是 group 的情形）
+function groupsUnder(code) {
+  const out = [];
+  groups.forEach((g, gi) => {
+    if (g.code === code || (g.ancestors || []).some(a => a[0] === code)) out.push(gi);
+  });
+  return out;
+}
+// 某明細 code 是否位於 ancestorCode 這個節點之下（用來擋循環參照）
+function leafUnder(leafCode, ancestorCode) {
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    if ((g.leaves || []).some(lf => lf.code === leafCode)) {
+      return g.code === ancestorCode || (g.ancestors || []).some(a => a[0] === ancestorCode);
+    }
+  }
+  return false;
+}
+// 彙總某節點底下的原契約金額與增減金額。
+// 邏輯與 calcTotals 相同，只是限縮在子樹範圍內，兩邊要一起維護。
+function subtreeAgg(code) {
+  let base = 0, inc = 0, dec = 0;
+  groupsUnder(code).forEach(gi => {
+    const g = groups[gi];
+    (g.leaves || []).forEach(lf => {
+      base += Number(lf.orig_total) || 0;
+      if (lf.is_rate) {
+        const ra = rateAmounts[lf.code];
+        if (ra) { inc += Number(ra.inc) || 0; dec += Number(ra.dec) || 0; }
+      } else if (lf.code in changes) {
+        const price = typeof lf.price === 'number' ? lf.price : 0;
+        const delta = (changes[lf.code] - lf.orig_qty) * price;
+        if (delta > 0) inc += delta; else dec += -delta;
+      }
+    });
+    // 新增項目也算進「增加金額」，與 calcTotals 一致
+    newItems.forEach(it => {
+      if (it.group_code === g.code) {
+        inc += (sumUpa(it.upa_orig) + sumUpa(it.upa_new)) * (Number(it.qty) || 0);
+      }
+    });
+  });
+  return { base: base, inc: inc, dec: dec };
+}
+// 把所有設定了基準的費率項目算出來，寫回 rateAmounts。
+// 依相依順序計算：若 <E> 的基準包含 <D>，會先算完 <D> 再算 <E>。
+function computeAutoRates() {
+  rateAutoError = {}; rateAutoDetail = {};
+  const pending = new Set(Object.keys(rateBasis).filter(c => (rateBasis[c] || []).length && leafByCode[c]));
+  // 自我參照：基準涵蓋了自己，永遠算不出來，先挑掉並報錯
+  Array.from(pending).forEach(code => {
+    if ((rateBasis[code] || []).some(b => leafUnder(code, b))) {
+      rateAutoError[code] = '基準包含本項自己，無法計算';
+      pending.delete(code);
+    }
+  });
+  let guard = 0;
+  while (pending.size && guard++ < 100) {
+    let progressed = false;
+    Array.from(pending).forEach(code => {
+      const basis = rateBasis[code];
+      // 若基準底下還有別的「尚未算完」的自動項目，先等它
+      const blocked = Array.from(pending).some(other =>
+        other !== code && basis.some(b => leafUnder(other, b)));
+      if (blocked) return;
+      const lf = leafByCode[code];
+      const origTotal = Number(lf.orig_total) || 0;
+      let base = 0, inc = 0, dec = 0;
+      basis.forEach(b => { const a = subtreeAgg(b); base += a.base; inc += a.inc; dec += a.dec; });
+      if (!base) {
+        rateAutoError[code] = '基準的原契約金額為 0，無法計算比例';
+        rateAmounts[code] = { inc: 0, dec: 0 };
+      } else {
+        rateAmounts[code] = {
+          inc: Math.round(inc / base * origTotal * 100) / 100,
+          dec: Math.round(dec / base * origTotal * 100) / 100,
+        };
+      }
+      rateAutoDetail[code] = { base: base, inc: inc, dec: dec, origTotal: origTotal };
+      pending.delete(code);
+      progressed = true;
+    });
+    if (!progressed) break;   // 互相依賴，解不開
+  }
+  pending.forEach(code => { rateAutoError[code] = '基準之間有循環參照，無法計算'; });
 }
 
 // ---------- 即時總計 ----------
@@ -433,6 +537,7 @@ function renderTotals() {
 // ---------- 畫面（樹狀展開/收合 + 紅字變更標記）----------
 function render() {
   if (!groups.length) { document.getElementById('tableWrap').innerHTML = ''; return; }
+  computeAutoRates();   // 先把自動費率算好寫回 rateAmounts，後面的顯示與總計才會一致
   const root = buildTree();
   const rows = flattenTree(root);
   const onlyChanged = document.getElementById('onlyChanged').checked;
@@ -485,13 +590,33 @@ function render() {
       const codeAttr = esc(lf.code);
       if (lf.is_rate) {
         const ra = rateAmounts[lf.code] || { inc: '', dec: '' };
+        const isAuto = !!(rateBasis[lf.code] && rateBasis[lf.code].length);
+        const err = rateAutoError[lf.code];
+        const det = rateAutoDetail[lf.code];
+        const roAttr = isAuto ? ' readonly title="由基準自動計算，如需手動輸入請按「改手動」"' : '';
+        const roCls = isAuto ? ' class="auto-val"' : '';
+        let noteHtml = '';
+        if (isAuto) {
+          const basisTxt = rateBasis[lf.code].join(' ＋ ');
+          if (err) {
+            noteHtml = `<div class="rate-note err">⚠ ${esc(err)}（基準：${esc(basisTxt)}）</div>`;
+          } else if (det) {
+            noteHtml = `<div class="rate-note" title="增加 = (基準增加合計 ÷ 基準原契約合計) × 本項原契約金額">` +
+              `基準：${esc(basisTxt)}　原契約 ${fmt(det.base)}　本項原契約 ${fmt(det.origTotal)}<br>` +
+              `增加 ${fmt(det.inc)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}　減少 ${fmt(det.dec)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}</div>`;
+          }
+        }
         html += `<tr class="leaf${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
           `<td title="${codeAttr}" style="padding-left:${indent}px;">${esc(shortCode(lf.code))}</td>` +
           `<td>${esc(lf.desc)}</td>` +
           `<td>${esc(lf.unit)}</td><td class="num">${lf.orig_qty}</td><td class="num">--</td>` +
           `<td class="rate-inputs">` +
-          `<span class="ri-grp"><label>增加$</label><input type="number" value="${ra.inc}" onchange="setRate('${codeAttr}','inc',this.value)"></span>` +
-          `<span class="ri-grp"><label>減少$</label><input type="number" value="${ra.dec}" onchange="setRate('${codeAttr}','dec',this.value)"></span>` +
+          `<span class="ri-grp"><label>增加$</label><input type="number"${roCls} value="${ra.inc}"${roAttr} onchange="setRate('${codeAttr}','inc',this.value)"></span>` +
+          `<span class="ri-grp"><label>減少$</label><input type="number"${roCls} value="${ra.dec}"${roAttr} onchange="setRate('${codeAttr}','dec',this.value)"></span>` +
+          `<span class="rate-auto-btns">` +
+          `<span class="mini" onclick="openRateBasis('${codeAttr}')">${isAuto ? '改基準' : '⚙ 自動計算'}</span>` +
+          (isAuto ? `<span class="mini" onclick="clearRateBasis('${codeAttr}')">改手動</span>` : '') +
+          `</span>` + noteHtml +
           `</td><td></td></tr>`;
       } else {
         const nq = (lf.code in changes) ? changes[lf.code] : '';
@@ -534,7 +659,90 @@ function setQty(code, origQty, v) {
   else { changes[code] = parseFloat(v); }
   render();
 }
-function clearChange(code) { delete changes[code]; delete rateAmounts[code]; delete reasons[code]; render(); }
+function clearChange(code) {
+  delete changes[code]; delete rateAmounts[code]; delete reasons[code]; delete rateBasis[code];
+  render();
+}
+
+// ---------- 費率自動計算：基準選取 ----------
+function openRateBasis(code) {
+  const lf = leafByCode[code];
+  if (!lf) return;
+  const cur = new Set(rateBasis[code] || []);
+  // 列出所有節點讓使用者勾（含自己的祖先鏈也一併列出，但會擋掉會造成循環的選項）
+  const root = buildTree();
+  const opts = [];
+  (function walk(node, depth) {
+    if (node.code !== '__root__') {
+      opts.push({ code: node.code, desc: node.desc, depth: depth - 1,
+                  bad: leafUnder(code, node.code) });
+    }
+    node.children.forEach(c => walk(c, depth + 1));
+  })(root, 0);
+
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg'; bg.id = 'rbModal';
+  bg.innerHTML = `<div class="modal">
+    <h3>⚙ 自動計算基準 — ${esc(shortCode(code))}　${esc(lf.desc)}</h3>
+    <div style="font-size:12px;color:#666;margin:-4px 0 10px;line-height:1.7;">
+      勾選要當作計算基準的項目，本項的增加/減少金額會自動算成：<br>
+      <b>（基準的增加金額合計 ÷ 基準的原契約金額合計）× 本項原契約金額 ${fmt(Number(lf.orig_total) || 0)}</b><br>
+      減少金額同理。基準內容有任何變動時會即時重算。
+    </div>
+    <div id="rbList" style="max-height:46vh;overflow:auto;border:1px solid #e3e3e3;border-radius:6px;padding:6px;">
+      ${opts.map(o => `<label style="display:block;padding:3px 0 3px ${o.depth * 18}px;${o.bad ? 'opacity:.4;' : 'cursor:pointer;'}">
+        <input type="checkbox" value="${esc(o.code)}" ${cur.has(o.code) ? 'checked' : ''} ${o.bad ? 'disabled' : ''}
+          onchange="previewRateBasis('${esc(code)}')">
+        <span style="font-family:monospace;">${esc(o.code)}</span>　${esc(o.desc)}
+        ${o.bad ? '<span style="color:#c62828;font-size:11px;">（含本項自己，不可選）</span>' : ''}
+      </label>`).join('')}
+    </div>
+    <div id="rbPreview" style="margin-top:10px;font-size:12.5px;"></div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeRateBasis()">取消</button>
+      <button class="btn primary" onclick="saveRateBasis('${esc(code)}')">確定</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener('click', e => { if (e.target === bg) closeRateBasis(); });
+  previewRateBasis(code);
+}
+function rbChecked() {
+  return Array.from(document.querySelectorAll('#rbList input:checked')).map(i => i.value);
+}
+// 即時試算，讓使用者按確定前就看到會算出什麼
+function previewRateBasis(code) {
+  const el = document.getElementById('rbPreview');
+  if (!el) return;
+  const picked = rbChecked();
+  if (!picked.length) { el.innerHTML = '<span style="color:#888;">未勾選任何基準 → 維持手動輸入</span>'; return; }
+  const lf = leafByCode[code];
+  const origTotal = Number(lf.orig_total) || 0;
+  let base = 0, inc = 0, dec = 0;
+  picked.forEach(b => { const a = subtreeAgg(b); base += a.base; inc += a.inc; dec += a.dec; });
+  if (!base) { el.innerHTML = '<span style="color:#c62828;">基準的原契約金額為 0，無法計算比例</span>'; return; }
+  const ri = Math.round(inc / base * origTotal * 100) / 100;
+  const rd = Math.round(dec / base * origTotal * 100) / 100;
+  el.innerHTML = `<div style="background:#f1f8e9;border-radius:6px;padding:8px;line-height:1.8;">
+    基準原契約金額合計：<b>${fmt(base)}</b><br>
+    增加：${fmt(inc)} ÷ ${fmt(base)} × ${fmt(origTotal)} ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>
+    減少：${fmt(dec)} ÷ ${fmt(base)} × ${fmt(origTotal)} ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>
+  </div>`;
+}
+function saveRateBasis(code) {
+  const picked = rbChecked();
+  if (picked.length) rateBasis[code] = picked;
+  else delete rateBasis[code];
+  closeRateBasis();
+  render();
+  toast(picked.length ? '已設定自動計算基準：' + picked.join('、') : '已改回手動輸入');
+}
+function clearRateBasis(code) {
+  delete rateBasis[code];
+  render();
+  toast('已改回手動輸入（保留目前金額，可自行修改）');
+}
+function closeRateBasis() { const m = document.getElementById('rbModal'); if (m) m.remove(); }
 function setReason(code, v) {
   v = String(v || '').trim();
   if (v) reasons[code] = v; else delete reasons[code];
@@ -546,6 +754,13 @@ function setNewItemReason(ii, v) {
   if (v) newItems[ii].reason = v; else delete newItems[ii].reason;
 }
 function setRate(code, kind, v) {
+  // 設了自動基準的項目不接受手動改；改了也會在下次 render 被覆蓋，
+  // 與其讓使用者以為改成功了，不如當場擋下並說明。
+  if (rateBasis[code] && rateBasis[code].length) {
+    toast('此項為自動計算，請先按「改手動」再輸入');
+    render();
+    return;
+  }
   const cur = rateAmounts[code] || { inc: 0, dec: 0 };
   cur[kind] = parseFloat(v) || 0;
   if (!cur.inc && !cur.dec) delete rateAmounts[code];
@@ -939,7 +1154,9 @@ function closeUpaOverview() {
 }
 
 function currentState() {
-  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts, reasons: reasons };
+  // rate_basis 是本工具自用的設定；Python 端用 .get() 取值，多這個鍵不影響匯出
+  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts,
+           reasons: reasons, rate_basis: rateBasis };
 }
 function saveState() {
   const blob = new Blob([JSON.stringify(currentState(), null, 2)], { type: 'application/json' });
@@ -962,6 +1179,12 @@ function loadState(file) {
       Object.keys(d.rate_amounts || {}).forEach(k => rateAmounts[k] = { inc: parseFloat(d.rate_amounts[k].inc) || 0, dec: parseFloat(d.rate_amounts[k].dec) || 0 });
       reasons = {};
       Object.keys(d.reasons || {}).forEach(k => { const v = String(d.reasons[k] || '').trim(); if (v) reasons[k] = v; });
+      // 舊版存檔沒有 rate_basis，維持全手動；有的話載入後 render 會自動重算
+      rateBasis = {};
+      Object.keys(d.rate_basis || {}).forEach(k => {
+        const arr = (d.rate_basis[k] || []).filter(c => typeof c === 'string');
+        if (arr.length) rateBasis[k] = arr;
+      });
       collapseLeafGroups();
       render();
       toast('已讀入變更狀態');
