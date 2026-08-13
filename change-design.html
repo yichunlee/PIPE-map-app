@@ -116,6 +116,8 @@
   <button class="btn" id="btnLoadState" disabled onclick="document.getElementById('stateInput').click()">讀入變更狀態</button>
   <input type="file" id="stateInput" accept=".json" style="display:none" onchange="loadState(this.files[0])">
   <button class="btn" id="btnSaveState" disabled onclick="saveState()">儲存變更狀態</button>
+  <span class="lbl-input">工程名稱<input id="projName" placeholder="例：后里第一淨水場北側鯉魚潭第二原水管工程" style="width:260px;" title="會印在每張表的抬頭，列印時每頁都會出現"></span>
+  <span class="lbl-input">工程編號<input id="projNo" placeholder="例：DV115040101" style="width:120px;" title="會印在每張表的抬頭"></span>
   <span class="lbl-input">前次標題<input id="beforeLabel" value="第十二次修正預算"></span>
   <span class="lbl-input">本次標題<input id="afterLabel" value="第一次變更設計"></span>
   <button class="btn blue" id="btnGenerate" disabled onclick="generateXlsx()">② 產生變更設計明細表</button>
@@ -216,6 +218,10 @@ async function loadContract(file) {
     if (!res.ok) throw new Error((await res.json()).detail || res.status);
     const data = await res.json();
     groups = data.groups || [];
+    // 從原契約抬頭自動帶入工程名稱/編號（使用者已填的不覆蓋）
+    const pn = document.getElementById('projName'), pno = document.getElementById('projNo');
+    if (pn && !pn.value && data.proj_name) pn.value = data.proj_name;
+    if (pno && !pno.value && data.proj_no) pno.value = data.proj_no;
     changes = {}; rateAmounts = {}; newItems = []; reasons = {}; rateBasis = {}; rateAutoError = {};
     leafByCode = {};
     groups.forEach(g => g.leaves.forEach(lf => { leafByCode[lf.code] = lf; }));
@@ -1284,6 +1290,8 @@ async function generateXlsx() {
     fd.append('state', JSON.stringify(currentState()));
     fd.append('before_label', document.getElementById('beforeLabel').value || '前次修正預算');
     fd.append('after_label', document.getElementById('afterLabel').value || '第N次變更設計');
+    fd.append('proj_name', document.getElementById('projName').value || '');
+    fd.append('proj_no', document.getElementById('projNo').value || '');
     const res = await fetch(API_BASE + '/generate', { method: 'POST', body: fd, headers: authHeaders() });
     if (!res.ok) throw new Error((await res.json()).detail || res.status);
     const blob = await res.blob();

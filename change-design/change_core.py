@@ -15,6 +15,7 @@ import json
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.properties import PageSetupProperties
 from parse_boq import parse_workbook, is_boilerplate, is_discard_rollup
 
 import re as _re
@@ -228,6 +229,52 @@ def build_groups(roots):
     return groups, leaf_by_code, group_by_code
 
 
+def _sniff_project_info(src_path):
+    """從原契約詳細表的抬頭區抓「工程名稱 / 工程編號」，供匯出時自動帶入。
+
+    台水的詳細表前幾列長這樣：
+        A5='工程名稱'  B5='后里第一淨水場新建工程'
+    欄位位置與用字各檔略有差異，所以用「找到含關鍵字的儲存格，取右邊第一個有值的」，
+    不寫死座標。抓不到就回空字串，使用者可在介面自行輸入。
+    """
+    name, no = '', ''
+    try:
+        wb = openpyxl.load_workbook(src_path, data_only=True, read_only=True)
+        ws = wb[wb.sheetnames[0]]
+        for row in ws.iter_rows(min_row=1, max_row=12, max_col=8):
+            for i, cell in enumerate(row):
+                v = cell.value
+                if not isinstance(v, str):
+                    continue
+                key = v.replace(' ', '').replace('\u3000', '')
+                target = None
+                if not name and '工程名稱' in key:
+                    target = 'name'
+                elif not no and ('工程編號' in key or '工程案號' in key):
+                    target = 'no'
+                if not target:
+                    continue
+                # 同一格就寫成「工程名稱：XXX」的情況
+                inline = _re.split(r'[:：]', v, maxsplit=1)
+                if len(inline) == 2 and inline[1].strip():
+                    val = inline[1].strip()
+                else:
+                    val = ''
+                    for nxt in row[i + 1:]:
+                        if nxt.value not in (None, ''):
+                            val = str(nxt.value).strip()
+                            break
+                if val:
+                    if target == 'name':
+                        name = val
+                    else:
+                        no = val
+        wb.close()
+    except Exception:      # noqa: BLE001  抓不到就算了，不能因此讓整份匯出失敗
+        pass
+    return name, no
+
+
 class ChangeModel:
     def __init__(self, src_path):
         self.src_path = src_path      # 保留原始檔路徑，供產生「變更後詳細價目表」時重用其 A 欄編碼
@@ -238,6 +285,7 @@ class ChangeModel:
         self.new_items = []    # list[NewItem]
         self.rate_amounts = {} # code -> {'inc': 增加金額, 'dec': 減少金額}（費率型項目手填）
         self.reasons = {}      # code -> 數量增加/減少原因分析（原契約工項用）
+        self.proj_name, self.proj_no = _sniff_project_info(src_path)
 
     # ---- 變更操作 ----
     def set_new_qty(self, code, new_qty):
@@ -426,9 +474,40 @@ def generate_detail_boq(model: ChangeModel, out_path, title_suffix='（第一次
     return out_path
 
 
+# 列印用的頁尾（每張紙都會印到）。Excel 2003 也支援頁首/頁尾，語法相同。
+FOOT_2 = '編製：　　　　　　　　　覆核：'
+FOOT_3 = '編製：　　　　　　　　　覆核：　　　　　　　　　主任：'
+
+
+def _setup_print(ws, title_rows, footer_text, ncols):
+    """設定列印：表頭每頁重複、頁尾每頁顯示、寬度縮成一頁寬。
+
+    表頭用 print_title_rows（Excel 的「列印標題／頂端標題列」），這是把實際的
+    儲存格列在每頁重印，所以格式與內容完全一致。
+    表尾用頁尾（page footer）—— Excel 沒有「底端重複列」這種功能，
+    要每頁都出現簽核欄只能靠頁尾。
+    """
+    ws.print_title_rows = title_rows          # 例 '1:4'
+    ws.oddFooter.left.text = footer_text
+    ws.oddFooter.left.size = 10
+    ws.evenFooter.left.text = footer_text
+    ws.evenFooter.left.size = 10
+    ws.oddFooter.right.text = '第 &P 頁 / 共 &N 頁'
+    ws.oddFooter.right.size = 10
+    ws.evenFooter.right.text = '第 &P 頁 / 共 &N 頁'
+    ws.evenFooter.right.size = 10
+    # 橫向 + 縮成一頁寬（高度不限），避免寬表被切成兩半
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.print_area = None
+
+
 def generate_change_xlsx(model: ChangeModel, out_path,
                          before_label='前次修正預算',
-                         after_label='第N次變更設計'):
+                         after_label='第N次變更設計',
+                         proj_name='', proj_no=''):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = '變更設計明細表'
@@ -445,26 +524,39 @@ def generate_change_xlsx(model: ChangeModel, out_path,
     sub_fill = PatternFill('solid', fgColor='FFF2CC')
     anc_fill = PatternFill('solid', fgColor='F2F2F2')       # 祖先標題底色
     lvl_fill = PatternFill('solid', fgColor='E2EFDA')       # 層級小計底色
+    total_fill = PatternFill('solid', fgColor='FFFF00')     # 總計列底色（黃）
 
-    # ---- 表頭（兩列）----
-    ws.merge_cells('A1:A2'); ws['A1'] = '項次'
-    ws.merge_cells('B1:B2'); ws['B1'] = '項目及說明'
-    ws.merge_cells('C1:C2'); ws['C1'] = '單位'
-    ws.merge_cells('D1:D2'); ws['D1'] = '原定\n數量'
-    ws.merge_cells('E1:E2'); ws['E1'] = '變更後\n數量'
-    ws.merge_cells('F1:F2'); ws['F1'] = '增減\n數量'
-    ws.merge_cells('G1:G2'); ws['G1'] = '單價'
-    ws.merge_cells('H1:H2'); ws['H1'] = before_label
-    ws.merge_cells('I1:I2'); ws['I1'] = after_label
-    ws.merge_cells('J1:K1'); ws['J1'] = '增減合價'
-    ws['J2'] = '增加金額'
-    ws['K2'] = '減少金額'
+    # ---- 機關/工程抬頭（兩列，會隨列印標題每頁重複）----
+    ws.merge_cells('A1:K1')
+    c = ws.cell(row=1, column=1, value='台灣自來水股份有限公司')
+    c.font = Font(name='Arial', bold=True, size=14); c.alignment = center
+    ws.merge_cells('A2:K2')
+    c = ws.cell(row=2, column=1,
+                value=f'工程名稱：{proj_name}　　工程編號：{proj_no}')
+    c.font = bold; c.alignment = left
     for row in (1, 2):
+        for col in range(1, 12):
+            ws.cell(row=row, column=col).border = border
+
+    # ---- 欄位標題（兩列）----
+    ws.merge_cells('A3:A4'); ws['A3'] = '項次'
+    ws.merge_cells('B3:B4'); ws['B3'] = '項目及說明'
+    ws.merge_cells('C3:C4'); ws['C3'] = '單位'
+    ws.merge_cells('D3:D4'); ws['D3'] = '原定\n數量'
+    ws.merge_cells('E3:E4'); ws['E3'] = '變更後\n數量'
+    ws.merge_cells('F3:F4'); ws['F3'] = '增減\n數量'
+    ws.merge_cells('G3:G4'); ws['G3'] = '單價'
+    ws.merge_cells('H3:H4'); ws['H3'] = before_label
+    ws.merge_cells('I3:I4'); ws['I3'] = after_label
+    ws.merge_cells('J3:K3'); ws['J3'] = '增減合價'
+    ws['J4'] = '增加金額'
+    ws['K4'] = '減少金額'
+    for row in (3, 4):
         for col in range(1, 12):
             c = ws.cell(row=row, column=col)
             c.font = bold; c.alignment = center; c.border = border; c.fill = hdr_fill
 
-    r = 3  # 目前寫入列
+    r = 5  # 目前寫入列
 
     def money_fmt(cell):
         cell.number_format = '#,##0.00;(#,##0.00);-'
@@ -769,6 +861,7 @@ def generate_change_xlsx(model: ChangeModel, out_path,
 
     # ---- 安全網：把 group_code 對不上任何群組的新增項目補在最後，避免遺漏 ----
     orphans = [it for it in model.new_items if id(it) not in rendered_new_items]
+    orphan_rows = []
     if orphans:
         ws.cell(row=r, column=C_CODE, value='＊').font = bold
         ws.cell(row=r, column=C_DESC, value='其他新增項目（未歸入既有分組）').font = bold
@@ -793,7 +886,24 @@ def generate_change_xlsx(model: ChangeModel, out_path,
                 hd = ws.cell(row=r, column=C_DEC, value=0); money_fmt(hd); hd.font = normal
                 for col in range(1, 12):
                     ws.cell(row=r, column=col).border = border
+                orphan_rows.append(r)
                 r += 1
+
+    # ---- 總計（含營業稅）----
+    # top_level_rows 是所有最頂層的小計/合計列（例如 <壹> 施工費 小計、<貳> 營業稅合計），
+    # 相加就是整份契約的總額。orphan_rows 是掛不到分組的新增項目，一併計入才不會漏。
+    # 用 SUM 各列相加而非直接算數值，是為了讓使用者在 Excel 裡改數量後總計會跟著動。
+    total_rows = top_level_rows + orphan_rows
+    if total_rows:
+        r += 1   # 空一列，與上方合計分開
+        ws.cell(row=r, column=C_DESC, value='總計').font = bold
+        for cc, ch in ((C_BEFORE, 'H'), (C_AFTER, 'I'), (C_INC, 'J'), (C_DEC, 'K')):
+            c = ws.cell(row=r, column=cc, value='=' + '+'.join(f'{ch}{i}' for i in total_rows))
+            money_fmt(c); c.font = bold
+        for col in range(1, 12):
+            ws.cell(row=r, column=col).border = border
+            ws.cell(row=r, column=col).fill = total_fill
+        r += 1
 
     widths = [16, 44, 6, 11, 11, 10, 10, 16, 16, 14, 14]
     for ci, w in enumerate(widths, start=1):
@@ -801,11 +911,13 @@ def generate_change_xlsx(model: ChangeModel, out_path,
     # 依標題長度動態放寬 H/I 欄（設上限 34 避免過寬；更長的字交給自動換行處理）
     for col, label in (('H', before_label), ('I', after_label)):
         ws.column_dimensions[col].width = max(16, min(34, int(len(str(label)) * 2.2)))
-    ws.freeze_panes = 'A3'
+    ws.freeze_panes = 'A5'
+    # 表頭 1~4 列每頁重印；表尾（編製／覆核）用頁尾，每頁都會出現
+    _setup_print(ws, '1:4', FOOT_2, 11)
 
     # ---- 附加分析表 ----
-    _add_analysis_sheets(wb, model)
-    _add_upa_sheet(wb, model)
+    _add_analysis_sheets(wb, model, proj_name=proj_name, proj_no=proj_no)
+    _add_upa_sheet(wb, model, proj_name=proj_name, proj_no=proj_no)
 
     # ---- 全表文字自動換行（保留原水平對齊；垂直預設置中）----
     for _w in wb.worksheets:
@@ -919,6 +1031,8 @@ def _add_analysis_sheets(wb, model, proj_name='', proj_no=''):
         for ci, w in enumerate(widths, start=1):
             ws.column_dimensions[get_column_letter(ci)].width = w
         ws.freeze_panes = 'A5'
+        # 表頭 1~4 列每頁重印；表尾用頁尾（編製／覆核／主任）
+        _setup_print(ws, '1:4', FOOT_3, len(headers['cols']))
 
     ws = wb.create_sheet('原契約數量增加')
     emit_hierarchy_sheet(ws, {
@@ -957,7 +1071,7 @@ def _leaf_seq(code):
 # ----------------------------------------------------------------------------
 # 單價分析表工作表：把所有新增項目的單價分析整理成一張（可微調）
 # ----------------------------------------------------------------------------
-def _add_upa_sheet(wb, model):
+def _add_upa_sheet(wb, model, proj_name='', proj_no=''):
     news = list(model.new_items)
     if not news:
         return
@@ -987,7 +1101,19 @@ def _add_upa_sheet(wb, model):
     red = Font(name='Arial', color='FF0000')
     red_bold = Font(name='Arial', bold=True, color='FF0000')
 
-    r = 1
+    # ---- 機關/工程抬頭（兩列，會隨列印標題每頁重複）----
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=NCOL)
+    c = ws.cell(row=1, column=1, value='台灣自來水股份有限公司')
+    c.font = Font(name='Arial', bold=True, size=14); c.alignment = center
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=NCOL)
+    c = ws.cell(row=2, column=1,
+                value=f'工程名稱：{proj_name}　　工程編號：{proj_no}')
+    c.font = bold; c.alignment = left
+    for row in (1, 2):
+        for ci in range(1, NCOL + 1):
+            ws.cell(row=row, column=ci).border = border
+
+    r = 3
     for it in news:
         # 項目標題
         ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=NCOL)
@@ -1035,7 +1161,10 @@ def _add_upa_sheet(wb, model):
                 cf = ws.cell(row=r, column=8,
                              value=(row.coef if (row.remark and row.coef) else None))
                 # 用 General 而非 '0.00'：顯示值就是計算值，不會出現
-                # 「儲存格顯示 3.56、實際用 3.555 在算」這種對不上的情況
+                # 「儲存格顯示 3.56、實際用 3.555 在算」這種對不上的情況。
+                # ⚠️ 這是儲存格的 number_format，與公式裡的 TEXT() 無關；
+                #    公式中「不可」寫 TEXT(x,"General")，中文版 Excel 2003 不認得
+                #    這個格式代碼（要寫 "G/通用格式"），改用 &x& 直接串接最保險。
                 cf.number_format = 'General'; cf.font = red if (row.remark and row.coef) else normal
                 cf.alignment = center
                 if row.remark:
@@ -1073,7 +1202,7 @@ def _add_upa_sheet(wb, model):
                         cf_ref = f'H{rows_of[0]}'
                         lbl_val = (base_lbl
                                    + f'&TEXT(IF(F{sub_row}=0,0,({num})/F{sub_row}),"0.0000%")'
-                                     f'&" ×"&TEXT({cf_ref},"General")&"%＝"')
+                                     f'&" ×"&{cf_ref}&"%＝"')
                         wc_val = f'=IF(F{sub_row}=0,0,({num})/F{sub_row}*{cf_ref}/100)'
                     else:
                         lbl_val = base_lbl
@@ -1097,3 +1226,6 @@ def _add_upa_sheet(wb, model):
             ws.cell(row=r, column=ci).border = border
             ws.cell(row=r, column=ci).fill = title_fill
         r += 2  # 空一列
+
+    # 抬頭 1~2 列每頁重印；表尾用頁尾（編製／覆核）
+    _setup_print(ws, '1:2', FOOT_2, NCOL)

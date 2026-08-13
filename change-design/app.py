@@ -110,7 +110,10 @@ async def parse(file: UploadFile = File(...),
                 'is_rate': bool(is_rate_item(lf)),
             } for lf in g.leaves],
         })
-    return {'success': True, 'groups': groups}
+    # 順便把原契約抬頭抓到的工程名稱/編號回傳，讓前端自動帶入（使用者仍可改）
+    return {'success': True, 'groups': groups,
+            'proj_name': getattr(model, 'proj_name', ''),
+            'proj_no': getattr(model, 'proj_no', '')}
 
 
 def _apply_state(model: ChangeModel, state: str):
@@ -188,6 +191,8 @@ async def generate(file: UploadFile = File(...),
                    state: str = Form('{}'),
                    before_label: str = Form('前次修正預算'),
                    after_label: str = Form('第N次變更設計'),
+                   proj_name: str = Form(''),
+                   proj_no: str = Form(''),
                    x_user_token: str = Header(default='')):
     _verify(x_user_token)
     try:
@@ -200,7 +205,8 @@ async def generate(file: UploadFile = File(...),
     out_tmp.close()
     try:
         generate_change_xlsx(model, out_tmp.name,
-                             before_label=before_label, after_label=after_label)
+                             before_label=before_label, after_label=after_label,
+                             proj_name=proj_name, proj_no=proj_no)
         with open(out_tmp.name, 'rb') as f:
             content = f.read()
     except Exception as e:  # noqa: BLE001
