@@ -1249,16 +1249,28 @@ function closeUpaOverview() {
   render();
 }
 
+// 工具列上要一起存進變更狀態的欄位：id -> JSON 鍵名
+const STATE_FIELDS = { projName: 'proj_name', projNo: 'proj_no',
+                       beforeLabel: 'before_label', afterLabel: 'after_label' };
 function currentState() {
-  // rate_basis 是本工具自用的設定；Python 端用 .get() 取值，多這個鍵不影響匯出
-  return { changes: changes, new_items: newItems, rate_amounts: rateAmounts,
-           reasons: reasons, rate_basis: rateBasis };
+  // rate_basis / 工具列欄位都是本工具自用的設定；
+  // Python 端 _apply_state 用 .get() 取值，多這些鍵不影響匯出
+  const st = { changes: changes, new_items: newItems, rate_amounts: rateAmounts,
+               reasons: reasons, rate_basis: rateBasis };
+  Object.keys(STATE_FIELDS).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) st[STATE_FIELDS[id]] = el.value || '';
+  });
+  return st;
 }
 function saveState() {
   const blob = new Blob([JSON.stringify(currentState(), null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = '變更狀態.json';
+  // 檔名帶上工程編號/名稱，避免多個工程的存檔都叫「變更狀態.json」而分不出來
+  const tag = (document.getElementById('projNo').value || document.getElementById('projName').value || '')
+    .trim().replace(/[\\/:*?"<>|]/g, '');
+  a.download = tag ? `變更狀態_${tag}.json` : '變更狀態.json';
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -1285,6 +1297,13 @@ function loadState(file) {
         rateBasis[k] = { mode: (!Array.isArray(v) && v.mode === 'rate') ? 'rate' : 'ratio',
                          basis: basis,
                          rate: (!Array.isArray(v) && Number(v.rate)) || 0 };
+      });
+      // 還原工具列欄位（工程名稱/編號、前次/本次標題）。
+      // 存檔裡是空字串的就不覆蓋，避免把載入原契約時自動帶入的值洗掉。
+      Object.keys(STATE_FIELDS).forEach(id => {
+        const el = document.getElementById(id);
+        const v = d[STATE_FIELDS[id]];
+        if (el && typeof v === 'string' && v.trim()) el.value = v;
       });
       collapseLeafGroups();
       render();
