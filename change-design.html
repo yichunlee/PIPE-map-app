@@ -483,6 +483,17 @@ function aggBasis(basis, selfCode) {
 }
 // 把所有設定了基準的費率項目算出來，寫回 rateAmounts。
 // 依相依順序計算：若 <E> 的基準包含 <D>，會先算完 <D> 再算 <E>。
+// 比例分攤模式的收尾規則（台水慣例）：
+//   增加金額：無條件捨去後「再減 1」
+//   減少金額：無條件捨去後「再加 1」
+// 兩者都讓變更金額往保守方向靠（增加算少一點、減少算多一點）。
+// ⚠️ 值為 0 時一律維持 0 —— 否則沒有任何增減的項目會變成 -1 / +1，
+//    合計就會被這些幽靈金額汙染。
+function ratioAdjust(v, kind) {
+  if (!v) return 0;
+  const f = Math.floor(v);
+  return kind === 'inc' ? Math.max(0, f - 1) : f + 1;
+}
 function ruleOf(code) {
   const r = rateBasis[code];
   if (!r) return null;
@@ -526,8 +537,8 @@ function computeAutoRates() {
         rateAmounts[code] = { inc: 0, dec: 0 };
       } else {
         rateAmounts[code] = {
-          inc: Math.round(a.inc / a.base * origTotal * 100) / 100,
-          dec: Math.round(a.dec / a.base * origTotal * 100) / 100,
+          inc: ratioAdjust(a.inc / a.base * origTotal, 'inc'),
+          dec: ratioAdjust(a.dec / a.base * origTotal, 'dec'),
         };
       }
       rateAutoDetail[code] = { mode: rule.mode, rate: rule.rate, basis: rule.basis,
@@ -645,9 +656,10 @@ function render() {
               `基準：${esc(basisTxt)}　稅率 ${det.rate}%<br>` +
               `增加 ${fmt(det.inc)} × ${det.rate}%　減少 ${fmt(det.dec)} × ${det.rate}%</div>`;
           } else if (det) {
-            noteHtml = `<div class="rate-note" title="增加 = (基準增加合計 ÷ 基準原契約合計) × 本項原契約金額">` +
+            noteHtml = `<div class="rate-note" title="增加 = (基準增加合計 ÷ 基準原契約合計) × 本項原契約金額，無條件捨去後再減1；減少同式，捨去後再加1">` +
               `基準：${esc(basisTxt)}　原契約 ${fmt(det.base)}　本項原契約 ${fmt(det.origTotal)}<br>` +
-              `增加 ${fmt(det.inc)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}　減少 ${fmt(det.dec)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}</div>`;
+              `增加 ${fmt(det.inc)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}（捨去再減1）　` +
+              `減少 ${fmt(det.dec)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}（捨去再加1）</div>`;
           }
         }
         html += `<tr class="leaf${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
@@ -797,11 +809,14 @@ function previewRateBasis(code) {
            `減少：${fmt(a.dec)} × ${rate}% ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
   } else {
     if (!a.base) { el.innerHTML = '<span style="color:#c62828;">基準的原契約金額為 0，無法計算比例</span>'; return; }
-    ri = Math.round(a.inc / a.base * origTotal * 100) / 100;
-    rd = Math.round(a.dec / a.base * origTotal * 100) / 100;
+    const rawI = a.inc / a.base * origTotal, rawD = a.dec / a.base * origTotal;
+    ri = ratioAdjust(rawI, 'inc'); rd = ratioAdjust(rawD, 'dec');
+    const f2 = v => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     expl = `基準原契約金額合計：<b>${fmt(a.base)}</b><br>` +
-           `增加：${fmt(a.inc)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
-           `減少：${fmt(a.dec)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
+           `增加：${fmt(a.inc)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ ${f2(rawI)}` +
+           ` → 捨去再減1 ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
+           `減少：${fmt(a.dec)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ ${f2(rawD)}` +
+           ` → 捨去再加1 ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
   }
   el.innerHTML = `<div style="background:#f1f8e9;border-radius:6px;padding:8px;line-height:1.8;">${expl}</div>`;
 }
