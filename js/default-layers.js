@@ -137,11 +137,15 @@ window.applyDefaultLayers = async function () {
         const p = dlPrefs();
         if (!_dlApplied) {
             _dlApplied = true;
+            // 等主畫面（工程管線、進度）畫完再開始。這三個是參考圖層，
+            // 晚個 1 秒出現沒關係，但如果跟主內容搶網路與主執行緒，
+            // 使用者會覺得「地圖開很慢」——那才是真正在意的事。
+            await dlIdle();
             // 逐一開啟，不用 Promise.all：三個都會打 API，一起發會讓
             // 手機在工地的網路更容易逾時，也讓錯誤難以歸因。
-            if (p.supplyzone) await dlEnableSupplyZone().catch(e => console.warn('供水轄區', e));
-            if (p.dgs) await dlEnableDgs().catch(e => console.warn('申挖路權', e));
-            if (p.roadwork) await dlEnableRoadwork().catch(e => console.warn('挖掘許可', e));
+            if (p.supplyzone) await dlTimed('供水轄區', dlEnableSupplyZone);
+            if (p.dgs) await dlTimed('申挖路權', dlEnableDgs);
+            if (p.roadwork) await dlTimed('挖掘許可', dlEnableRoadwork);
         } else {
             dlReapply(p);
         }
@@ -149,6 +153,22 @@ window.applyDefaultLayers = async function () {
         _dlBusy = false;
     }
 };
+
+// 等瀏覽器閒下來（最多等 3 秒），避免跟主內容搶資源
+function dlIdle() {
+    return new Promise(resolve => {
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: 3000 });
+        else setTimeout(resolve, 800);
+    });
+}
+
+// 量測各圖層耗時，覺得慢的時候打開 F12 主控台就知道是哪一個
+async function dlTimed(name, fn) {
+    const t0 = performance.now();
+    try { await fn(); }
+    catch (e) { console.warn('[預設圖層]', name, '失敗', e); return; }
+    console.log('[預設圖層]', name, Math.round(performance.now() - t0) + ' ms');
+}
 
 // 切換計畫/工程時 initMap 會把非底圖的圖層全部移除，
 // 這裡把已經抓回來的資料重畫一次就好，不再打 API。

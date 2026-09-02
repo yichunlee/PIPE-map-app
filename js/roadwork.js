@@ -90,6 +90,8 @@ async function refreshRoadworkFileList() {
 function renderRoadworkFileList() {
     const el = document.getElementById('roadworkFileList');
     if (!el) return;
+    const _p = document.getElementById('roadworkPanel');
+    if (_p && _p.style.display === 'none') { _rwListDirty = true; return; }
     if (rwCloudFiles.length === 0) {
         el.innerHTML = '<div style="color:#aaa;font-size:11px;padding:4px 0;">尚無上傳檔案</div>';
         return;
@@ -232,7 +234,9 @@ function displayRoadworkMarkers() {
     ordered.forEach(c => {
         const st = rwStatus(c);
         const color = RW_STATUS_COLOR[st];
-        const popup = rwPopup(c);
+        // popup 內容改成點開才產生：上千筆案件先把 HTML 字串全部組好非常吃時間，
+        // 但使用者實際上只會點開其中幾個。Leaflet 的 bindPopup 支援傳函式。
+        const popup = () => rwPopup(c);
         c.areas.forEach(ar => {
             if (ar.coords.length >= 3) {
                 const poly = L.polygon(ar.coords, {
@@ -276,9 +280,14 @@ function clearRoadworkMarkers() {
 }
 
 // ---------- 案件清單 ----------
+let _rwListDirty = false;
 function renderRoadworkList() {
     const el = document.getElementById('roadworkList');
     if (!el) return;
+    // 面板收合時不建清單 DOM（理由同 dgs-permits.js）
+    const panel = document.getElementById('roadworkPanel');
+    if (panel && panel.style.display === 'none') { _rwListDirty = true; return; }
+    _rwListDirty = false;
     const cases = rwFiltered();
     if (cases.length === 0) { el.innerHTML = ''; return; }
     const show = cases.slice(0, 200);   // 全部可能上千件，清單只列前 200
@@ -383,6 +392,7 @@ function toggleRoadworkLayer() {
 function openRoadworkPanel() {
     const panel = document.getElementById('roadworkPanel');
     if (panel) panel.style.display = 'block';
+    if (_rwListDirty) renderRoadworkList();   // 收合期間略過的清單，現在補建
     const up = document.getElementById('rwUploadBtn');
     if (up) up.style.display = rwCanEdit() ? '' : 'none';
 }

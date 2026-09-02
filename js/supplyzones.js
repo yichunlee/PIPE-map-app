@@ -73,7 +73,7 @@ function renderSupplyZoneLayer() {
             radius: 5, fillColor: '#00838F', color: '#fff', weight: 1.5,
             opacity: 1, fillOpacity: 0.85,
         });
-        marker.bindPopup(szPopup(z));
+        marker.bindPopup(() => szPopup(z));   // 點開才產生，約500站不用先全部組好
         supplyZoneLayer.addLayer(marker);
 
         // 站名標籤：依類型分兩種門檻與顏色

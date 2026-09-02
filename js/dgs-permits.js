@@ -69,12 +69,16 @@ async function loadDgsPermits() {
         const listRes = await apiCall('listDgsUploads', {}, { silent: true });
         dgsUploads = listRes.uploads || [];
 
-        // 2) 逐縣市把案件抓回來合併（all=1 ＝ 不過濾）
+        // 2) 各縣市的案件平行抓取後合併（all=1 ＝ 不過濾）
+        //    原本是 for + await 一個一個抓，N 個縣市就是 N 趟來回，
+        //    在工地的手機網路上光等待就要好幾秒。改成一次全部發出。
+        const results = await Promise.all(dgsUploads.map(u =>
+            apiCall('getDgsPermits', { city: u.city, all: '1' }, { silent: true })
+                .then(res => ({ city: u.city, cases: res.cases || [] }))
+                .catch(e => { console.warn('載入', u.city, '失敗', e); return { city: u.city, cases: [] }; })
+        ));
         const merged = [];
-        for (const u of dgsUploads) {
-            const res = await apiCall('getDgsPermits', { city: u.city, all: '1' }, { silent: true });
-            (res.cases || []).forEach(c => { c._city = u.city; merged.push(c); });
-        }
+        results.forEach(r => r.cases.forEach(c => { c._city = r.city; merged.push(c); }));
         dgsCases = merged;
         window.dgsCases = dgsCases;
 
@@ -159,7 +163,8 @@ function renderDgsPermits() {
         const color = dgsIsWater(c) ? DGS_COLOR : DGS_COLOR_OTHER;
 
         c.locations.forEach(loc => {
-            const popup = dgsPopupHtml(c, loc);
+            // 點開才產生 popup 內容（理由同 roadwork.js）
+            const popup = () => dgsPopupHtml(c, loc);
 
             if (loc.type === 'polygon' && loc.coords.length >= 3) {
                 const poly = L.polygon(loc.coords, {
@@ -204,15 +209,24 @@ function clearDgsLayers() {
 }
 
 // ---------- 案件清單 ----------
+let _dgsListDirty = false;
 function renderDgsList() {
     const listEl = document.getElementById('dgsList');
     if (!listEl) return;
+    // 面板收合時不建清單 DOM。自動載入時面板是收合的，
+    // 上千筆案件逐筆組 HTML 卻沒人看得到，純浪費。等打開面板再補建。
+    const panel = document.getElementById('dgsPanel');
+    if (panel && panel.style.display === 'none') { _dgsListDirty = true; return; }
+    _dgsListDirty = false;
     const cases = dgsFilteredCases();
     if (cases.length === 0) {
         listEl.innerHTML = '<div style="color:#999;padding:8px 0;text-align:center;">目前沒有案件</div>';
         return;
     }
-    listEl.innerHTML = cases.map((c, i) => {
+    // 只列前 200 筆：全部可能上千件，一次建完 DOM 會卡住畫面。
+    // 要找特定案件用上方的篩選，不是靠往下捲。
+    const shownList = cases.slice(0, 200);
+    listEl.innerHTML = shownList.map((c, i) => {
         const active = dgsIsActive(c);
         return '<div onclick="zoomToDgsCase(' + i + ')" style="padding:6px 8px;border-left:3px solid ' +
             (dgsIsWater(c) ? DGS_COLOR : DGS_COLOR_OTHER) + ';background:#f7f9fa;margin-bottom:4px;' +
@@ -222,7 +236,10 @@ function renderDgsList() {
             '<div style="color:#555;">' + dgsEsc(c.route) + '｜' + dgsEsc(c.pipeType) + '｜' + c.locations.length + ' 點</div>' +
             '<div style="color:#888;font-size:11px;">' + dgsEsc(c.startDate) + ' ~ ' + dgsEsc(c.extEndDate || c.endDate) + '</div>' +
             '</div>';
-    }).join('');
+    }).join('') + (cases.length > shownList.length
+        ? '<div style="color:#999;font-size:11px;padding:6px 0;text-align:center;">還有 ' +
+          (cases.length - shownList.length) + ' 件未列出，請用上方篩選縮小範圍</div>'
+        : '');
 }
 
 function zoomToDgsCase(index) {
@@ -357,6 +374,7 @@ function toggleDgsLayer() {
 function openDgsPanel() {
     const panel = document.getElementById('dgsPanel');
     if (panel) panel.style.display = 'block';
+    if (_dgsListDirty) renderDgsList();   // 收合期間略過的清單，現在補建
     const up = document.getElementById('dgsUploadBtn');
     if (up) up.style.display = dgsCanEdit() ? '' : 'none';
 }
