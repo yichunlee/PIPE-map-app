@@ -113,6 +113,8 @@ function renderSupplyZoneLayer() {
 
 async function toggleSupplyZoneLayer() {
     supplyZoneVisible = !supplyZoneVisible;
+    // 記住使用者的選擇，下次進來沿用（見 js/default-layers.js）
+    if (typeof rememberLayerPref === 'function') rememberLayerPref('supplyzone', supplyZoneVisible);
     const opt = document.getElementById('layer-supplyzone');
     if (opt) {
         const box = opt.querySelector('.layer-checkbox');

@@ -379,6 +379,10 @@ function showProjectPipelines(projectName) {
 
     // 背景靜默載入所有工程進度，載入完自動更新統計欄
     _loadProjectProgressBackground(projectPipelines);
+
+    // 自動開啟預設參考圖層（供水轄區／申挖路權／挖掘許可）。
+    // 放在最後：initMap 進來時會把非底圖的圖層全部清掉，太早開會被清掉。
+    if (typeof applyDefaultLayers === 'function') applyDefaultLayers();
 }
 
 function showPipelineList(pipelines) {

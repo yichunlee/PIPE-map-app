@@ -154,6 +154,8 @@ async function toggleRoadworkDataset(fileName) {
     updateRoadworkCount();
     renderRoadworkList();
     if (roadworkVisible) displayRoadworkMarkers();
+    // 記住勾了哪些檔案，下次進來自動沿用（見 js/default-layers.js）
+    if (typeof rememberRoadworkFiles === 'function') rememberRoadworkFiles();
 }
 
 function updateRoadworkCount() {
@@ -370,6 +372,7 @@ function toggleRoadworkLayer() {
     }
 
     roadworkVisible = true;
+    if (typeof rememberLayerPref === 'function') rememberLayerPref('roadwork', true);
     const btn = document.getElementById('roadworkButton');
     if (btn) btn.classList.add('active');
     openRoadworkPanel();
@@ -392,6 +395,7 @@ function collapseRoadworkPanel() {
 
 function hideRoadworkLayer() {
     roadworkVisible = false;
+    if (typeof rememberLayerPref === 'function') rememberLayerPref('roadwork', false);
     const btn = document.getElementById('roadworkButton');
     if (btn) btn.classList.remove('active');
     const panel = document.getElementById('roadworkPanel');

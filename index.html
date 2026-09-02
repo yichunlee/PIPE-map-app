@@ -146,6 +146,7 @@
     <div id="roadworkPanel" class="roadwork-panel" style="right:64px; left:auto; max-height:70vh; overflow:auto; width:260px;">
         <div class="panel-title">
             <span style="color:#FF5722;">🚧 自來水挖掘許可（台中市）</span>
+            <span onclick="hideRoadworkLayer()" title="關閉此圖層（下次進來不再自動顯示）" style="cursor:pointer; color:#c62828; font-size:11px; padding:0 4px;">關閉圖層</span>
             <span onclick="collapseRoadworkPanel()" title="收合面板（地圖保留）" style="cursor:pointer; color:#999; font-size:16px; padding:0 4px;">✕</span>
         </div>
         <!-- 三種狀態各自可開關；取消勾選其他兩個就能專心追未核發的路證 -->
@@ -188,6 +189,7 @@
     <div id="dgsPanel" class="roadwork-panel" style="bottom:30px; right:64px; left:auto; width:260px; max-height:70vh; overflow:auto;">
         <div class="panel-title">
             <span style="color:#0288D1;">💧 公路局申挖路權</span>
+            <span onclick="hideDgsLayer()" title="關閉此圖層（下次進來不再自動顯示）" style="cursor:pointer; color:#c62828; font-size:11px; padding:0 4px;">關閉圖層</span>
             <span onclick="collapseDgsPanel()" title="收合面板（地圖保留）" style="cursor:pointer; color:#999; font-size:16px; padding:0 4px;">✕</span>
         </div>
         <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; margin-bottom:6px; cursor:pointer;">
@@ -452,26 +454,26 @@
     </div>
 
     <!-- JS -->
-    <script defer src="js/config.js?v=961598e9"></script>
+    <script defer src="js/config.js?v=03b83b39"></script>
     <script defer src="js/utils.js?v=66ff43ed"></script>
     <script defer src="js/api.js?v=99ed34d9"></script>
     <script defer src="js/auth.js?v=5a68cb93"></script>
-    <script defer src="js/data.js?v=0fe95f90"></script>
+    <script defer src="js/data.js?v=60cbaf0f"></script>
     <script defer src="js/map.js?v=c96c0d7f"></script>
     <script defer src="js/map-features.js?v=f88d5e63"></script>
     <script defer src="js/batch.js?v=860ee8a3"></script>
     <script defer src="js/panels.js?v=0bf5b261"></script>
-    <script defer src="js/roadwork.js?v=c9d34498"></script>
+    <script defer src="js/roadwork.js?v=14d49e75"></script>
     <script defer src="js/progress-memo.js?v=25bed888"></script>
     <script defer src="js/streetview.js?v=bf5fcf73"></script>
     <script defer src="js/gwwells.js?v=2905cbe1"></script>
-    <script defer src="js/supplyzones.js?v=d66101d5"></script>
+    <script defer src="js/supplyzones.js?v=f3f3b9eb"></script>
     <script defer src="js/publicland.js?v=ea9d772d"></script>
     <script defer src="js/wayback.js?v=89342995"></script>
     <script defer src="js/completion-view.js?v=f2b39d6a"></script>
     <script defer src="js/cci.js?v=8c9910a3"></script>
     <script defer src="js/mobile-sheet.js?v=534452eb"></script>
-    <script defer src="js/dgs-permits.js?v=c18172ac"></script>
+    <script defer src="js/dgs-permits.js?v=106d005d"></script>
     <script defer src="js/wgis.js?v=a69294ca"></script>
     <script defer src="js/permits.js?v=6ebf94e9"></script>
     <script defer src="js/gantt.js?v=30c49ebf"></script>
@@ -489,5 +491,6 @@
     <script defer src="js/photos.js?v=6cab4164"></script>
     <script defer src="js/user-mgmt.js?v=160f72db"></script>
     <script defer src="js/accounting.js?v=3cbb77e4"></script>
+    <script defer src="js/default-layers.js?v=7cd73835"></script>
 </body>
 </html>

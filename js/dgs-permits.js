@@ -345,6 +345,7 @@ function toggleDgsLayer() {
 
     // 圖層原本關著：開啟圖層 + 面板
     dgsVisible = true;
+    if (typeof rememberLayerPref === 'function') rememberLayerPref('dgs', true);
     const btn = document.getElementById('dgsButton');
     if (btn) btn.classList.add('active-blue');
     openDgsPanel();
@@ -370,6 +371,7 @@ function collapseDgsPanel() {
 // 真正關閉圖層（長按工具鈕，或關閉鈕另設；預設保留給程式呼叫）
 function hideDgsLayer() {
     dgsVisible = false;
+    if (typeof rememberLayerPref === 'function') rememberLayerPref('dgs', false);
     const btn = document.getElementById('dgsButton');
     if (btn) btn.classList.remove('active-blue');
     const panel = document.getElementById('dgsPanel');
