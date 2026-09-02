@@ -494,26 +494,13 @@ function ratioAdjust(v, kind) {
   const f = Math.floor(v);
   return kind === 'inc' ? Math.max(0, f - 1) : f + 1;
 }
-// 收尾方式。與「計算模式」是兩件事：
-//   adj   無條件捨去後，增加再減 1、減少再加 1（<D> 包商利潤、<E> 承商管理費）
-//   round 單純四捨五入到元（<貳> 營業稅 —— 稅額不能自行加減 1）
-// 營業稅的原契約金額往往剛好是工程費的 5%，用比例分攤或稅率模式算出來一樣，
-// 所以收尾方式不能綁在模式上，必須讓使用者各自指定。
-function applyRounding(v, kind, rounding) {
-  if (rounding === 'round') return Math.round(v);
-  return ratioAdjust(v, kind);
-}
-// 沒指定時的預設：稅率模式 → 四捨五入；比例分攤 → 捨去加減1
-function defaultRounding(mode) { return mode === 'rate' ? 'round' : 'adj'; }
 function ruleOf(code) {
   const r = rateBasis[code];
   if (!r) return null;
   // 相容舊格式：早期版本存的是純陣列（只有比例分攤模式）
-  if (Array.isArray(r)) return { mode: 'ratio', basis: r, rate: 0, rounding: 'adj' };
+  if (Array.isArray(r)) return { mode: 'ratio', basis: r, rate: 0 };
   if (!r.basis || !r.basis.length) return null;
-  const mode = r.mode || 'ratio';
-  return { mode: mode, basis: r.basis, rate: Number(r.rate) || 0,
-           rounding: r.rounding || defaultRounding(mode) };
+  return { mode: r.mode || 'ratio', basis: r.basis, rate: Number(r.rate) || 0 };
 }
 function computeAutoRates() {
   rateAutoError = {}; rateAutoDetail = {};
@@ -542,19 +529,19 @@ function computeAutoRates() {
       if (rule.mode === 'rate') {
         // 稅率模式：基準的增減金額 × 稅率，四捨五入到元
         rateAmounts[code] = {
-          inc: applyRounding(a.inc * rule.rate / 100, 'inc', rule.rounding),
-          dec: applyRounding(a.dec * rule.rate / 100, 'dec', rule.rounding),
+          inc: Math.round(a.inc * rule.rate / 100),
+          dec: Math.round(a.dec * rule.rate / 100),
         };
       } else if (!a.base) {
         rateAutoError[code] = '基準的原契約金額為 0，無法計算比例';
         rateAmounts[code] = { inc: 0, dec: 0 };
       } else {
         rateAmounts[code] = {
-          inc: applyRounding(a.inc / a.base * origTotal, 'inc', rule.rounding),
-          dec: applyRounding(a.dec / a.base * origTotal, 'dec', rule.rounding),
+          inc: ratioAdjust(a.inc / a.base * origTotal, 'inc'),
+          dec: ratioAdjust(a.dec / a.base * origTotal, 'dec'),
         };
       }
-      rateAutoDetail[code] = { mode: rule.mode, rate: rule.rate, basis: rule.basis, rounding: rule.rounding,
+      rateAutoDetail[code] = { mode: rule.mode, rate: rule.rate, basis: rule.basis,
                                base: a.base, inc: a.inc, dec: a.dec, origTotal: origTotal };
       pending.delete(code);
       progressed = true;
@@ -664,19 +651,15 @@ function render() {
           const basisTxt = rule.basis.map(b => b === ALL_BASIS ? '全部（本項以外）' : b).join(' ＋ ');
           if (err) {
             noteHtml = `<div class="rate-note err">⚠ ${esc(err)}（基準：${esc(basisTxt)}）</div>`;
+          } else if (det && det.mode === 'rate') {
+            noteHtml = `<div class="rate-note" title="增加 = 基準的增加金額合計 × 稅率">` +
+              `基準：${esc(basisTxt)}　稅率 ${det.rate}%<br>` +
+              `增加 ${fmt(det.inc)} × ${det.rate}%　減少 ${fmt(det.dec)} × ${det.rate}%</div>`;
           } else if (det) {
-            const rTag = det.rounding === 'round'
-              ? '四捨五入到元' : '捨去後 增加−1／減少+1';
-            if (det.mode === 'rate') {
-              noteHtml = `<div class="rate-note" title="增加 = 基準的增加金額合計 × 稅率">` +
-                `基準：${esc(basisTxt)}　稅率 ${det.rate}%　收尾：${rTag}<br>` +
-                `增加 ${fmt(det.inc)} × ${det.rate}%　減少 ${fmt(det.dec)} × ${det.rate}%</div>`;
-            } else {
-              noteHtml = `<div class="rate-note" title="增加 = (基準增加合計 ÷ 基準原契約合計) × 本項原契約金額">` +
-                `基準：${esc(basisTxt)}　原契約 ${fmt(det.base)}　本項原契約 ${fmt(det.origTotal)}　收尾：${rTag}<br>` +
-                `增加 ${fmt(det.inc)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}　` +
-                `減少 ${fmt(det.dec)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}</div>`;
-            }
+            noteHtml = `<div class="rate-note" title="增加 = (基準增加合計 ÷ 基準原契約合計) × 本項原契約金額，無條件捨去後再減1；減少同式，捨去後再加1">` +
+              `基準：${esc(basisTxt)}　原契約 ${fmt(det.base)}　本項原契約 ${fmt(det.origTotal)}<br>` +
+              `增加 ${fmt(det.inc)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}（捨去再減1）　` +
+              `減少 ${fmt(det.dec)} ÷ ${fmt(det.base)} × ${fmt(det.origTotal)}（捨去再加1）</div>`;
           }
         }
         html += `<tr class="leaf${row.isChanged ? ' changed' : ''}" data-code="${codeAttr}"${style} oncontextmenu="leafCtxMenu(event,'${codeAttr}')">` +
@@ -741,7 +724,7 @@ function clearChange(code) {
 function openRateBasis(code) {
   const lf = leafByCode[code];
   if (!lf) return;
-  const rule = ruleOf(code) || { mode: 'ratio', basis: [], rate: 5, rounding: 'adj' };
+  const rule = ruleOf(code) || { mode: 'ratio', basis: [], rate: 5 };
   const cur = new Set(rule.basis);
   const root = buildTree();
   const opts = [];
@@ -772,18 +755,6 @@ function openRateBasis(code) {
         </span>
       </label>
     </div>
-    <div style="border-top:1px solid #eee;padding-top:8px;margin-bottom:8px;">
-      <span style="font-weight:bold;">收尾方式</span>
-      <label style="margin-left:10px;cursor:pointer;">
-        <input type="radio" name="rbRound" value="adj" ${rule.rounding === 'adj' ? 'checked' : ''} onchange="previewRateBasis('${esc(code)}')">
-        無條件捨去後，增加再減1／減少再加1
-      </label>
-      <label style="margin-left:12px;cursor:pointer;">
-        <input type="radio" name="rbRound" value="round" ${rule.rounding === 'round' ? 'checked' : ''} onchange="previewRateBasis('${esc(code)}')">
-        四捨五入到元
-      </label>
-      <div style="font-size:12px;color:#888;margin-top:3px;">營業稅請選「四捨五入到元」—— 稅額不可自行加減 1。</div>
-    </div>
     <div style="font-size:12px;color:#666;margin-bottom:6px;">勾選要當作計算基準的項目（基準內容變動時會即時重算）：</div>
     <div id="rbList" style="max-height:40vh;overflow:auto;border:1px solid #e3e3e3;border-radius:6px;padding:6px;">
       <label style="display:block;padding:3px 0;cursor:pointer;background:#fffde7;border-radius:4px;">
@@ -811,10 +782,6 @@ function rbMode() {
   const el = document.querySelector('input[name="rbMode"]:checked');
   return el ? el.value : 'ratio';
 }
-function rbRounding() {
-  const el = document.querySelector('input[name="rbRound"]:checked');
-  return el ? el.value : 'adj';
-}
 function rbModeChanged(code) {
   const w = document.getElementById('rbRateWrap');
   if (w) w.style.opacity = rbMode() === 'rate' ? '1' : '.35';
@@ -834,27 +801,22 @@ function previewRateBasis(code) {
   const a = aggBasis(picked, code);
   const mode = rbMode();
   let ri, rd, expl;
-  const rnd = rbRounding();
-  const f2 = v => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const tagI = rnd === 'round' ? '四捨五入' : '捨去再減1';
-  const tagD = rnd === 'round' ? '四捨五入' : '捨去再加1';
   if (mode === 'rate') {
     const rate = parseFloat((document.getElementById('rbRate') || {}).value) || 0;
-    const rawI = a.inc * rate / 100, rawD = a.dec * rate / 100;
-    ri = applyRounding(rawI, 'inc', rnd); rd = applyRounding(rawD, 'dec', rnd);
-    expl = `增加：${fmt(a.inc)} × ${rate}% ＝ ${f2(rawI)}` +
-           ` → ${tagI} ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
-           `減少：${fmt(a.dec)} × ${rate}% ＝ ${f2(rawD)}` +
-           ` → ${tagD} ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
+    ri = Math.round(a.inc * rate / 100);
+    rd = Math.round(a.dec * rate / 100);
+    expl = `增加：${fmt(a.inc)} × ${rate}% ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
+           `減少：${fmt(a.dec)} × ${rate}% ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
   } else {
     if (!a.base) { el.innerHTML = '<span style="color:#c62828;">基準的原契約金額為 0，無法計算比例</span>'; return; }
     const rawI = a.inc / a.base * origTotal, rawD = a.dec / a.base * origTotal;
-    ri = applyRounding(rawI, 'inc', rnd); rd = applyRounding(rawD, 'dec', rnd);
+    ri = ratioAdjust(rawI, 'inc'); rd = ratioAdjust(rawD, 'dec');
+    const f2 = v => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     expl = `基準原契約金額合計：<b>${fmt(a.base)}</b><br>` +
            `增加：${fmt(a.inc)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ ${f2(rawI)}` +
-           ` → ${tagI} ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
+           ` → 捨去再減1 ＝ <b style="color:#2e7d32;">${ri.toLocaleString()}</b><br>` +
            `減少：${fmt(a.dec)} ÷ ${fmt(a.base)} × ${fmt(origTotal)} ＝ ${f2(rawD)}` +
-           ` → ${tagD} ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
+           ` → 捨去再加1 ＝ <b style="color:#c62828;">${rd.toLocaleString()}</b>`;
   }
   el.innerHTML = `<div style="background:#f1f8e9;border-radius:6px;padding:8px;line-height:1.8;">${expl}</div>`;
 }
@@ -863,8 +825,7 @@ function saveRateBasis(code) {
   if (!picked.length) { delete rateBasis[code]; }
   else {
     rateBasis[code] = { mode: rbMode(), basis: picked,
-                        rate: parseFloat((document.getElementById('rbRate') || {}).value) || 0,
-                        rounding: rbRounding() };
+                        rate: parseFloat((document.getElementById('rbRate') || {}).value) || 0 };
   }
   closeRateBasis();
   render();
@@ -1333,13 +1294,9 @@ function loadState(file) {
         // 相容早期版本存的純陣列格式
         const basis = (Array.isArray(v) ? v : (v && v.basis) || []).filter(c => typeof c === 'string');
         if (!basis.length) return;
-        const md = (!Array.isArray(v) && v.mode === 'rate') ? 'rate' : 'ratio';
-        const rd = (!Array.isArray(v) && v.rounding === 'round') ? 'round'
-                 : (!Array.isArray(v) && v.rounding === 'adj') ? 'adj'
-                 : defaultRounding(md);          // 舊存檔沒有此欄，依模式給預設
-        rateBasis[k] = { mode: md, basis: basis,
-                         rate: (!Array.isArray(v) && Number(v.rate)) || 0,
-                         rounding: rd };
+        rateBasis[k] = { mode: (!Array.isArray(v) && v.mode === 'rate') ? 'rate' : 'ratio',
+                         basis: basis,
+                         rate: (!Array.isArray(v) && Number(v.rate)) || 0 };
       });
       // 還原工具列欄位（工程名稱/編號、前次/本次標題）。
       // 存檔裡是空字串的就不覆蓋，避免把載入原契約時自動帶入的值洗掉。
