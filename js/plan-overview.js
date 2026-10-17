@@ -192,12 +192,18 @@ function drawProjectValveMarkers(pipeline) {
             // 在高緯度會偏斜）。投影後的角度不受縮放等級影響，只需算一次。
             const p0 = smallCoords[0];
             const p1 = smallCoords[smallCoords.length - 1];
-            const proj0 = L.CRS.EPSG3857.project(L.latLng(p0[0], p0[1]));
-            const proj1 = L.CRS.EPSG3857.project(L.latLng(p1[0], p1[1]));
-            const pipeAngleDeg = Math.atan2(proj1.y - proj0.y, proj1.x - proj0.x) * 180 / Math.PI;
-            // 下面畫的紅色線段本身預設就是「直的」（垂直方向），對應數學角度 90 度，
-            // 所以要讓線段轉成「垂直於管線」，CSS 旋轉量 = 管線角度本身即可
-            // （管線角度 0 度＝水平管線 → 旋轉 0 度＝線段維持垂直，剛好穿過水平管線）。
+            // 🐛 修正（2026-10-17）：原本用 L.CRS.EPSG3857.project()，那是「往北為正」
+            // 的投影公尺座標（角度逆時針為正），但 CSS rotate() 是「順時針為正」
+            // （螢幕 y 軸往下），正負號相反 → 斜向管線上的制水閥被鏡像、沒有垂直。
+            // 改用 latLngToPoint 取「螢幕像素座標」（y 往下，與 CSS 同一套方向），
+            // 角度與縮放等級無關，取 zoom 0 算一次即可。
+            const crs = map.options.crs || L.CRS.EPSG3857;
+            const px0 = crs.latLngToPoint(L.latLng(p0[0], p0[1]), 0);
+            const px1 = crs.latLngToPoint(L.latLng(p1[0], p1[1]), 0);
+            const pipeAngleDeg = Math.atan2(px1.y - px0.y, px1.x - px0.x) * 180 / Math.PI;
+            // 下面畫的紅色線段預設是「直的」（螢幕垂直方向）。管線在螢幕上順時針轉了
+            // pipeAngleDeg 度，線段也跟著順時針轉同樣角度，就會一直保持垂直於管線
+            // （管線水平＝0 度 → 線段維持直立，剛好穿過水平管線）。
             const crossAngleDeg = pipeAngleDeg;
 
             const iconHtml = `
